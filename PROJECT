@@ -6,4 +6,14 @@ plugins:
   scorecard.sdk.operatorframework.io/v2: {}
 projectName: intel-ethernet-operator
 repo: github.com/otcshare/intel-ethernet-operator
+resources:
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: intel.com
+  group: ethernet
+  kind: DevicePoolClusterPolicy
+  path: github.com/otcshare/intel-ethernet-operator/api/v1alpha1
+  version: v1alpha1
 version: "3"
