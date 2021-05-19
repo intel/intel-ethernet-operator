@@ -1,4 +1,5 @@
 ## Append samples you want in your CSV to this file as resources ##
 resources:
-- ethernet_v1alpha1_devicepoolclusterpolicy.yaml
+- ethernet_v1_ethernetclusterconfig.yaml
+- ethernet_v1_ethernetnodeconfig.yaml
 #+kubebuilder:scaffold:manifestskustomizesamples

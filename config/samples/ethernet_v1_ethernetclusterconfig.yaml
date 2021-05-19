@@ -1,0 +1,7 @@
+apiVersion: ethernet.intel.com/v1
+kind: EthernetClusterConfig
+metadata:
+  name: ethernetclusterconfig-sample
+spec:
+  # Add fields here
+  foo: bar

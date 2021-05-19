@@ -1,0 +1,7 @@
+apiVersion: ethernet.intel.com/v1
+kind: EthernetNodeConfig
+metadata:
+  name: ethernetnodeconfig-sample
+spec:
+  # Add fields here
+  foo: bar

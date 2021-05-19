@@ -1,7 +1,0 @@
-apiVersion: ethernet.intel.com/v1alpha1
-kind: DevicePoolClusterPolicy
-metadata:
-  name: devicepoolclusterpolicy-sample
-spec:
-  # Add fields here
-  foo: bar
