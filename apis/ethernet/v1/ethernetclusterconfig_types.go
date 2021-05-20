@@ -17,18 +17,18 @@ type DeviceSelectors struct {
 type DeviceConfig struct {
 	// DDP package to be applied
 	// +kubebuilder:validation:Pattern=[a-zA-Z0-9\.\-\/]+
-	DDPURL string `json:”ddpURL,omitempty”`
+	DDPURL string `json:"ddpURL,omitempty"`
 	// +kubebuilder:validation:Pattern=`^[a-fA-F0-9]{32}$`
-	DDPChecksum string `json:”ddpChecksum,omitempty”`
+	DDPChecksum string `json:"ddpChecksum,omitempty"`
 
 	// Firmware (NVMUpdate package) to be applied
 	// +kubebuilder:validation:Pattern=[a-zA-Z0-9\.\-\/]+
-	FWURL string `json:”fwURL,omitempty”`
+	FWURL string `json:"fwURL,omitempty"`
 	// +kubebuilder:validation:Pattern=`^[a-fA-F0-9]{32}$`
-	FWChecksum string `json:”fwChecksum,omitempty”`
+	FWChecksum string `json:"fwChecksum,omitempty"`
 
 	// Force DDP and/or FW application given incompatibility
-	Force bool `json:”force,omitempty”`
+	Force bool `json:"force,omitempty"`
 }
 
 type SyncStatus string
