@@ -7,11 +7,11 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-type DeviceSelectors struct {
-	VendorID   []string `json:"vendorId,omitempty"`
-	DeviceID   []string `json:"deviceId,omitempty"`
-	PCIAddress []string `json:"pciAddress,omitempty"`
-	Drivers    []string `json:"drivers,omitempty"`
+type DeviceSelector struct {
+	VendorID   string `json:"vendorId,omitempty"`
+	DeviceID   string `json:"deviceId,omitempty"`
+	PCIAddress string `json:"pciAddress,omitempty"`
+	Drivers    string `json:"drivers,omitempty"`
 }
 
 type DeviceConfig struct {
@@ -49,7 +49,7 @@ type EthernetClusterConfigSpec struct {
 	// Select the nodes
 	NodeSelectors map[string]string `json:"nodeSelectors,omitempty"`
 	// Select the devices on nodes
-	DeviceSelector DeviceSelectors `json:"deviceSelector,omitempty"`
+	DeviceSelectors []DeviceSelector `json:"deviceSelector,omitempty"`
 
 	DeviceConfig DeviceConfig `json:"deviceConfig"`
 
