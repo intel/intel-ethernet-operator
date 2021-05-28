@@ -1,30 +1,23 @@
 # SPDX-License-Identifier: Apache-2.0
 # Copyright (c) 2021 Intel Corporation
 
-# permissions to do leader election.
+# permissions for end users to view ethernetnodeconfigs.
 apiVersion: rbac.authorization.k8s.io/v1
-kind: Role
+kind: ClusterRole
 metadata:
-  name: leader-election-role
+  name: ethernetnodeconfig-viewer-role
 rules:
 - apiGroups:
-  - ""
-  - coordination.k8s.io
+  - ethernet.intel.com
   resources:
-  - configmaps
-  - leases
+  - ethernetnodeconfigs
   verbs:
   - get
   - list
   - watch
-  - create
-  - update
-  - patch
-  - delete
 - apiGroups:
-  - ""
+  - ethernet.intel.com
   resources:
-  - events
+  - ethernetnodeconfigs/status
   verbs:
-  - create
-  - patch
+  - get

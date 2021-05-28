@@ -17,6 +17,9 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+
+	ethernetv1 "github.com/otcshare/intel-ethernet-operator/apis/ethernet/v1"
+	ethernetcontrollers "github.com/otcshare/intel-ethernet-operator/controllers/ethernet"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -28,6 +31,7 @@ var (
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 
+	utilruntime.Must(ethernetv1.AddToScheme(scheme))
 	//+kubebuilder:scaffold:scheme
 }
 
@@ -61,6 +65,14 @@ func main() {
 		os.Exit(1)
 	}
 
+	if err = (&ethernetcontrollers.EthernetClusterConfigReconciler{
+		Client: mgr.GetClient(),
+		Log:    ctrl.Log.WithName("controllers").WithName("ethernet").WithName("EthernetClusterConfig"),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "EthernetClusterConfig")
+		os.Exit(1)
+	}
 	//+kubebuilder:scaffold:builder
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {

@@ -1,0 +1,69 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright (c) 2021 Intel Corporation
+
+package v1
+
+import (
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+)
+
+type DeviceNodeConfig struct {
+	PCIAddress   string       `json:"PCIAddress"`
+	DeviceConfig DeviceConfig `json:"deviceConfig"`
+}
+
+// EthernetNodeConfigSpec defines the desired state of EthernetNodeConfig
+type EthernetNodeConfigSpec struct {
+	Config    []DeviceNodeConfig `json:"config,omitempty"`
+	DrainSkip bool               `json:"drainSkip,omitempty"`
+}
+
+type FirmwareInfo struct {
+	Name    string `json:"name"`
+	MAC     string `json:"mac"`
+	Version string `json:"version"`
+}
+
+type DDPInfo struct {
+	PackageName string `json:"packageName"`
+	Version     string `json:"version"`
+	TrackID     string `json:"trackId"`
+}
+
+type Device struct {
+	PCIAddress string       `json:"PCIAddress"`
+	Firmware   FirmwareInfo `json:"firmware"`
+	DDP        DDPInfo      `json:"ddp"`
+}
+
+// EthernetNodeConfigStatus defines the observed state of EthernetNodeConfig
+type EthernetNodeConfigStatus struct {
+	// Provides information about device update status
+	Conditions []metav1.Condition `json:"conditions,omitempty"`
+	Devices    []Device           `json:"devices,omitempty"`
+}
+
+//+kubebuilder:object:root=true
+//+kubebuilder:subresource:status
+
+// EthernetNodeConfig is the Schema for the ethernetnodeconfigs API
+type EthernetNodeConfig struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+
+	Spec   EthernetNodeConfigSpec   `json:"spec,omitempty"`
+	Status EthernetNodeConfigStatus `json:"status,omitempty"`
+}
+
+//+kubebuilder:object:root=true
+
+// EthernetNodeConfigList contains a list of EthernetNodeConfig
+type EthernetNodeConfigList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata,omitempty"`
+	Items           []EthernetNodeConfig `json:"items"`
+}
+
+func init() {
+	SchemeBuilder.Register(&EthernetNodeConfig{}, &EthernetNodeConfigList{})
+}
