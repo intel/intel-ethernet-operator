@@ -50,6 +50,15 @@ else
 GOBIN=$(shell go env GOBIN)
 endif
 
+# To pass proxy for docker build from env invoke make with 'make docker-build HTTP_PROXY=$http_proxy HTTPS_PROXY=$https_proxy'
+DOCKERARGS?=
+ifdef HTTP_PROXY
+	DOCKERARGS += --build-arg http_proxy=${HTTP_PROXY}
+endif
+ifdef HTTPS_PROXY
+	DOCKERARGS += --build-arg https_proxy=${HTTPS_PROXY}
+endif
+
 all: build
 
 ##@ General
@@ -97,7 +106,7 @@ run: manifests generate fmt vet ## Run a controller from your host.
 	go run ./main.go
 
 docker-build: test ## Build docker image with the manager.
-	docker build -t ${IMG} .
+	docker build -t ${IMG} ${DOCKERARGS} .
 
 docker-push: ## Push docker image with the manager.
 	docker push ${IMG}
