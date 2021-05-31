@@ -5,4 +5,5 @@
 resources:
 - ethernet_v1_ethernetclusterconfig.yaml
 - ethernet_v1_ethernetnodeconfig.yaml
+- flowconfig_v1_nodeflowconfig.yaml
 #+kubebuilder:scaffold:manifestskustomizesamples

@@ -25,4 +25,13 @@ resources:
   kind: EthernetNodeConfig
   path: github.com/otcshare/intel-ethernet-operator/apis/ethernet/v1
   version: v1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: intel.com
+  group: flowconfig
+  kind: NodeFlowConfig
+  path: github.com/otcshare/intel-ethernet-operator/apis/flowconfig/v1
+  version: v1
 version: "3"

@@ -19,6 +19,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	ethernetv1 "github.com/otcshare/intel-ethernet-operator/apis/ethernet/v1"
+	flowconfigv1 "github.com/otcshare/intel-ethernet-operator/apis/flowconfig/v1"
 	ethernetcontrollers "github.com/otcshare/intel-ethernet-operator/controllers/ethernet"
 	//+kubebuilder:scaffold:imports
 )
@@ -32,6 +33,7 @@ func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 
 	utilruntime.Must(ethernetv1.AddToScheme(scheme))
+	utilruntime.Must(flowconfigv1.AddToScheme(scheme))
 	//+kubebuilder:scaffold:scheme
 }
 
