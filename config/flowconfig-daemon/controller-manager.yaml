@@ -1,0 +1,29 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: controller-manager
+  namespace: system
+  labels:
+    control-plane: flowconfig-daemon-controller-manager
+spec:
+  selector:
+    matchLabels:
+      control-plane: flowconfig-daemon-controller-manager
+  template:
+    metadata:
+      labels:
+        control-plane: flowconfig-daemon-controller-manager
+    spec:
+      containers:
+      - command:
+        - /flowconfig-daemon
+        image: daemon-image:latest
+        name: flowconfig-daemon
+        resources:
+          limits:
+            cpu: 100m
+            memory: 30Mi
+          requests:
+            cpu: 100m
+            memory: 20Mi
+      terminationGracePeriodSeconds: 10

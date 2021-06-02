@@ -1,0 +1,21 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: controller-manager
+  namespace: system
+spec:
+  template:
+    metadata:
+      labels:
+        name: flowconfig-daemon
+    spec:
+      containers:
+        - name: flowconfig-daemon
+          volumeMounts:
+            - name: dcfsockdir
+              mountPath: /var/run/dcf/
+      volumes:
+        # DCF Unix domain socket directory
+        - name: dcfsockdir
+          hostPath:
+            path: /var/run/dcf/

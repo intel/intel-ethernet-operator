@@ -1,0 +1,15 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+# Change this namespace to match with namespace in config/default/kustomization.yaml
+namespace: intel-ethernet-operator-system
+namePrefix: flowconfig-daemon-
+resources:
+- controller-manager.yaml
+patchesStrategicMerge:
+- add_env.yaml
+- add_privilege.yaml
+- add_dcf_volume.yaml
+images:
+- name: daemon-image
+  newName: flowconfig-daemon
+  newTag: 0.0.1
