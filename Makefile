@@ -105,6 +105,10 @@ test: manifests generate fmt vet ## Run tests.
 build: generate fmt vet ## Build manager binary.
 	go build -o bin/manager main.go
 
+# Build flowconfig-daemon binary
+flowconfig-daemon: generate fmt vet
+	go build -o bin/flowconfig-daemon cmd/flowconfig-daemon/main.go
+
 run: manifests generate fmt vet ## Run a controller from your host.
 	go run ./main.go
 
