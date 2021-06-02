@@ -28,6 +28,7 @@ endif
 BUNDLE_METADATA_OPTS ?= $(BUNDLE_CHANNELS) $(BUNDLE_DEFAULT_CHANNEL)
 
 APP_NAME ?= intel-ethernet-operator
+DAEMON_NAME ?= flowconfig-daemon
 # IMAGE_TAG_BASE defines the docker.io namespace and part of the image name for remote images.
 # This variable is used to construct full image tags for bundle and catalog images.
 #
@@ -43,6 +44,14 @@ IMAGE_TAG_LATEST ?= $(APP_NAME):latest
 IMAGE_TAG_VERSION = $(APP_NAME):$(VERSION)
 # Image URL to use all building/pushing image targets
 IMG ?= $(IMAGE_TAG_VERSION)
+
+# FlowConfigDaemon image tag
+FCDAEMON_IMAGE_TAG_LATEST?=$(DAEMON_NAME):latest
+FCDAEMON_IMAGE_TAG_VERSION=$(DAEMON_NAME):$(VERSION)
+# Image URL to use all building/pushing FlowConfigDaemon image targets
+FCDAEMON_IMG?=$(FCDAEMON_IMAGE_TAG_VERSION)
+FCDAEMON_DOCKERFILE = images/Dockerfile.FlowConfigDaemon
+
 # Produce CRDs that work back to Kubernetes 1.11 (no version conversion)
 CRD_OPTIONS ?= "crd:trivialVersions=true,preserveUnknownFields=false"
 
@@ -118,6 +127,12 @@ docker-build: test ## Build docker image with the manager.
 
 docker-push: ## Push docker image with the manager.
 	docker push ${IMG}
+
+# Build FlowConfigDaemon docker image
+.PHONY: docker-build-flowconfig
+docker-build-flowconfig:
+	docker build . -f ${FCDAEMON_DOCKERFILE} -t ${FCDAEMON_IMG} $(DOCKERARGS)
+	docker image tag ${FCDAEMON_IMG} ${FCDAEMON_IMAGE_TAG_LATEST}
 
 ##@ Deployment
 
