@@ -63,16 +63,13 @@ func (ipv4 *Ipv4) ToRteFlowItemIpv4() (*RteFlowItemIpv4, error) {
 
 func ipToUint32(ip net.IP) uint32 {
 	if len(ip) == 16 {
-		// return binary.BigEndian.Uint32(ip[12:16])
-		return binary.LittleEndian.Uint32(ip[12:16]) // REPLACE this with BigEndian conversion above
+		return binary.BigEndian.Uint32(ip[12:16])
 	}
-	// return binary.BigEndian.Uint32(ip)
-	return binary.LittleEndian.Uint32(ip[12:16]) // REPLACE this with BigEndian conversion above
+	return binary.BigEndian.Uint32(ip)
 }
 
 func uint32ToIP(val uint32) net.IP {
 	ip := make(net.IP, 4)
-	// binary.BigEndian.PutUint32(ip, val)
-	binary.LittleEndian.PutUint32(ip, val) // REPLACE this with BigEndian conversion above
+	binary.BigEndian.PutUint32(ip, val)
 	return ip
 }
