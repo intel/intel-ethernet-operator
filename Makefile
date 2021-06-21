@@ -56,8 +56,7 @@ endif
 SHELL = /usr/bin/env bash -o pipefail 
 .SHELLFLAGS = -ec
 
-all: build 
-
+all: build daemon
 ##@ General
 
 # The help target prints out all targets with their descriptions organized
@@ -98,6 +97,9 @@ test: manifests generate fmt vet ## Run tests.
 
 build: generate fmt vet ## Build manager binary.
 	go build -o bin/manager main.go
+
+daemon: generate fmt vet
+	go build -o bin/fwddp-daemon cmd/fwddp-daemon/main.go
 
 run: manifests generate fmt vet ## Run a controller from your host.
 	go run ./main.go
