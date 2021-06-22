@@ -8,7 +8,9 @@ import (
 
 	"github.com/go-logr/logr"
 	ethernetv1 "github.com/otcshare/intel-ethernet-operator/apis/ethernet/v1"
+	"github.com/otcshare/intel-ethernet-operator/pkg/utils"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clientset "k8s.io/client-go/kubernetes"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -17,6 +19,61 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
+
+var (
+	supportedDevices utils.SupportedDevices
+	compatMapPath    = "./compat.json"
+	getInventory     = GetInventory
+)
+
+type UpdateConditionReason string
+
+const (
+	UpdateCondition    string                = "Updated"
+	UpdateUnknown      UpdateConditionReason = "Unknown"
+	UpdateInProgress   UpdateConditionReason = "InProgress"
+	UpdateFailed       UpdateConditionReason = "Failed"
+	UpdateNotRequested UpdateConditionReason = "NotRequested"
+	UpdateSucceeded    UpdateConditionReason = "Succeeded"
+)
+
+func (r *NodeConfigReconciler) updateCondition(nc *ethernetv1.EthernetNodeConfig, status metav1.ConditionStatus,
+	reason UpdateConditionReason, msg string) {
+	log := r.log.WithName("updateCondition")
+	c := metav1.Condition{
+		Type:               UpdateCondition,
+		Status:             status,
+		Reason:             string(reason),
+		Message:            msg,
+		ObservedGeneration: nc.GetGeneration(),
+	}
+	if err := r.updateStatus(nc, []metav1.Condition{c}); err != nil {
+		log.Error(err, "failed to update EthernetNodeConfig condition")
+	}
+}
+
+func (r *NodeConfigReconciler) updateStatus(nc *ethernetv1.EthernetNodeConfig, c []metav1.Condition) error {
+	log := r.log.WithName("updateStatus")
+
+	inv, err := getInventory(log)
+	if err != nil {
+		log.Error(err, "failed to obtain inventory for the node")
+		return err
+	}
+	nodeStatus := ethernetv1.EthernetNodeConfigStatus{Devices: inv}
+
+	for _, condition := range c {
+		meta.SetStatusCondition(&nodeStatus.Conditions, condition)
+	}
+
+	nc.Status = nodeStatus
+	if err := r.Status().Update(context.Background(), nc); err != nil {
+		log.Error(err, "failed to update EthernetFecNode status")
+		return err
+	}
+
+	return nil
+}
 
 type NodeConfigReconciler struct {
 	client.Client
@@ -27,6 +84,12 @@ type NodeConfigReconciler struct {
 
 func NewNodeConfigReconciler(c client.Client, clientSet *clientset.Clientset, log logr.Logger,
 	nodeName, ns string) (*NodeConfigReconciler, error) {
+
+	var err error
+	supportedDevices, err = utils.LoadSupportedDevices(compatMapPath)
+	if err != nil {
+		return nil, err
+	}
 
 	return &NodeConfigReconciler{
 		Client:    c,
@@ -62,7 +125,6 @@ func (r *NodeConfigReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 func (r *NodeConfigReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := r.log.WithName("Reconcile").WithValues("namespace", req.Namespace, "name", req.Name)
-
 	if req.Namespace != r.namespace {
 		log.V(4).Info("unexpected namespace - ignoring", "expected namespace", r.namespace)
 		return reconcile.Result{}, nil
@@ -70,6 +132,22 @@ func (r *NodeConfigReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 
 	if req.Name != r.nodeName {
 		log.V(4).Info("CR intended for another node - ignoring", "expected name", r.nodeName)
+		return reconcile.Result{}, nil
+	}
+
+	nodeConfig := &ethernetv1.EthernetNodeConfig{}
+	if err := r.Client.Get(ctx, req.NamespacedName, nodeConfig); err != nil {
+		if k8serrors.IsNotFound(err) {
+			log.V(4).Info("not found - creating")
+			return reconcile.Result{}, r.CreateEmptyNodeConfigIfNeeded(r.Client)
+		}
+		log.Error(err, "Get() failed")
+		return reconcile.Result{}, err
+	}
+
+	if len(nodeConfig.Spec.Config) == 0 {
+		log.V(4).Info("Nothing to do")
+		r.updateCondition(nodeConfig, metav1.ConditionFalse, UpdateNotRequested, "Inventory up to date")
 		return reconcile.Result{}, nil
 	}
 

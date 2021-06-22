@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	ctrl "sigs.k8s.io/controller-runtime"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -27,6 +29,7 @@ var (
 	k8sClient     client.Client
 	testEnv       *envtest.Environment
 	testTmpFolder string
+	log           = ctrl.Log.WithName("EthernetDaemon-test")
 )
 
 func TestAPIs(t *testing.T) {

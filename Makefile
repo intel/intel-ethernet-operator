@@ -57,6 +57,7 @@ SHELL = /usr/bin/env bash -o pipefail
 .SHELLFLAGS = -ec
 
 all: build daemon
+
 ##@ General
 
 # The help target prints out all targets with their descriptions organized

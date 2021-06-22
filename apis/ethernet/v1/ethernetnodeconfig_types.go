@@ -19,8 +19,7 @@ type EthernetNodeConfigSpec struct {
 }
 
 type FirmwareInfo struct {
-	Name    string `json:"name"`
-	MAC     string `json:"mac"`
+	MAC     string `json:"MAC"`
 	Version string `json:"version"`
 }
 
@@ -31,9 +30,12 @@ type DDPInfo struct {
 }
 
 type Device struct {
-	PCIAddress string       `json:"PCIAddress"`
-	Firmware   FirmwareInfo `json:"firmware"`
-	DDP        DDPInfo      `json:"ddp"`
+	PCIAddress    string       `json:"PCIAddress"`
+	Name          string       `json:"name"`
+	Driver        string       `json:"driver"`
+	DriverVersion string       `json:"driverVersion"`
+	Firmware      FirmwareInfo `json:"firmware"`
+	DDP           DDPInfo      `json:"DDP"`
 }
 
 // EthernetNodeConfigStatus defines the observed state of EthernetNodeConfig
