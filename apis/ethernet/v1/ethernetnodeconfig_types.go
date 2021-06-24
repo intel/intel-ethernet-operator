@@ -30,6 +30,8 @@ type DDPInfo struct {
 }
 
 type Device struct {
+	VendorID      string       `json:"vendorID"`
+	DeviceID      string       `json:"deviceID"`
 	PCIAddress    string       `json:"PCIAddress"`
 	Name          string       `json:"name"`
 	Driver        string       `json:"driver"`
