@@ -7,12 +7,15 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang/protobuf/ptypes"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	flowconfigv1 "github.com/otcshare/intel-ethernet-operator/apis/flowconfig/v1"
-	flowapi "github.com/otcshare/intel-ethernet-operator/pkg/rpc/v1/flow"
-	mock "github.com/otcshare/intel-ethernet-operator/pkg/rpc/v1/flow/mocks"
+	"github.com/otcshare/intel-ethernet-operator/pkg/rpc/v1/flow"
+	mocks "github.com/otcshare/intel-ethernet-operator/pkg/rpc/v1/flow/mocks"
 	"github.com/otcshare/intel-ethernet-operator/pkg/utils"
+	"github.com/stretchr/testify/assert"
+	mock "github.com/stretchr/testify/mock"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -20,17 +23,20 @@ import (
 )
 
 func TestGetFlowCreateRequests(t *testing.T) {
-
-	data := `
+	var (
+		data = `
 ---
 apiVersion: flowconfig.intel.com/v1
 kind: NodeFlowConfig
 metadata:
-  name: silpixa00399841
+  name: testk8snode
+  namespace: default
 spec:
   rules:
     - pattern:
-        - type: RTE_FLOW_ITEM_TYPE_ETH
+        - type: RTE_FLOW_ITEM_TYPE_VLAN
+          spec:
+            tci: 1234
         - type: RTE_FLOW_ITEM_TYPE_IPV4
           spec:
             hdr:
@@ -48,6 +54,7 @@ spec:
       attr:
         ingress: 1
 `
+	)
 
 	policy := &flowconfigv1.NodeFlowConfig{}
 
@@ -65,16 +72,30 @@ spec:
 	//}
 	//fmt.Printf("%+v\n", policy)
 
-	//fmt.Printf("number or rules: %d\n", len(policy.Spec.Rules))
-	for _, r := range policy.Spec.Rules {
+	// fmt.Printf("number or rules: %d\n", len(policy.Spec.Rules))
+	for i, r := range policy.Spec.Rules {
 		// fmt.Printf("item: %+v\n", r)
 		flowReq, err := getFlowCreateRequests(r)
 		if err != nil {
 			t.Errorf("error creating flowRequest object: %v", err)
 		}
 		_ = flowReq
-		fmt.Printf("flowReq[1]: %s\n", flowReq.Pattern[1].Spec.String())
+		fmt.Printf("flowReq[%d]: %s\n", i, flowReq.Pattern[i].Spec)
 	}
+
+	// Check dst_addr value
+	testRawSpec, err := getFlowCreateRequests(policy.Spec.Rules[0])
+	if err != nil {
+		t.Errorf("error creating flowRequest object: %v", err)
+	}
+	rteFlowItemIpv4 := &flow.RteFlowItemIpv4{}
+	err = ptypes.UnmarshalAny(testRawSpec.Pattern[1].Spec, rteFlowItemIpv4)
+	if err != nil {
+		t.Errorf("error unmarshaling object *anypb.Any: %v", err)
+	}
+
+	dstAddr := flow.Uint32ToIP(rteFlowItemIpv4.Hdr.DstAddr)
+	assert.Equal(t, dstAddr.String(), "192.168.100.10")
 }
 
 // TestGetFlowCreateHash compare calculated hash values from RequestFlowCreate instances
@@ -84,35 +105,35 @@ func TestGetFlowCreateHash(t *testing.T) {
 		t.Error("error getting FlowItemAny from raw bytes")
 	}
 
-	req1 := &flowapi.RequestFlowCreate{
+	req1 := &flow.RequestFlowCreate{
 		PortId: 0,
-		Pattern: []*flowapi.RteFlowItem{
-			&flowapi.RteFlowItem{Type: flowapi.RteFlowItemType_RTE_FLOW_ITEM_TYPE_ETH},
-			&flowapi.RteFlowItem{
-				Type: flowapi.RteFlowItemType_RTE_FLOW_ITEM_TYPE_ETH,
+		Pattern: []*flow.RteFlowItem{
+			{Type: flow.RteFlowItemType_RTE_FLOW_ITEM_TYPE_ETH},
+			{
+				Type: flow.RteFlowItemType_RTE_FLOW_ITEM_TYPE_ETH,
 				Spec: specAny1,
 			},
-			&flowapi.RteFlowItem{Type: flowapi.RteFlowItemType_RTE_FLOW_ITEM_TYPE_END},
+			{Type: flow.RteFlowItemType_RTE_FLOW_ITEM_TYPE_END},
 		},
-		Action: []*flowapi.RteFlowAction{
-			&flowapi.RteFlowAction{Type: flowapi.RteFlowActionType_RTE_FLOW_ACTION_TYPE_DROP},
-			&flowapi.RteFlowAction{Type: flowapi.RteFlowActionType_RTE_FLOW_ACTION_TYPE_END},
+		Action: []*flow.RteFlowAction{
+			{Type: flow.RteFlowActionType_RTE_FLOW_ACTION_TYPE_DROP},
+			{Type: flow.RteFlowActionType_RTE_FLOW_ACTION_TYPE_END},
 		},
 	}
 
-	req2 := &flowapi.RequestFlowCreate{
+	req2 := &flow.RequestFlowCreate{
 		PortId: 0,
-		Pattern: []*flowapi.RteFlowItem{
-			&flowapi.RteFlowItem{Type: flowapi.RteFlowItemType_RTE_FLOW_ITEM_TYPE_ETH},
-			&flowapi.RteFlowItem{
-				Type: flowapi.RteFlowItemType_RTE_FLOW_ITEM_TYPE_ETH,
+		Pattern: []*flow.RteFlowItem{
+			{Type: flow.RteFlowItemType_RTE_FLOW_ITEM_TYPE_ETH},
+			{
+				Type: flow.RteFlowItemType_RTE_FLOW_ITEM_TYPE_ETH,
 				Spec: specAny1,
 			},
-			&flowapi.RteFlowItem{Type: flowapi.RteFlowItemType_RTE_FLOW_ITEM_TYPE_END},
+			{Type: flow.RteFlowItemType_RTE_FLOW_ITEM_TYPE_END},
 		},
-		Action: []*flowapi.RteFlowAction{
-			&flowapi.RteFlowAction{Type: flowapi.RteFlowActionType_RTE_FLOW_ACTION_TYPE_DROP},
-			&flowapi.RteFlowAction{Type: flowapi.RteFlowActionType_RTE_FLOW_ACTION_TYPE_END},
+		Action: []*flow.RteFlowAction{
+			{Type: flow.RteFlowActionType_RTE_FLOW_ACTION_TYPE_DROP},
+			{Type: flow.RteFlowActionType_RTE_FLOW_ACTION_TYPE_END},
 		},
 	}
 
@@ -120,19 +141,19 @@ func TestGetFlowCreateHash(t *testing.T) {
 	if err != nil {
 		t.Error("error getting FlowItemAny from raw bytes")
 	}
-	req3 := &flowapi.RequestFlowCreate{
+	req3 := &flow.RequestFlowCreate{
 		PortId: 0,
-		Pattern: []*flowapi.RteFlowItem{
-			&flowapi.RteFlowItem{Type: flowapi.RteFlowItemType_RTE_FLOW_ITEM_TYPE_ETH},
-			&flowapi.RteFlowItem{
-				Type: flowapi.RteFlowItemType_RTE_FLOW_ITEM_TYPE_ETH,
+		Pattern: []*flow.RteFlowItem{
+			{Type: flow.RteFlowItemType_RTE_FLOW_ITEM_TYPE_ETH},
+			{
+				Type: flow.RteFlowItemType_RTE_FLOW_ITEM_TYPE_ETH,
 				Spec: specAny3,
 			},
-			&flowapi.RteFlowItem{Type: flowapi.RteFlowItemType_RTE_FLOW_ITEM_TYPE_END},
+			{Type: flow.RteFlowItemType_RTE_FLOW_ITEM_TYPE_END},
 		},
-		Action: []*flowapi.RteFlowAction{
-			&flowapi.RteFlowAction{Type: flowapi.RteFlowActionType_RTE_FLOW_ACTION_TYPE_DROP},
-			&flowapi.RteFlowAction{Type: flowapi.RteFlowActionType_RTE_FLOW_ACTION_TYPE_END},
+		Action: []*flow.RteFlowAction{
+			{Type: flow.RteFlowActionType_RTE_FLOW_ACTION_TYPE_DROP},
+			{Type: flow.RteFlowActionType_RTE_FLOW_ACTION_TYPE_END},
 		},
 	}
 
@@ -153,14 +174,14 @@ func TestGetFlowCreateHash(t *testing.T) {
 
 // TestListDCFPorts is a sample test that uses mock DCF client for NodeFlowConfig Reconciler
 func TestListDCFPorts(t *testing.T) {
-	mockDCF := &mock.FlowServiceClient{}
+	mockDCF := &mocks.FlowServiceClient{}
 	reconciler := &NodeFlowConfigReconciler{
 		flowClient: mockDCF,
 	}
 
-	mockRes := &flowapi.ResponsePortList{
-		Ports: []*flowapi.PortsInformation{
-			&flowapi.PortsInformation{
+	mockRes := &flow.ResponsePortList{
+		Ports: []*flow.PortsInformation{
+			{
 				PortId:   0,
 				PortMode: "dcf",
 				PortPci:  "0000:01.01",
@@ -169,7 +190,7 @@ func TestListDCFPorts(t *testing.T) {
 	}
 
 	// Have mock return our expected mockRes
-	mockDCF.On("ListPorts", context.TODO(), &flowapi.RequestListPorts{}).Return(mockRes, nil)
+	mockDCF.On("ListPorts", context.TODO(), &flow.RequestListPorts{}).Return(mockRes, nil)
 
 	ports, err := reconciler.listDCFPorts()
 	if err != nil {
@@ -183,7 +204,7 @@ func TestListDCFPorts(t *testing.T) {
 }
 
 // Controller tests
-var _ = PDescribe("NodeFlowConfig controller", func() {
+var _ = Describe("NodeFlowConfig controller", func() {
 	// Define utility constants for object names and testing timeouts/durations and intervals.
 	var (
 		portID uint32 = 0
@@ -200,6 +221,7 @@ var _ = PDescribe("NodeFlowConfig controller", func() {
 		It("should update Status with DCF port info", func() {
 			By("Creating new NodeFlowConfigSpec")
 			ctx := context.Background()
+
 			policy := &flowconfigv1.NodeFlowConfig{
 				TypeMeta: metav1.TypeMeta{
 					APIVersion: "flowconfig.intel.com/v1",
@@ -246,27 +268,8 @@ var _ = PDescribe("NodeFlowConfig controller", func() {
 				},
 			}
 
-			// Set up mock responses for each flow request from list of rules in spec On 'Create'
-			if policy.Spec.Rules != nil {
-				var flowID uint32 = 0
-				for _, fr := range policy.Spec.Rules {
-					flowReqs, err := getFlowCreateRequests(fr)
-					Expect(err).ToNot(HaveOccurred())
-
-					mockCreateResponse := &flowapi.ResponseFlowCreate{FlowId: flowID}
-					mockDCF.On("Create", context.TODO(), flowReqs).Return(mockCreateResponse, nil)
-
-					mockValidateResponse := &flowapi.ResponseFlow{}
-					mockDCF.On("Validate", context.TODO(), flowReqs).Return(mockValidateResponse, nil)
-
-					mockDestroyReq := &flowapi.RequestFlowofPort{PortId: portID, FlowId: flowID}
-					mockDCF.On("Destroy", context.TODO(), mockDestroyReq).Return(mockValidateResponse, nil)
-					flowID++
-				}
-			}
-			// Have mock returns our expected mockRes On 'ListPorts'
-			mockRes := &flowapi.ResponsePortList{
-				Ports: []*flowapi.PortsInformation{
+			mockRes := &flow.ResponsePortList{
+				Ports: []*flow.PortsInformation{
 					{
 						PortId:   0,
 						PortMode: "dcf",
@@ -274,7 +277,22 @@ var _ = PDescribe("NodeFlowConfig controller", func() {
 					},
 				},
 			}
-			mockDCF.On("ListPorts", context.TODO(), &flowapi.RequestListPorts{}).Return(mockRes, nil)
+			mockDCF.On("ListPorts", context.TODO(), &flow.RequestListPorts{}).Return(mockRes, nil)
+
+			if policy.Spec.Rules != nil {
+				var flowID uint32 = 0
+				for range policy.Spec.Rules {
+					mockValidateResponse := &flow.ResponseFlow{}
+					mockDCF.On("Validate", context.TODO(), mock.AnythingOfType("*flow.RequestFlowCreate")).Return(mockValidateResponse, nil)
+
+					mockCreateResponse := &flow.ResponseFlowCreate{FlowId: flowID}
+					mockDCF.On("Create", context.TODO(), mock.AnythingOfType("*flow.RequestFlowCreate")).Return(mockCreateResponse, nil)
+
+					mockDestroyReq := &flow.RequestFlowofPort{PortId: portID, FlowId: flowID}
+					mockDCF.On("Destroy", context.TODO(), mockDestroyReq).Return(mockValidateResponse, nil)
+					flowID++
+				}
+			}
 
 			Expect(k8sClient.Create(ctx, policy)).Should(Succeed())
 
@@ -292,7 +310,7 @@ var _ = PDescribe("NodeFlowConfig controller", func() {
 			}, timeout, interval).Should(BeTrue())
 
 			// Verify that Status is updated with correct Port Information
-			Expect(len(createdPolicyObj.Status.PortInfo)).Should(Equal(1))
+			Eventually(len(createdPolicyObj.Status.PortInfo), timeout, interval).Should(Equal(1))
 		})
 
 	})

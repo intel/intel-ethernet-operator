@@ -68,7 +68,7 @@ func ipToUint32(ip net.IP) uint32 {
 	return binary.BigEndian.Uint32(ip)
 }
 
-func uint32ToIP(val uint32) net.IP {
+func Uint32ToIP(val uint32) net.IP {
 	ip := make(net.IP, 4)
 	binary.BigEndian.PutUint32(ip, val)
 	return ip
