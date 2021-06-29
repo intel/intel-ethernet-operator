@@ -1,6 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
 # Copyright (c) 2021 Intel Corporation
 
+export APP_NAME=intel-ethernet-operator
+
 # VERSION defines the project version for the bundle.
 # Update this value when you upgrade the version of your project.
 # To re-generate a bundle for another specific version without changing the standard setup, you can:
@@ -32,14 +34,18 @@ BUNDLE_METADATA_OPTS ?= $(BUNDLE_CHANNELS) $(BUNDLE_DEFAULT_CHANNEL)
 #
 # For example, running 'make bundle-build bundle-push catalog-build catalog-push' will build and push both
 # intel.com/intel-ethernet-operator-bundle:$VERSION and intel.com/intel-ethernet-operator-catalog:$VERSION.
-IMAGE_TAG_BASE ?= intel.com/intel-ethernet-operator
+IMAGE_TAG_BASE ?= intel.com/$(APP_NAME)
 
 # BUNDLE_IMG defines the image:tag used for the bundle.
 # You can use it as an arg. (E.g make bundle-build BUNDLE_IMG=<some-registry>/<project-name-bundle>:<tag>)
 BUNDLE_IMG ?= $(IMAGE_TAG_BASE)-bundle:v$(VERSION)
 
+# Versioned image tag
+IMAGE_TAG_LATEST?=$(APP_NAME):latest
+IMAGE_TAG_VERSION=$(APP_NAME):$(VERSION)
+
 # Image URL to use all building/pushing image targets
-IMG ?= controller:latest
+IMG ?= $(IMAGE_TAG_VERSION)
 # Produce CRDs that work back to Kubernetes 1.11 (no version conversion)
 CRD_OPTIONS ?= "crd:trivialVersions=true,preserveUnknownFields=false"
 
@@ -116,6 +122,7 @@ run: manifests generate fmt vet ## Run a controller from your host.
 
 docker-build: test ## Build docker image with the manager.
 	docker build -t ${IMG} ${DOCKERARGS} .
+	docker image tag ${IMG} ${IMAGE_TAG_LATEST}
 
 docker-push: ## Push docker image with the manager.
 	docker push ${IMG}
