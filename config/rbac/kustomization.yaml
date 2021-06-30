@@ -19,3 +19,8 @@ resources:
 - auth_proxy_role.yaml
 - auth_proxy_role_binding.yaml
 - auth_proxy_client_clusterrole.yaml
+# Ethernet Operator
+- ethernetclusterconfig_editor_role.yaml
+- ethernetclusterconfig_viewer_role.yaml
+- ethernetnodeconfig_editor_role.yaml
+- ethernetnodeconfig_viewer_role.yaml
