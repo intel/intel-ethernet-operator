@@ -75,6 +75,15 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "EthernetClusterConfig")
 		os.Exit(1)
 	}
+
+	// to disable webhook(e.g. when testing locally) run it as 'make run ENABLE_WEBHOOKS=false'
+	if os.Getenv("ENABLE_WEBHOOKS") != "false" {
+		if err = (&flowconfigv1.NodeFlowConfig{}).SetupWebhookWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create webhook", "webhook", "NodeFlowConfig")
+			os.Exit(1)
+		}
+	}
+
 	//+kubebuilder:scaffold:builder
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
