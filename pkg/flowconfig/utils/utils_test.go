@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/golang/protobuf/ptypes"
-	flowapi "github.com/otcshare/intel-ethernet-operator/pkg/rpc/v1/flow"
+	flowapi "github.com/otcshare/intel-ethernet-operator/pkg/flowconfig/rpc/v1/flow"
 )
 
 func TestGetFlowActionAny(t *testing.T) {

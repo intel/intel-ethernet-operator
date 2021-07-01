@@ -5,7 +5,7 @@ package mocks
 import (
 	context "context"
 
-	flow "github.com/otcshare/intel-ethernet-operator/pkg/rpc/v1/flow"
+	flow "github.com/otcshare/intel-ethernet-operator/pkg/flowconfig/rpc/v1/flow"
 	grpc "google.golang.org/grpc"
 
 	mock "github.com/stretchr/testify/mock"

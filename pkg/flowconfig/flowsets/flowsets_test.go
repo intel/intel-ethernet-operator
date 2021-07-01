@@ -21,7 +21,7 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	flowapi "github.com/otcshare/intel-ethernet-operator/pkg/rpc/v1/flow"
+	flowapi "github.com/otcshare/intel-ethernet-operator/pkg/flowconfig/rpc/v1/flow"
 )
 
 func TestFlowSets(t *testing.T) {

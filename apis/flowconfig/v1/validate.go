@@ -23,7 +23,7 @@ import (
 
 	"github.com/golang/protobuf/ptypes"
 	"github.com/golang/protobuf/ptypes/any"
-	"github.com/otcshare/intel-ethernet-operator/pkg/rpc/v1/flow"
+	"github.com/otcshare/intel-ethernet-operator/pkg/flowconfig/rpc/v1/flow"
 )
 
 func validateRteFlowItemEth(itemName string, spec, item *any.Any) error {

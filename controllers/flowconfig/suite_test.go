@@ -10,8 +10,8 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	"github.com/otcshare/intel-ethernet-operator/pkg/flowsets"
-	mock "github.com/otcshare/intel-ethernet-operator/pkg/rpc/v1/flow/mocks"
+	"github.com/otcshare/intel-ethernet-operator/pkg/flowconfig/flowsets"
+	mock "github.com/otcshare/intel-ethernet-operator/pkg/flowconfig/rpc/v1/flow/mocks"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"

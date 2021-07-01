@@ -20,7 +20,7 @@ import (
 	"flag"
 	"os"
 
-	"github.com/otcshare/intel-ethernet-operator/pkg/flowsets"
+	"github.com/otcshare/intel-ethernet-operator/pkg/flowconfig/flowsets"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"

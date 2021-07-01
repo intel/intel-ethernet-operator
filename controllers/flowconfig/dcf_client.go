@@ -22,7 +22,7 @@ import (
 	"net"
 	"time"
 
-	flowapi "github.com/otcshare/intel-ethernet-operator/pkg/rpc/v1/flow"
+	flowapi "github.com/otcshare/intel-ethernet-operator/pkg/flowconfig/rpc/v1/flow"
 	"google.golang.org/grpc"
 )
 

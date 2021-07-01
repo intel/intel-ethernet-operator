@@ -17,7 +17,7 @@ limitations under the License.
 package flowsets
 
 import (
-	flowapi "github.com/otcshare/intel-ethernet-operator/pkg/rpc/v1/flow"
+	flowapi "github.com/otcshare/intel-ethernet-operator/pkg/flowconfig/rpc/v1/flow"
 )
 
 type FlowCreateRecord struct {

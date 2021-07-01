@@ -8,7 +8,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes"
 	"github.com/golang/protobuf/ptypes/any"
-	flowapi "github.com/otcshare/intel-ethernet-operator/pkg/rpc/v1/flow"
+	flowapi "github.com/otcshare/intel-ethernet-operator/pkg/flowconfig/rpc/v1/flow"
 )
 
 func GetFlowItemAny(flowType string, b []byte) (*any.Any, error) {
