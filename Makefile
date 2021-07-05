@@ -1,6 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
 # Copyright (c) 2021 Intel Corporation
 
+export APP_NAME=intel-ethernet-operator
+
 # VERSION defines the project version for the bundle.
 # Update this value when you upgrade the version of your project.
 # To re-generate a bundle for another specific version without changing the standard setup, you can:
@@ -71,7 +73,13 @@ ifdef HTTPS_PROXY
 	DOCKERARGS += --build-arg https_proxy=${HTTPS_PROXY}
 endif
 
-all: build
+# Setting SHELL to bash allows bash commands to be executed by recipes. 
+# This is a requirement for 'setup-envtest.sh' in the test target. 
+# Options are set to exit when a recipe line exits non-zero or a piped command fails. 
+SHELL = /usr/bin/env bash -o pipefail 
+.SHELLFLAGS = -ec
+
+all: build daemon
 
 ##@ General
 
@@ -113,7 +121,7 @@ ENVTEST_ASSETS_DIR=$(shell pwd)/testbin
 test: manifests generate fmt vet ## Run tests.
 	mkdir -p ${ENVTEST_ASSETS_DIR}
 	test -f ${ENVTEST_ASSETS_DIR}/setup-envtest.sh || curl -sSLo ${ENVTEST_ASSETS_DIR}/setup-envtest.sh https://raw.githubusercontent.com/kubernetes-sigs/controller-runtime/v0.7.2/hack/setup-envtest.sh
-	source ${ENVTEST_ASSETS_DIR}/setup-envtest.sh; fetch_envtest_tools $(ENVTEST_ASSETS_DIR); setup_envtest_env $(ENVTEST_ASSETS_DIR); go test ./... -coverprofile cover.out
+	source ${ENVTEST_ASSETS_DIR}/setup-envtest.sh; fetch_envtest_tools $(ENVTEST_ASSETS_DIR); setup_envtest_env $(ENVTEST_ASSETS_DIR); ETHERNET_NAMESPACE=default go test ./... -coverprofile cover.out -v
 
 ##@ Build
 
@@ -123,6 +131,8 @@ build: generate fmt vet ## Build manager binary.
 # Build flowconfig-daemon binary
 flowconfig-daemon: generate fmt vet
 	go build -o bin/flowconfig-daemon cmd/flowconfig-daemon/main.go
+daemon: generate fmt vet
+	go build -o bin/fwddp-daemon cmd/fwddp-daemon/main.go
 
 run: manifests generate fmt vet ## Run a controller from your host.
 	go run ./main.go

@@ -7,6 +7,39 @@ metadata:
   name: manager-role
 rules:
 - apiGroups:
+  - ""
+  resources:
+  - nodes
+  verbs:
+  - list
+  - watch
+- apiGroups:
+  - ethernet.intel.com
+  resources:
+  - ethernetclusterconfigs
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - ethernet.intel.com
+  resources:
+  - ethernetclusterconfigs/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - ethernet.intel.com
+  resources:
+  - ethernetclusterconfigs/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
   - flowconfig.intel.com
   resources:
   - nodeflowconfigs

@@ -11,7 +11,7 @@ type DeviceSelector struct {
 	VendorID   string `json:"vendorId,omitempty"`
 	DeviceID   string `json:"deviceId,omitempty"`
 	PCIAddress string `json:"pciAddress,omitempty"`
-	Drivers    string `json:"drivers,omitempty"`
+	Driver     string `json:"driver,omitempty"`
 }
 
 type DeviceConfig struct {
@@ -47,9 +47,9 @@ var (
 // EthernetClusterConfigSpec defines the desired state of EthernetClusterConfig
 type EthernetClusterConfigSpec struct {
 	// Select the nodes
-	NodeSelectors map[string]string `json:"nodeSelectors,omitempty"`
+	NodeSelector map[string]string `json:"nodeSelectors,omitempty"`
 	// Select the devices on nodes
-	DeviceSelectors []DeviceSelector `json:"deviceSelector,omitempty"`
+	DeviceSelector DeviceSelector `json:"deviceSelector,omitempty"`
 
 	DeviceConfig DeviceConfig `json:"deviceConfig"`
 
