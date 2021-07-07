@@ -4,7 +4,7 @@ kind: Kustomization
 namespace: intel-ethernet-operator-system
 namePrefix: flowconfig-daemon-
 resources:
-- controller-manager.yaml
+- flowconfig-manager.yaml
 patchesStrategicMerge:
 - add_env.yaml
 - add_privilege.yaml

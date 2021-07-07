@@ -1,18 +1,18 @@
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
-  name: controller-manager
+  name: flowconfig-daemon
   namespace: system
   labels:
-    control-plane: flowconfig-daemon-controller-manager
+    control-plane: flowconfig-daemon
 spec:
   selector:
     matchLabels:
-      control-plane: flowconfig-daemon-controller-manager
+      control-plane: flowconfig-daemon
   template:
     metadata:
       labels:
-        control-plane: flowconfig-daemon-controller-manager
+        control-plane: flowconfig-daemon
     spec:
       containers:
       - command:
@@ -26,4 +26,5 @@ spec:
           requests:
             cpu: 100m
             memory: 20Mi
+      serviceAccountName: controller-manager
       terminationGracePeriodSeconds: 10

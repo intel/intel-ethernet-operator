@@ -2,17 +2,17 @@ apiVersion: apps/v1
 kind: DaemonSet
 metadata:
   labels:
-    control-plane: flowconfig-daemon-controller-manager
-  name: flowconfig-daemon-controller-manager
+    control-plane: flowconfig-daemon
+  name: flowconfig-daemon-flowconfig-daemon
   namespace: intel-ethernet-operator-system
 spec:
   selector:
     matchLabels:
-      control-plane: flowconfig-daemon-controller-manager
+      control-plane: flowconfig-daemon
   template:
     metadata:
       labels:
-        control-plane: flowconfig-daemon-controller-manager
+        control-plane: flowconfig-daemon
         name: flowconfig-daemon
     spec:
       containers:
@@ -45,6 +45,7 @@ spec:
         volumeMounts:
         - mountPath: /var/run/dcf/
           name: dcfsockdir
+      serviceAccountName: controller-manager
       terminationGracePeriodSeconds: 10
       volumes:
       - hostPath:
