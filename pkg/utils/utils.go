@@ -4,10 +4,20 @@
 package utils
 
 import (
+	"archive/tar"
+	"compress/gzip"
+	"crypto/md5"
+	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
+
+	"github.com/go-logr/logr"
 )
 
 type SupportedDevices map[string]SupportedDevice
@@ -52,4 +62,175 @@ func LoadSupportedDevices(cfgPath string) (SupportedDevices, error) {
 		return cfg, fmt.Errorf("Failed to unmarshal config: %v", err)
 	}
 	return cfg, nil
+}
+
+func verifyChecksum(path, expected string) (bool, error) {
+	if expected == "" {
+		return false, nil
+	}
+	f, err := os.Open(path)
+	if err != nil {
+		return false, errors.New("Failed to open file to calculate md5")
+	}
+	defer f.Close()
+	h := md5.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return false, errors.New("Failed to copy file to calculate md5")
+	}
+	if hex.EncodeToString(h.Sum(nil)) != expected {
+		return false, nil
+	}
+
+	return true, nil
+}
+
+func downloadFile(path, url, checksum string) error {
+	f, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	r, err := http.Get(url)
+	if err != nil {
+		return err
+	}
+	defer r.Body.Close()
+
+	if r.StatusCode != http.StatusOK {
+		return fmt.Errorf("Unable to download image from: %s err: %s",
+			url, r.Status)
+	}
+
+	_, err = io.Copy(f, r.Body)
+	if err != nil {
+		return err
+	}
+
+	if checksum != "" {
+		match, err := verifyChecksum(path, checksum)
+		if err != nil {
+			return err
+		}
+		if !match {
+			return fmt.Errorf("Checksum mismatch in downloaded file: %s", url)
+		}
+	}
+	return nil
+}
+
+// DownloadFile downloads file from provided URL to provided path. If checksum value is
+// not empty, it first checks if file already exists in path and skips downloading
+// if calculated MD5 value matches provided one.
+func DownloadFile(path, url, checksum string, log logr.Logger) error {
+	_, err := os.Stat(path)
+	if err == nil {
+		ret, err := verifyChecksum(path, checksum)
+		if err != nil {
+			return err
+		}
+		if ret {
+			log.V(4).Info("File already downloaded", "path", path)
+			return nil
+		}
+		err = os.Remove(path)
+		if err != nil {
+			return fmt.Errorf("Unable to remove old file: %s",
+				path)
+		}
+	} else if !os.IsNotExist(err) {
+		return err
+	}
+
+	log.V(4).Info("Downloading file", "url", url)
+	if err := downloadFile(path, url, checksum); err != nil {
+		log.Error(err, "Unable to download file")
+		return err
+	}
+	return nil
+}
+
+func CreateFolder(path string, log logr.Logger) error {
+	_, err := os.Stat(path)
+	if err == nil {
+		return nil
+	}
+
+	if !os.IsNotExist(err) {
+		return err
+	}
+
+	err = os.MkdirAll(path, 0777)
+	if err != nil {
+		log.V(4).Info("Unable to create", "path", path)
+		return err
+	}
+	return nil
+}
+
+type LogWriter struct {
+	logr.Logger
+	stream string
+}
+
+func (l *LogWriter) Write(p []byte) (n int, err error) {
+	o := strings.TrimSpace(string(p))
+	// Split the input string to avoid clumping of multiple lines
+	for _, s := range strings.FieldsFunc(o, func(r rune) bool { return r == '\n' || r == '\r' }) {
+		l.V(2).Info(strings.TrimSpace(s), "stream", l.stream)
+	}
+	return len(p), nil
+}
+
+func Untar(srcPath string, dstPath string, log logr.Logger) error {
+	log.V(4).Info("Extracting file", "srcPath", srcPath, "dstPath", dstPath)
+
+	f, err := os.Open(srcPath)
+	if err != nil {
+		log.Error(err, "Unable to open file")
+		return err
+	}
+	defer f.Close()
+
+	gzr, err := gzip.NewReader(f)
+	if err != nil {
+		return err
+	}
+	defer gzr.Close()
+
+	tr := tar.NewReader(gzr)
+
+	for {
+		fh, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			log.Error(err, "Error when reading tar")
+			return err
+		}
+
+		nfDst := filepath.Join(dstPath, fh.Name)
+
+		switch fh.Typeflag {
+		case tar.TypeReg:
+			nf, err := os.OpenFile(nfDst, os.O_CREATE|os.O_RDWR, os.FileMode(fh.Mode))
+			if err != nil {
+				return err
+			}
+			defer nf.Close()
+
+			_, err = io.Copy(nf, tr)
+			if err != nil {
+				return err
+			}
+		case tar.TypeDir:
+			err := os.MkdirAll(nfDst, fh.FileInfo().Mode())
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
 }
