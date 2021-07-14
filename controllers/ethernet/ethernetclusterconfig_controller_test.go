@@ -375,11 +375,25 @@ var _ = Describe("EthernetControllerTest", func() {
 				Expect(nodeConfigs.Items[0].Name).To(Equal(node.Name))
 				Expect(nodeConfigs.Items[0].Spec.Config).To(HaveLen(2))
 
-				Expect(nodeConfigs.Items[0].Spec.Config[0].DeviceConfig.DDPURL).Should(Equal(cc1.Spec.DeviceConfig.DDPURL))
-				Expect(nodeConfigs.Items[0].Spec.Config[0].DeviceConfig.FWURL).Should(Equal(cc1.Spec.DeviceConfig.FWURL))
+				Expect(nodeConfigs.Items[0].Spec.Config).Should(ContainElement(
+					ethernetv1.DeviceNodeConfig{
+						PCIAddress: "0000:15:00.1",
+						DeviceConfig: ethernetv1.DeviceConfig{
+							FWURL:  cc1.Spec.DeviceConfig.FWURL,
+							DDPURL: cc1.Spec.DeviceConfig.DDPURL,
+						},
+					},
+				))
 
-				Expect(nodeConfigs.Items[0].Spec.Config[1].DeviceConfig.DDPURL).Should(Equal(cc2.Spec.DeviceConfig.DDPURL))
-				Expect(nodeConfigs.Items[0].Spec.Config[1].DeviceConfig.FWURL).Should(Equal(cc2.Spec.DeviceConfig.FWURL))
+				Expect(nodeConfigs.Items[0].Spec.Config).Should(ContainElement(
+					ethernetv1.DeviceNodeConfig{
+						PCIAddress: "0000:15:00.2",
+						DeviceConfig: ethernetv1.DeviceConfig{
+							FWURL:  cc2.Spec.DeviceConfig.FWURL,
+							DDPURL: cc2.Spec.DeviceConfig.DDPURL,
+						},
+					},
+				))
 
 			})
 		})
