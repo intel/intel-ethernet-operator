@@ -92,14 +92,18 @@ type FlowAttr struct {
 
 // FlowItem defines flow pattern definition
 type FlowItem struct {
-	Type string                `json:"type,omitempty"`
+	Type string `json:"type,omitempty"`
+	// +kubebuilder:pruning:PreserveUnknownFields
 	Spec *runtime.RawExtension `json:"spec,omitempty"`
+	// +kubebuilder:pruning:PreserveUnknownFields
 	Last *runtime.RawExtension `json:"last,omitempty"`
+	// +kubebuilder:pruning:PreserveUnknownFields
 	Mask *runtime.RawExtension `json:"mask,omitempty"`
 }
 
 // FlowAction defines flow actions
 type FlowAction struct {
-	Type string                `json:"type,omitempty"`
+	Type string `json:"type,omitempty"`
+	// +kubebuilder:pruning:PreserveUnknownFields
 	Conf *runtime.RawExtension `json:"conf,omitempty"`
 }
