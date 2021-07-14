@@ -127,3 +127,18 @@ func addNetInfo(log logr.Logger, device ethernetv1.Device) ethernetv1.Device {
 	}
 	return device
 }
+
+func getDeviceMAC(pciAddr string, log logr.InfoLogger) (string, error) {
+	inv, err := getInventory(log)
+	if err != nil {
+		log.Error(err, "Failed to retrieve inventory")
+		return "", err
+	}
+
+	for _, i := range inv {
+		if i.PCIAddress == pciAddr {
+			return strings.Replace(strings.ToUpper(i.Firmware.MAC), ":", "", -1), nil
+		}
+	}
+	return "", fmt.Errorf("Device %v not found", pciAddr)
+}

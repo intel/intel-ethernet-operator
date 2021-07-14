@@ -169,15 +169,15 @@ func CreateFolder(path string, log logr.Logger) error {
 }
 
 type LogWriter struct {
-	logr.Logger
-	stream string
+	Log    logr.Logger
+	Stream string
 }
 
 func (l *LogWriter) Write(p []byte) (n int, err error) {
 	o := strings.TrimSpace(string(p))
 	// Split the input string to avoid clumping of multiple lines
 	for _, s := range strings.FieldsFunc(o, func(r rune) bool { return r == '\n' || r == '\r' }) {
-		l.V(2).Info(strings.TrimSpace(s), "stream", l.stream)
+		l.Log.V(2).Info(strings.TrimSpace(s), "stream", l.Stream)
 	}
 	return len(p), nil
 }
