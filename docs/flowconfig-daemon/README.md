@@ -271,7 +271,7 @@ replicaset.apps/intel-ethernet-operator-controller-manager-85b969fd99   1       
 ```
 ### Testing
 #### Create sample ACL rules:
-Change the `name` value in sample config file config/samples/node4_cr.yaml to the node name of target node.
+Change the `name` value in sample config file config/samples/flowconfig_v1_nodeflowconfig.yaml to the node name of target node.
 
 ```
 kubectl apply -f config/samples/flowconfig_v1_nodeflowconfig.yaml
