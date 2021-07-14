@@ -295,6 +295,8 @@ var _ = Describe("NodeFlowConfig controller", func() {
 			}
 
 			Expect(k8sClient.Create(ctx, policy)).Should(Succeed())
+			// Add delays after creating api object before retrieving it again
+			time.Sleep(time.Second * 5)
 
 			/*
 				After the policy spec is created, we expect the controller should update its internal state in its flowSets field and also update
