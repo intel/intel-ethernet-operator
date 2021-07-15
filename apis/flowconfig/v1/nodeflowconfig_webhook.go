@@ -105,12 +105,21 @@ func validate(rules *FlowRules) error {
 }
 
 func validateRteFlowAttr(attr *flow.RteFlowAttr) error {
-	// TODO: implement relevant applicable logic
+	if attr.Ingress > 0x1 {
+		return fmt.Errorf("invalid attr.ingress (%d), must be of value {0,1}", attr.Ingress)
+	}
+	if attr.Egress > 0x1 {
+		return fmt.Errorf("invalid attr.egress (%d), must be of value {0,1}", attr.Egress)
+	}
+	if attr.Transfer > 0x1 {
+		return fmt.Errorf("invalid attr.transfer (%d), must be of value {0,1}", attr.Transfer)
+	}
+
 	return nil
 }
 
 func validatePortId(id uint32) error {
-	// TODO: implement relevant applicable logic
+	// Port ID validation too complex right now
 	return nil
 }
 
