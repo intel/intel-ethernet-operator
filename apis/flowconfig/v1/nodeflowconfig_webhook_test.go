@@ -22,8 +22,6 @@ import (
 
 	"github.com/otcshare/intel-ethernet-operator/pkg/flowconfig/utils"
 
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
 	"github.com/otcshare/intel-ethernet-operator/pkg/flowconfig/rpc/v1/flow"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -1015,75 +1013,97 @@ func TestValidateRteFlowAction(t *testing.T) {
 	}
 }
 
-// Webhook Suite
-var _ = Describe("NodeFlowConfig webhook", func() {
-	var (
-		config1 = &NodeFlowConfig{
-			TypeMeta: metav1.TypeMeta{
-				APIVersion: "sriov.intel.com/v1",
-				Kind:       "NodeFlowConfig",
-			},
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      nodeName,
-				Namespace: NodeFlowConfigNamespace,
-			},
-			Spec: NodeFlowConfigSpec{},
-		}
-	)
-	Context("when creating new NodeFlowConfig spec", func() {
-		It("should validate new NodeFlowConfig spec", func() {
-			By("Creating NodeFlowConfigSpec with invalid Eth Field")
-			config1.Spec.Rules = invalidEthFieldName
+var (
+	policy1 = &NodeFlowConfig{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "sriov.intel.com/v1",
+			Kind:       "NodeFlowConfig",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "testk8snode",
+			Namespace: NodeFlowConfigNamespace,
+		},
+		Spec: NodeFlowConfigSpec{},
+	}
+	old = &runtime.Unknown{}
+)
 
-			Expect(config1.ValidateCreate()).To(HaveOccurred())
+func TestValidateCreate(t *testing.T) {
+	tests := []struct {
+		name    string
+		rules   []*FlowRules
+		wantErr bool
+	}{
+		{
+			name:    "Create NodeFlowConfigSpec with invalid Eth Field",
+			rules:   invalidEthFieldName,
+			wantErr: true,
+		},
+		{
+			name:    "Create NodeFlowConfigSpec with invalid Vlan Item Field",
+			rules:   invalidVlanFieldOutOfRange,
+			wantErr: true,
+		},
+		{
+			name:    "Create NodeFlowConfigSpec with invalid IPv4 Last",
+			rules:   invalidIpv4LastLowerThanSpec,
+			wantErr: true,
+		},
+		{
+			name:    "Create NodeFlowConfigSpec with invalid IPv4 Last - value out of range",
+			rules:   invalidIpv4LastFieldOutOfRange,
+			wantErr: true,
+		},
+		{
+			name:    "Create NodeFlowConfigSpec with invalid Udp spec",
+			rules:   invalidUdpSpecFieldOutOfRange,
+			wantErr: true,
+		},
+		{
+			name:    "Create NodeFlowConfigSpec with invalid Pppoe Field",
+			rules:   invalidPppoeFieldOutOfRange,
+			wantErr: true,
+		},
+		{
+			name:    "Create NodeFlowConfigSpec with invalid Pppoe Proto ID Field",
+			rules:   invalidPppoeProtoIdFieldOutOfRange,
+			wantErr: true,
+		},
+		{
+			name:    "Create NodeFlowConfigSpec with valid but not supported Item",
+			rules:   validUnsupportedItem,
+			wantErr: false,
+		},
+		{
+			name:    "Create NodeFlowConfigSpec with last with emty spec",
+			rules:   lastWithEmptySpec,
+			wantErr: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			policy1.Spec.Rules = tt.rules
 
-			By("Creating NodeFlowConfigSpec with invalid Vlan Item Field")
-			config1.Spec.Rules = invalidVlanFieldOutOfRange
-
-			Expect(config1.ValidateCreate()).To(HaveOccurred())
-
-			By("Creating NodeFlowConfigSpec with invalid IPv4 Last")
-
-			config1.Spec.Rules = invalidIpv4LastLowerThanSpec
-
-			Expect(config1.ValidateCreate()).To(HaveOccurred())
-
-			By("Creating NodeFlowConfigSpec with invalid IPv4 Last")
-
-			config1.Spec.Rules = invalidIpv4LastFieldOutOfRange
-
-			Expect(config1.ValidateCreate()).To(HaveOccurred())
-
-			By("Creating NodeFlowConfigSpec with invalid Udp spec")
-			config1.Spec.Rules = invalidUdpSpecFieldOutOfRange
-
-			Expect(config1.ValidateCreate()).To(HaveOccurred())
-
-			By("Creating NodeFlowConfigSpec with invalid Pppoe Field")
-			config1.Spec.Rules = invalidPppoeFieldOutOfRange
-
-			Expect(config1.ValidateCreate()).To(HaveOccurred())
-
-			By("Creating NodeFlowConfigSpec with invalid Pppoe Proto ID Field")
-			config1.Spec.Rules = invalidPppoeProtoIdFieldOutOfRange
-
-			Expect(config1.ValidateCreate()).To(HaveOccurred())
-
-			By("Creating NodeFlowConfigSpec with valid but not supported Item")
-			config1.Spec.Rules = validUnsupportedItem
-
-			Expect(config1.ValidateCreate()).ToNot(HaveOccurred())
-
-			By("Updating and Deleting NodeFlowConfigSpec with valid but not supported Item")
-			old := &runtime.Unknown{}
-			Expect(config1.ValidateUpdate(old)).ToNot(HaveOccurred())
-			Expect(config1.ValidateDelete()).ToNot(HaveOccurred())
-
-			By("Creating NodeFlowConfigSpec with last with emty spec")
-			config1.Spec.Rules = lastWithEmptySpec
-
-			Expect(config1.ValidateCreate()).To(HaveOccurred())
+			if err := policy1.ValidateCreate(); (err != nil) != tt.wantErr {
+				t.Errorf("NodeFlowConfig.ValidateCreate() error = %v, wantErr %v", err, tt.wantErr)
+			}
 		})
+	}
+}
 
+func TestValidateUpdate(t *testing.T) {
+	policy1.Spec.Rules = validUnsupportedItem
+	t.Run("Updating NodeFlowConfigSpec with valid but not supported Item", func(t *testing.T) {
+		if err := policy1.ValidateUpdate(old); (err != nil) != false {
+			t.Errorf("NodeFlowConfig.ValidateUpdate() error = %v, wantErr %v", err, false)
+		}
 	})
-})
+}
+
+func TestValidateDelete(t *testing.T) {
+	t.Run("Deleting NodeFlowConfigSpec with valid but not supported Item", func(t *testing.T) {
+		if err := policy1.ValidateDelete(); (err != nil) != false {
+			t.Errorf("NodeFlowConfig.ValidateUpdate() error = %v, wantErr %v", err, false)
+		}
+	})
+}
