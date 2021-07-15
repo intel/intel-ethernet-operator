@@ -1,18 +1,5 @@
-/*
-
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-*/
+// SPDX-License-Identifier: Apache-2.0
+// Copyright (c) 2021 Intel Corporation
 
 package v1
 
@@ -21,14 +8,12 @@ import (
 
 	"github.com/golang/protobuf/ptypes"
 	"github.com/golang/protobuf/ptypes/any"
-
+	"github.com/otcshare/intel-ethernet-operator/pkg/flowconfig/rpc/v1/flow"
+	"github.com/otcshare/intel-ethernet-operator/pkg/flowconfig/utils"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
-
-	"github.com/otcshare/intel-ethernet-operator/pkg/flowconfig/rpc/v1/flow"
-	"github.com/otcshare/intel-ethernet-operator/pkg/flowconfig/utils"
 )
 
 // log is for logging in this package.
@@ -43,7 +28,8 @@ func (r *NodeFlowConfig) SetupWebhookWithManager(mgr ctrl.Manager) error {
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 
 // TODO(user): change verbs to "verbs=create;update;delete" if you want to enable deletion validation.
-// +kubebuilder:webhook:webhookVersions=create,failurePolicy=fail,groups=flowconfig.intel.com,resources=nodeflowconfigs,verbs=create;update,versions=v1,name=vnodeflowconfig.kb.io,path=/validate-flowconfig-intel-com-v1-nodeflowconfig,mutating=false
+//+kubebuilder:webhook:path=/validate-flowconfig-intel-com-v1-nodeflowconfig,mutating=false,failurePolicy=fail,sideEffects=None,groups=flowconfig.intel.com,resources=nodeflowconfigs,verbs=create;update,versions=v1,name=vnodeflowconfig.kb.io,admissionReviewVersions={v1,v1beta1}
+
 var _ webhook.Validator = &NodeFlowConfig{}
 
 func validate(rules *FlowRules) error {
@@ -304,7 +290,6 @@ func (r *NodeFlowConfig) ValidateCreate() error {
 			return err
 		}
 	}
-
 	return nil
 }
 
@@ -328,6 +313,8 @@ func (r *NodeFlowConfig) ValidateUpdate(old runtime.Object) error {
 
 // ValidateDelete implements webhook.Validator so a webhook will be registered for the type
 func (r *NodeFlowConfig) ValidateDelete() error {
+	nodeflowconfiglog.Info("validate delete", "name", r.Name)
+
 	// NOTE(plalx): nothing to do on deletion
 	return nil
 }
