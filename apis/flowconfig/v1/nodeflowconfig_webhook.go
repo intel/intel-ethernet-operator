@@ -6,7 +6,6 @@ package v1
 import (
 	"fmt"
 
-	"github.com/golang/protobuf/ptypes"
 	"github.com/golang/protobuf/ptypes/any"
 	"github.com/otcshare/intel-ethernet-operator/pkg/flowconfig/rpc/v1/flow"
 	"github.com/otcshare/intel-ethernet-operator/pkg/flowconfig/utils"
@@ -243,35 +242,6 @@ func validateRteFlowAction(rteFlowAction *flow.RteFlowAction) error {
 		nodeflowconfiglog.Info("correct action type, but validation not implemented: %s", rteFlowAction.GetType())
 	default:
 		return fmt.Errorf("invalid action type: %s", rteFlowAction.GetType())
-	}
-
-	return nil
-}
-
-func validateRteFlowActionConfigEmpty(spec *any.Any) error {
-	if spec != nil {
-		return fmt.Errorf("unexpected key 'conf': action is not configurable")
-	}
-	return nil
-}
-
-func validateRteFlowActionVf(spec *any.Any) error {
-	conf := new(flow.RteFlowActionVf)
-
-	if err := ptypes.UnmarshalAny(spec, conf); err != nil {
-		return fmt.Errorf("could not unmarshal RTE_FLOW_ACTION_TYPE_VF configuration: %s", err)
-	}
-
-	// CVL supports up to 256 VFs
-	if conf.Id > 255 {
-		return fmt.Errorf("'id' must be in 0-255 range")
-	}
-	// whether to use original VF, uses 1 bit so it can be zero or one
-	if conf.Original > 1 {
-		return fmt.Errorf("'original' must be 0 or 1")
-	}
-	if conf.Reserved > 0 {
-		return fmt.Errorf("'reserved' field can't be non-zero")
 	}
 
 	return nil

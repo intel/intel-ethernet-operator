@@ -26,6 +26,8 @@ import (
 	"github.com/otcshare/intel-ethernet-operator/pkg/flowconfig/rpc/v1/flow"
 )
 
+// RteFlowItem Validation
+
 func validateRteFlowItemEth(itemName string, spec, item *any.Any) error {
 	specItem := new(flow.RteFlowItemEth)
 	if spec != nil {
@@ -351,6 +353,37 @@ func validateUint32ItemField(itemName, field string, specValue, fieldValue uint3
 		if fieldValue < specValue {
 			return fmt.Errorf("last.%s (%d) must be higher or equal to spec: %s (%d)", field, fieldValue, field, specValue)
 		}
+	}
+
+	return nil
+}
+
+// RteFlowAction Validation
+
+func validateRteFlowActionConfigEmpty(spec *any.Any) error {
+	if spec != nil {
+		return fmt.Errorf("unexpected key 'conf': action is not configurable")
+	}
+	return nil
+}
+
+func validateRteFlowActionVf(spec *any.Any) error {
+	conf := new(flow.RteFlowActionVf)
+
+	if err := ptypes.UnmarshalAny(spec, conf); err != nil {
+		return fmt.Errorf("could not unmarshal RTE_FLOW_ACTION_TYPE_VF configuration: %s", err)
+	}
+
+	// CVL supports up to 256 VFs
+	if conf.Id > 255 {
+		return fmt.Errorf("'id' must be in 0-255 range")
+	}
+	// whether to use original VF, uses 1 bit so it can be zero or one
+	if conf.Original > 1 {
+		return fmt.Errorf("'original' must be 0 or 1")
+	}
+	if conf.Reserved > 0 {
+		return fmt.Errorf("'reserved' field can't be non-zero")
 	}
 
 	return nil
