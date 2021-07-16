@@ -1075,7 +1075,7 @@ func TestValidateCreate(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name:    "Create NodeFlowConfigSpec with last with emty spec",
+			name:    "Create NodeFlowConfigSpec with last with empty spec",
 			rules:   lastWithEmptySpec,
 			wantErr: true,
 		},
