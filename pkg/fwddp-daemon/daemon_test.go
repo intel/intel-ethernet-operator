@@ -5,8 +5,11 @@ package daemon
 
 import (
 	"context"
+	"io/ioutil"
+	"os"
 	"os/exec"
 	"path"
+	"path/filepath"
 	"syscall"
 
 	gerrors "errors"
@@ -51,6 +54,7 @@ func initTestData() TestData {
 						DeviceConfig: ethernetv1.DeviceConfig{
 							DDPURL: "http://testddpurl",
 							FWURL:  "http://testfwurl",
+							Force:  true,
 						},
 					},
 				},
@@ -365,6 +369,145 @@ var _ = Describe("FirmwareDaemonTest", func() {
 			Expect(nodeConfigs.Items[0].Status.Conditions[0].Status).To(Equal(metav1.ConditionTrue))
 			Expect(nodeConfigs.Items[0].Status.Conditions[0].Reason).To(Equal(string(UpdateSucceeded)))
 			Expect(nodeConfigs.Items[0].Status.Conditions[0].Message).To(Equal("Updated successfully"))
+		})
+	})
+
+	var _ = Context("verifyCompatibility", func() {
+		BeforeEach(func() {
+			getIDs = func(string, logr.InfoLogger) (DeviceIDs, error) {
+				return DeviceIDs{
+					VendorID: "0001",
+					Class:    "00",
+					SubClass: "00",
+					DeviceID: "123",
+				}, nil
+			}
+		})
+
+		AfterEach(func() {
+		})
+
+		var _ = It("will return no error if force flag is provided", func() {
+			dev := ethernetv1.Device{
+				PCIAddress:    "00:00:00.0",
+				Name:          "TestName",
+				Driver:        "ice",
+				DriverVersion: "1.0.0",
+				Firmware: ethernetv1.FirmwareInfo{
+					MAC:     "aa:bb:cc:dd:ee:ff",
+					Version: "2.00",
+				},
+			}
+
+			Expect(initReconciler(reconciler, data.NodeConfig.Name, data.NodeConfig.Namespace)).To(Succeed())
+
+			err := reconciler.verifyCompatibility("testfwpath", "testddppath", dev, true)
+			Expect(err).ToNot(HaveOccurred())
+		})
+		var _ = It("will use firmware version from device if no path is provided", func() {
+			dev := ethernetv1.Device{
+				PCIAddress:    "00:00:00.0",
+				Name:          "TestName",
+				Driver:        "ice",
+				DriverVersion: "1.0.0",
+				Firmware: ethernetv1.FirmwareInfo{
+					MAC:     "aa:bb:cc:dd:ee:ff",
+					Version: "2.00 0xffffffff 1234",
+				},
+			}
+
+			Expect(initReconciler(reconciler, data.NodeConfig.Name, data.NodeConfig.Namespace)).To(Succeed())
+
+			err := reconciler.verifyCompatibility("", "profile2-2.00", dev, false)
+			Expect(err).ToNot(HaveOccurred())
+		})
+		var _ = It("will return error if firmware path is provided but fails when opening version.txt file", func() {
+			dev := ethernetv1.Device{
+				PCIAddress:    "00:00:00.0",
+				Name:          "TestName",
+				Driver:        "ice",
+				DriverVersion: "1.0.0",
+				Firmware: ethernetv1.FirmwareInfo{
+					MAC:     "aa:bb:cc:dd:ee:ff",
+					Version: "2.00 0xffffffff 1234",
+				},
+				DDP: ethernetv1.DDPInfo{
+					PackageName: "profile2",
+					Version:     "2.00",
+					TrackID:     "0xffffffff",
+				},
+			}
+
+			Expect(initReconciler(reconciler, data.NodeConfig.Name, data.NodeConfig.Namespace)).To(Succeed())
+
+			err := reconciler.verifyCompatibility("someinvalidpath", "", dev, false)
+			Expect(err).To(HaveOccurred())
+		})
+		var _ = It("will return no error if firmware path with valid version.txt file is provided", func() {
+			dev := ethernetv1.Device{
+				PCIAddress:    "00:00:00.0",
+				Name:          "TestName",
+				Driver:        "ice",
+				DriverVersion: "1.0.0",
+				Firmware: ethernetv1.FirmwareInfo{
+					MAC:     "aa:bb:cc:dd:ee:ff",
+					Version: "99.99 0xffffffff 1234",
+				},
+				DDP: ethernetv1.DDPInfo{
+					PackageName: "profile2",
+					Version:     "2.00",
+					TrackID:     "0xffffffff",
+				},
+			}
+
+			Expect(initReconciler(reconciler, data.NodeConfig.Name, data.NodeConfig.Namespace)).To(Succeed())
+
+			tmpdir, err := ioutil.TempDir("/tmp/", "testdir")
+			Expect(err).ToNot(HaveOccurred())
+			defer os.RemoveAll(tmpdir)
+
+			dir := filepath.Join(tmpdir, nvmupdate64eDirSuffix)
+			err = os.MkdirAll(dir, 0777)
+			Expect(err).ToNot(HaveOccurred())
+
+			err = ioutil.WriteFile(filepath.Join(dir, nvmupdateVersionFilename), []byte("v2.00"), 0666)
+			Expect(err).ToNot(HaveOccurred())
+
+			err = reconciler.verifyCompatibility(tmpdir, "", dev, false)
+			Expect(err).ToNot(HaveOccurred())
+		})
+		var _ = It("will return no error on any firmware provided if compatibility map entry with wildcard matches", func() {
+			dev := ethernetv1.Device{
+				PCIAddress:    "00:00:00.0",
+				Name:          "TestName",
+				Driver:        "ice",
+				DriverVersion: "9.9.9",
+				Firmware: ethernetv1.FirmwareInfo{
+					MAC:     "aa:bb:cc:dd:ee:ff",
+					Version: "0.99 0xffffffff 1234",
+				},
+				DDP: ethernetv1.DDPInfo{
+					PackageName: "profile3",
+					Version:     "3.00",
+					TrackID:     "0xffffffff",
+				},
+			}
+
+			Expect(initReconciler(reconciler, data.NodeConfig.Name, data.NodeConfig.Namespace)).To(Succeed())
+
+			tmpdir, err := ioutil.TempDir("/tmp/", "testdir")
+			Expect(err).ToNot(HaveOccurred())
+			defer os.RemoveAll(tmpdir)
+
+			dir := filepath.Join(tmpdir, nvmupdate64eDirSuffix)
+			err = os.MkdirAll(dir, 0777)
+			Expect(err).ToNot(HaveOccurred())
+
+			err = ioutil.WriteFile(filepath.Join(dir, nvmupdateVersionFilename), []byte("v1.23"), 0666)
+			Expect(err).ToNot(HaveOccurred())
+
+			err = reconciler.verifyCompatibility(tmpdir, "", dev, false)
+			Expect(err).ToNot(HaveOccurred())
 		})
 	})
 })

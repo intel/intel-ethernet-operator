@@ -32,36 +32,44 @@ const (
 	configFilesizeLimitInBytes = 10485760 //10 MB
 )
 
-func LoadSupportedDevices(cfgPath string) (SupportedDevices, error) {
-	cfg := SupportedDevices{}
+func LoadSupportedDevices(cfgPath string, inStruct interface{}) error {
 	file, err := os.Open(filepath.Clean(cfgPath))
 	if err != nil {
-		return cfg, fmt.Errorf("Failed to open config: %v", err)
+		return fmt.Errorf("Failed to open config: %v", err)
 	}
 	defer file.Close()
 
 	// get file stat
 	stat, err := file.Stat()
 	if err != nil {
-		return cfg, fmt.Errorf("Failed to get file stat: %v", err)
+		return fmt.Errorf("Failed to get file stat: %v", err)
 	}
 
 	// check file size
 	if stat.Size() > configFilesizeLimitInBytes {
-		return cfg, fmt.Errorf("Config file size %d, exceeds limit %d bytes",
+		return fmt.Errorf("Config file size %d, exceeds limit %d bytes",
 			stat.Size(), configFilesizeLimitInBytes)
 	}
 
 	cfgData := make([]byte, stat.Size())
 	bytesRead, err := file.Read(cfgData)
 	if err != nil || int64(bytesRead) != stat.Size() {
-		return cfg, fmt.Errorf("Unable to read config: %s", filepath.Clean(cfgPath))
+		return fmt.Errorf("Unable to read config: %s", filepath.Clean(cfgPath))
 	}
 
-	if err = json.Unmarshal(cfgData, &cfg); err != nil {
-		return cfg, fmt.Errorf("Failed to unmarshal config: %v", err)
+	if err = json.Unmarshal(cfgData, inStruct); err != nil {
+		return fmt.Errorf("Failed to unmarshal config: %v", err)
 	}
-	return cfg, nil
+	return nil
+}
+
+func (l *LogWriter) Write(p []byte) (n int, err error) {
+	o := strings.TrimSpace(string(p))
+	// Split the input string to avoid clumping of multiple lines
+	for _, s := range strings.FieldsFunc(o, func(r rune) bool { return r == '\n' || r == '\r' }) {
+		l.Log.V(2).Info(strings.TrimSpace(s), "stream", l.Stream)
+	}
+	return len(p), nil
 }
 
 func verifyChecksum(path, expected string) (bool, error) {
@@ -171,15 +179,6 @@ func CreateFolder(path string, log logr.Logger) error {
 type LogWriter struct {
 	Log    logr.Logger
 	Stream string
-}
-
-func (l *LogWriter) Write(p []byte) (n int, err error) {
-	o := strings.TrimSpace(string(p))
-	// Split the input string to avoid clumping of multiple lines
-	for _, s := range strings.FieldsFunc(o, func(r rune) bool { return r == '\n' || r == '\r' }) {
-		l.Log.V(2).Info(strings.TrimSpace(s), "stream", l.Stream)
-	}
-	return len(p), nil
 }
 
 func Untar(srcPath string, dstPath string, log logr.Logger) error {

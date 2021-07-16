@@ -15,6 +15,7 @@ import (
 	"github.com/jaypipes/ghw/pkg/net"
 	"github.com/jaypipes/ghw/pkg/pci"
 	ethernetv1 "github.com/otcshare/intel-ethernet-operator/apis/ethernet/v1"
+	"github.com/otcshare/intel-ethernet-operator/pkg/utils"
 )
 
 const (
@@ -55,7 +56,7 @@ func isDeviceSupported(d *pci.Device) bool {
 		return false
 	}
 
-	for _, supported := range supportedDevices {
+	for _, supported := range *compatibilityMap {
 		if supported.VendorID == d.Vendor.ID &&
 			supported.Class == d.Class.ID &&
 			supported.SubClass == d.Subclass.ID &&
@@ -141,4 +142,26 @@ func getDeviceMAC(pciAddr string, log logr.InfoLogger) (string, error) {
 		}
 	}
 	return "", fmt.Errorf("Device %v not found", pciAddr)
+}
+
+type DeviceIDs utils.SupportedDevice
+
+func getDeviceIDs(pciAddr string, log logr.InfoLogger) (DeviceIDs, error) {
+	pciDevices, err := getPCIDevices()
+	if err != nil {
+		log.Error(err, "Failed to get PCI Devices")
+		return DeviceIDs{}, err
+	}
+
+	for _, pciDevice := range pciDevices {
+		if pciDevice.Address == pciAddr {
+			return DeviceIDs{
+				VendorID: pciDevice.Vendor.ID,
+				Class:    pciDevice.Class.ID,
+				SubClass: pciDevice.Subclass.ID,
+				DeviceID: pciDevice.Product.ID,
+			}, nil
+		}
+	}
+	return DeviceIDs{}, fmt.Errorf("Device %v not found", pciAddr)
 }

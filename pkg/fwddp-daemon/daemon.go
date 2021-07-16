@@ -6,8 +6,11 @@ package daemon
 import (
 	"context"
 	"fmt"
+	"os"
 	"os/exec"
 	"path"
+	"path/filepath"
+	"strings"
 	"syscall"
 
 	"github.com/go-logr/logr"
@@ -26,23 +29,35 @@ import (
 )
 
 const (
-	nvmupdate64e = "./nvmupdate64e"
+	nvmupdate64e             = "./nvmupdate64e"
+	nvmupdateVersionFilesize = 10
 )
 
 var (
-	supportedDevices utils.SupportedDevices
-	compatMapPath    = "./compat.json"
+	compatibilityMap     *CompatibilityMap
+	compatMapPath        = "./compat.json"
+	compatibilityWildard = "*"
 
 	fwInstallDest            = "/workdir/nvmupdate/"
 	nvmupdatePackageFilename = "nvmupdate.tar.gz"
 	nvmupdate64eDirSuffix    = "E810/Linux_x64/"
+	nvmupdateVersionFilename = "version.txt"
 
 	getInventory  = GetInventory
+	getIDs        = getDeviceIDs
 	nvmupdateExec = runExecWithLog
 
 	utilsDownloadFile = utils.DownloadFile
 	utilsUntar        = utils.Untar
 )
+
+type CompatibilityMap map[string]Compatibility
+type Compatibility struct {
+	utils.SupportedDevice
+	Driver   string
+	Firmware string
+	DDP      []string
+}
 
 func nvmupdate64eDir(p string) string     { return path.Join(p, nvmupdate64eDirSuffix) }
 func nvmupdate64eCfgPath(p string) string { return path.Join(nvmupdate64eDir(p), "nvmupdate.cfg") }
@@ -106,11 +121,12 @@ type NodeConfigReconciler struct {
 func NewNodeConfigReconciler(c client.Client, clientSet *clientset.Clientset, log logr.Logger,
 	nodeName, ns string) (*NodeConfigReconciler, error) {
 
-	var err error
-	supportedDevices, err = utils.LoadSupportedDevices(compatMapPath)
+	cmpMap := make(CompatibilityMap)
+	err := utils.LoadSupportedDevices(compatMapPath, &cmpMap)
 	if err != nil {
 		return nil, err
 	}
+	compatibilityMap = &cmpMap
 
 	return &NodeConfigReconciler{
 		Client:    c,
@@ -239,9 +255,11 @@ func (r *NodeConfigReconciler) prepare(config ethernetv1.DeviceNodeConfig, inv [
 	log := r.log.WithName("prepare")
 
 	found := false
+	dev := ethernetv1.Device{}
 	for _, i := range inv {
 		if i.PCIAddress == config.PCIAddress {
 			found = true
+			dev = i
 			break
 		}
 	}
@@ -262,7 +280,7 @@ func (r *NodeConfigReconciler) prepare(config ethernetv1.DeviceNodeConfig, inv [
 		return deviceUpdateArtifacts{}, err
 	}
 
-	err = r.verifyCompatibility(fwPath, ddpPath, config.DeviceConfig.Force)
+	err = r.verifyCompatibility(fwPath, ddpPath, dev, config.DeviceConfig.Force)
 	if err != nil {
 		log.Error(err, "Failed to verify compatibility")
 		return deviceUpdateArtifacts{}, err
@@ -300,6 +318,53 @@ func (r *NodeConfigReconciler) prepareFirmware(config ethernetv1.DeviceNodeConfi
 	}
 
 	return targetPath, nil
+}
+
+func (r *NodeConfigReconciler) getFWVersion(fwPath string, dev ethernetv1.Device) (string, error) {
+	log := r.log.WithName("getFWVersion")
+	if fwPath == "" {
+		log.V(4).Info("Firmware package not provided - retrieving version from device")
+		v := strings.Split(dev.Firmware.Version, " ")
+		if len(v) != 3 {
+			return "", fmt.Errorf("Invalid firmware package version: %v", dev.Firmware.Version)
+		}
+		// Pick first element from eg: 2.40 0x80007064 1.2898.0 which is the NVM Version
+		return v[0], nil
+
+	} else {
+		log.V(4).Info("Retrieving version from", "path", fwPath)
+		path := filepath.Join(fwPath, nvmupdate64eDirSuffix, nvmupdateVersionFilename)
+		file, err := os.Open(path)
+		if err != nil {
+			return "", fmt.Errorf("Failed to open version file: %v", err)
+		}
+		defer file.Close()
+
+		ver := make([]byte, nvmupdateVersionFilesize)
+		n, err := file.Read(ver)
+		if err != nil {
+			return "", fmt.Errorf("Unable to read: %v", path)
+		}
+		// Example version.txt content: v2.40
+		return strings.ReplaceAll(strings.TrimSpace(string(ver[:n])), "v", ""), nil
+	}
+}
+
+func (r *NodeConfigReconciler) getDDPVersion(ddpPath string, dev ethernetv1.Device) (string, error) {
+	log := r.log.WithName("getDDPVersion")
+	if ddpPath == "" {
+		log.V(4).Info("DDP package not provided - retrieving version from device")
+		return dev.DDP.PackageName + "-" + dev.DDP.Version, nil
+	} else {
+		// TODO: DDP Tool currently does not allow to get package version from file
+		// return ddpPath instead
+		log.V(4).Info("Retrieving version from", "path", ddpPath)
+		return ddpPath, nil
+	}
+}
+
+func getDriverVersion(dev ethernetv1.Device) string {
+	return dev.Driver + "-" + dev.DriverVersion
 }
 
 func (r *NodeConfigReconciler) updateFirmware(pciAddr, fwPath string) error {
@@ -344,17 +409,79 @@ func runExecWithLog(cmd *exec.Cmd, log logr.Logger) error {
 
 func (r *NodeConfigReconciler) prepareDDP(config ethernetv1.DeviceNodeConfig) (string, error) {
 	log := r.log.WithName("prepareDDP")
-	// TODO: Download DDP profile, extract if required and return path if successful
+	// TODO: Download DDP profile, extract if required and return path if successful.
+	// For now, return the URL instead
 	_ = log
-	return "", nil
+	return config.DeviceConfig.DDPURL, nil
 }
 
-func (r *NodeConfigReconciler) verifyCompatibility(fwPath, ddpPath string, force bool) error {
+func (r *NodeConfigReconciler) verifyCompatibility(fwPath, ddpPath string, dev ethernetv1.Device, force bool) error {
 	log := r.log.WithName("verifyCompatibility")
-	// TODO: Get versions of proviced FW and DDP if provided (if empty, retrieve current from device);
-	// compare against compatibility map; skip if force==true
-	_ = log
-	return nil
+
+	if force {
+		log.V(2).Info("Force flag provided - skipping compatibility check for", "device", dev.PCIAddress)
+		return nil
+	}
+
+	fwVer, err := r.getFWVersion(fwPath, dev)
+	if err != nil {
+		log.Error(err, "Failed to retrieve firmware version")
+		return err
+	}
+
+	ddpVer, err := r.getDDPVersion(ddpPath, dev)
+	if err != nil {
+		log.Error(err, "Failed to retrieve DDP version")
+		return err
+	}
+
+	driverVer := getDriverVersion(dev)
+	deviceIDs, err := getIDs(dev.PCIAddress, log)
+	if err != nil {
+		log.Error(err, "Failed to retrieve device IDs")
+		return err
+	}
+
+	for _, c := range *compatibilityMap {
+		if deviceMatcher(deviceIDs,
+			fwVer,
+			ddpVer,
+			driverVer,
+			c) {
+			log.V(2).Info("Matching compatibility entry found", "entry", c)
+			return nil
+		}
+	}
+
+	return fmt.Errorf("No matching compatibility entry for %v (Ven:%v Cl:%v SubCl:%v DevID:%v Drv:%v FW:%v DDP:%v)",
+		dev.PCIAddress, deviceIDs.VendorID, deviceIDs.Class, deviceIDs.SubClass, deviceIDs.DeviceID, driverVer,
+		fwVer, ddpVer)
+}
+
+var deviceMatcher = func(ids DeviceIDs, fwVer, ddpVer, driverVer string, entry Compatibility) bool {
+	if ids.VendorID == entry.VendorID &&
+		ids.Class == entry.Class &&
+		ids.SubClass == entry.SubClass &&
+		ids.DeviceID == entry.DeviceID &&
+		(entry.Firmware == compatibilityWildard || fwVer == entry.Firmware) &&
+		(entry.Driver == compatibilityWildard || driverVer == entry.Driver) &&
+		ddpVersionMatcher(ddpVer, entry.DDP) {
+		return true
+	}
+	return false
+}
+
+var ddpVersionMatcher = func(ddpVer string, ddp []string) bool {
+	if len(ddp) == 1 && ddp[0] == compatibilityWildard {
+		return true
+	}
+
+	for _, d := range ddp {
+		if ddpVer == d {
+			return true
+		}
+	}
+	return false
 }
 
 func (r *NodeConfigReconciler) CreateEmptyNodeConfigIfNeeded(c client.Client) error {

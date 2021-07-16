@@ -50,50 +50,60 @@ var _ = Describe("InventoryTest", func() {
 
 		var _ = It("will return empty []ethernetv1.Device if supported device was not found", func() {
 			getPCIDevices = pcis
-			supportedDevices = utils.SupportedDevices{
-				"dev1": utils.SupportedDevice{
-					VendorID: "0001",
-					Class:    "00",
-					SubClass: "00",
-					DeviceID: "test",
+			compatibilityMap = &CompatibilityMap{
+				"dev1": Compatibility{
+					SupportedDevice: utils.SupportedDevice{
+						VendorID: "0001",
+						Class:    "00",
+						SubClass: "00",
+						DeviceID: "test",
+					},
 				},
 			}
 			d, err := GetInventory(log)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(d).To(BeEmpty())
-
-			supportedDevices = utils.SupportedDevices{
-				"dev1": utils.SupportedDevice{
-					VendorID: "0000",
-					Class:    "01",
-					SubClass: "00",
-					DeviceID: "test",
+			compatibilityMap = &CompatibilityMap{
+				"dev1": Compatibility{
+					SupportedDevice: utils.SupportedDevice{
+						VendorID: "0000",
+						Class:    "01",
+						SubClass: "00",
+						DeviceID: "test",
+					},
 				},
 			}
+
 			d, err = GetInventory(log)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(d).To(BeEmpty())
 
-			supportedDevices = utils.SupportedDevices{
-				"dev1": utils.SupportedDevice{
-					VendorID: "0000",
-					Class:    "00",
-					SubClass: "01",
-					DeviceID: "test",
+			compatibilityMap = &CompatibilityMap{
+				"dev1": Compatibility{
+					SupportedDevice: utils.SupportedDevice{
+						VendorID: "0000",
+						Class:    "00",
+						SubClass: "01",
+						DeviceID: "test",
+					},
 				},
 			}
+
 			d, err = GetInventory(log)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(d).To(BeEmpty())
 
-			supportedDevices = utils.SupportedDevices{
-				"dev1": utils.SupportedDevice{
-					VendorID: "0000",
-					Class:    "00",
-					SubClass: "00",
-					DeviceID: "test2",
+			compatibilityMap = &CompatibilityMap{
+				"dev1": Compatibility{
+					SupportedDevice: utils.SupportedDevice{
+						VendorID: "0000",
+						Class:    "00",
+						SubClass: "00",
+						DeviceID: "test2",
+					},
 				},
 			}
+
 			d, err = GetInventory(log)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(d).To(BeEmpty())
@@ -105,14 +115,17 @@ var _ = Describe("InventoryTest", func() {
 				return nil, fmt.Errorf("failed to get network info")
 			}
 
-			supportedDevices = utils.SupportedDevices{
-				"dev1": utils.SupportedDevice{
-					VendorID: "0000",
-					Class:    "00",
-					SubClass: "00",
-					DeviceID: "test",
+			compatibilityMap = &CompatibilityMap{
+				"dev1": Compatibility{
+					SupportedDevice: utils.SupportedDevice{
+						VendorID: "0000",
+						Class:    "00",
+						SubClass: "00",
+						DeviceID: "test",
+					},
 				},
 			}
+
 			d, err := GetInventory(log)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(d).ToNot(BeEmpty())
@@ -142,14 +155,17 @@ var _ = Describe("InventoryTest", func() {
 				return nil, fmt.Errorf("Error when calling ethtool")
 			}
 
-			supportedDevices = utils.SupportedDevices{
-				"dev1": utils.SupportedDevice{
-					VendorID: "0000",
-					Class:    "00",
-					SubClass: "00",
-					DeviceID: "test",
+			compatibilityMap = &CompatibilityMap{
+				"dev1": Compatibility{
+					SupportedDevice: utils.SupportedDevice{
+						VendorID: "0000",
+						Class:    "00",
+						SubClass: "00",
+						DeviceID: "test",
+					},
 				},
 			}
+
 			d, err := GetInventory(log)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(d).ToNot(BeEmpty())
@@ -191,14 +207,17 @@ supports-priv-flags: yes
 `), nil
 			}
 
-			supportedDevices = utils.SupportedDevices{
-				"dev1": utils.SupportedDevice{
-					VendorID: "0000",
-					Class:    "00",
-					SubClass: "00",
-					DeviceID: "test",
+			compatibilityMap = &CompatibilityMap{
+				"dev1": Compatibility{
+					SupportedDevice: utils.SupportedDevice{
+						VendorID: "0000",
+						Class:    "00",
+						SubClass: "00",
+						DeviceID: "test",
+					},
 				},
 			}
+
 			d, err := GetInventory(log)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(d).ToNot(BeEmpty())

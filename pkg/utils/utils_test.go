@@ -29,17 +29,20 @@ func TestMain(t *testing.T) {
 var _ = Describe("Utils", func() {
 	var _ = Describe("LoadSupportedDevices", func() {
 		var _ = It("will fail if the file does not exist", func() {
-			cfg, err := LoadSupportedDevices("notExistingFile.json")
+			cfg := make(SupportedDevices)
+			err := LoadSupportedDevices("notExistingFile.json", &cfg)
 			Expect(err).To(HaveOccurred())
 			Expect(cfg).To(Equal(SupportedDevices{}))
 		})
 		var _ = It("will fail if the file is not json", func() {
-			cfg, err := LoadSupportedDevices("testdata/invalid.json")
+			cfg := make(SupportedDevices)
+			err := LoadSupportedDevices("testdata/invalid.json", &cfg)
 			Expect(err).To(HaveOccurred())
 			Expect(cfg).To(Equal(SupportedDevices{}))
 		})
 		var _ = It("will load the valid config successfully", func() {
-			cfg, err := LoadSupportedDevices("testdata/valid.json")
+			cfg := make(SupportedDevices)
+			err := LoadSupportedDevices("testdata/valid.json", &cfg)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(cfg).To(Equal(SupportedDevices{
 				"E810": {
