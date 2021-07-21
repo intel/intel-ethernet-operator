@@ -7,7 +7,7 @@
 The FlowConfig Daemon is K8s custom controller that runs as node level agent on each node.
 This Operator mediator between cluster admin and the underlying DCF tool to mananage Intel Columbiaville(800 series) NICs to configure and manage advanced switch filter and ACL rules.
 
-This Operator is built on using Operator SDK v1.X.X [TO-DO]
+This Operator is built on using Operator SDK v1.7.2.
 
 ```
 +-------------------------------------------+
@@ -41,9 +41,9 @@ Fig: FlowConfig Daemon Controller relationship diagram with DCF and CVL NIC.
 - Multus
 - Hugepage suppport
 - Golang
-- Operator SDK:[TO-DO]
-- Intel E810 Firmware version:[TO-DO]
-- Intel ICE Driver:[TO-DO]
+- Operator SDK: v1.7.2
+- Intel E810 Firmware version: 2.22
+- Intel ICE Driver version: 1.2.1
 - K8s cert-manager
 
 #### K8s cert-manager
@@ -232,7 +232,7 @@ EAL: No legacy callbacks, legacy socket not created
 ```
 
 ###  Install Operator SDK
-Install Operator SDK v1.X[TO-DO] using installation instructions from [here](https://sdk.operatorframework.io/docs/installation/install-operator-sdk/).
+Install Operator SDK v1.7.2 using installation instructions from [here](https://sdk.operatorframework.io/docs/installation/install-operator-sdk/).
 
 ### Build Intel Ethernet Operator
 ```
@@ -289,7 +289,7 @@ kubectl -n sriov-cp-operator-system logs -f sriov-cp-operator-controller-manager
 ...
 ```
 
-To read more about creating ACL rules see this [creating-rules.md](docs/flowconfig-daemon/creating-rules.md) user guide.
+To read more about creating ACL rules see this [creating-rules.md](docs/flowconfig-daemon/creating-rules.md) user guide. Note that some items may require a recent [Ice COMMS DDP package](https://downloadcenter.intel.com/download/29889/Intel-Ethernet-800-Series-Telecommunication-Comms-Dynamic-Device-Personalization-DDP-Package) to be loaded.
 
 ### Clean up
 To clean up and teardown the CP operator run:

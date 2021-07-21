@@ -164,6 +164,7 @@ An example of PPPOES Pattern Item:
       version_type: 0x01
       code: 0x09
 ```
+NOTE: A recent [Ice COMMS DDP package](https://downloadcenter.intel.com/download/29889/Intel-Ethernet-800-Series-Telecommunication-Comms-Dynamic-Device-Personalization-DDP-Package) needs to be loaded in order to create items of type PPPOES/PPPOED.
 
 ##### Item PPPOE PROTO ID
 |   Data Field      |   Value   |
@@ -176,7 +177,7 @@ An example of PPPOE PROTO ID Pattern Item:
      spec:
       proto_id: 0xc021
 ```
-
+NOTE: A recent [Ice COMMS DDP package](https://downloadcenter.intel.com/download/29889/Intel-Ethernet-800-Series-Telecommunication-Comms-Dynamic-Device-Personalization-DDP-Package) needs to be loaded in order to create items of type PPPOE PROTO ID.
 ### Actions
 Actions can alter the fate of matching traffic, its contents or properties. A list of actions can be assigned to a flow rule. These actions are performed in a given order and can require additional configuration. 
 
