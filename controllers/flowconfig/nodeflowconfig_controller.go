@@ -39,7 +39,7 @@ type NodeFlowConfigReconciler struct {
 //+kubebuilder:rbac:groups=flowconfig.intel.com,resources=nodeflowconfigs/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=flowconfig.intel.com,resources=nodeflowconfigs/finalizers,verbs=update
 
-// GetNodeFlowConfigReconciler returns an instance of NodeFlowConfigReconciler with nodeName initialized from envrironment variable
+// GetNodeFlowConfigReconciler returns an instance of NodeFlowConfigReconciler with nodeName initialized from environment variable
 func GetNodeFlowConfigReconciler(k8sClient client.Client, logger logr.Logger, scheme *runtime.Scheme, fs *flowsets.FlowSets,
 	fc flowapi.FlowServiceClient, nodeName string) *NodeFlowConfigReconciler {
 

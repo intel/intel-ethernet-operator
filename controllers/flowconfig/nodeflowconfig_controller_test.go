@@ -208,6 +208,8 @@ var _ = Describe("NodeFlowConfig controller", func() {
 	// Define utility constants for object names and testing timeouts/durations and intervals.
 	var (
 		portID uint32 = 0
+		ctx    context.Context
+		policy *flowconfigv1.NodeFlowConfig
 	)
 
 	const (
@@ -217,103 +219,148 @@ var _ = Describe("NodeFlowConfig controller", func() {
 		duration = time.Second * 10
 		interval = time.Millisecond * 250
 	)
-	Context("when creating new NodeFlowConfig spec", func() {
-		It("should update Status with DCF port info", func() {
-			By("Creating new NodeFlowConfigSpec")
-			ctx := context.Background()
 
-			policy := &flowconfigv1.NodeFlowConfig{
-				TypeMeta: metav1.TypeMeta{
-					APIVersion: "flowconfig.intel.com/v1",
-					Kind:       "NodeFlowConfig",
-				},
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      nodeName,
-					Namespace: NodeFlowConfigNamespace,
-				},
-				Spec: flowconfigv1.NodeFlowConfigSpec{
-					Rules: []*flowconfigv1.FlowRules{
-						{
-							PortId: portID,
-							Pattern: []*flowconfigv1.FlowItem{
-								{
-									Type: "RTE_FLOW_ITEM_TYPE_ETH",
+	BeforeEach(func() {
+		ctx = context.Background()
+		policy = &flowconfigv1.NodeFlowConfig{
+			TypeMeta: metav1.TypeMeta{
+				APIVersion: "flowconfig.intel.com/v1",
+				Kind:       "NodeFlowConfig",
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      nodeName,
+				Namespace: NodeFlowConfigNamespace,
+			},
+			Spec: flowconfigv1.NodeFlowConfigSpec{
+				Rules: []*flowconfigv1.FlowRules{
+					{
+						PortId: portID,
+						Pattern: []*flowconfigv1.FlowItem{
+							{
+								Type: "RTE_FLOW_ITEM_TYPE_ETH",
+							},
+							{
+								Type: "RTE_FLOW_ITEM_TYPE_IPV4",
+								Spec: &runtime.RawExtension{
+									Raw: []byte(`{ "hdr": { "src_addr": "10.56.217.9" } }`),
 								},
-								{
-									Type: "RTE_FLOW_ITEM_TYPE_IPV4",
-									Spec: &runtime.RawExtension{
-										Raw: []byte(`{ "hdr": { "src_addr": "10.56.217.9" } }`),
-									},
-									Mask: &runtime.RawExtension{
-										Raw: []byte(`{ "hdr": { "src_addr": "255.255.255.255" } }`),
-									},
-								},
-								{
-									Type: "RTE_FLOW_ITEM_TYPE_END",
+								Mask: &runtime.RawExtension{
+									Raw: []byte(`{ "hdr": { "src_addr": "255.255.255.255" } }`),
 								},
 							},
-							Action: []*flowconfigv1.FlowAction{
-								{
-									Type: "RTE_FLOW_ACTION_TYPE_DROP",
-								},
-								{
-									Type: "RTE_FLOW_ACTION_TYPE_END",
-								},
+							{
+								Type: "RTE_FLOW_ITEM_TYPE_END",
 							},
-							Attr: &flowconfigv1.FlowAttr{
-								Ingress: 1,
+						},
+						Action: []*flowconfigv1.FlowAction{
+							{
+								Type: "RTE_FLOW_ACTION_TYPE_DROP",
 							},
+							{
+								Type: "RTE_FLOW_ACTION_TYPE_END",
+							},
+						},
+						Attr: &flowconfigv1.FlowAttr{
+							Ingress: 1,
 						},
 					},
 				},
-			}
+			},
+		}
 
-			mockRes := &flow.ResponsePortList{
-				Ports: []*flow.PortsInformation{
-					{
-						PortId:   0,
-						PortMode: "dcf",
-						PortPci:  "0000:01.01",
-					},
+		mockRes := &flow.ResponsePortList{
+			Ports: []*flow.PortsInformation{
+				{
+					PortId:   0,
+					PortMode: "dcf",
+					PortPci:  "0000:01.01",
 				},
+			},
+		}
+
+		mockDCF.On("ListPorts", context.TODO(), &flow.RequestListPorts{}).Return(mockRes, nil)
+
+		if policy.Spec.Rules != nil {
+			var flowID uint32 = 0
+			for range policy.Spec.Rules {
+				mockValidateResponse := &flow.ResponseFlow{}
+				mockDCF.On("Validate", context.TODO(), mock.AnythingOfType("*flow.RequestFlowCreate")).Return(mockValidateResponse, nil)
+
+				mockCreateResponse := &flow.ResponseFlowCreate{FlowId: flowID}
+				mockDCF.On("Create", context.TODO(), mock.AnythingOfType("*flow.RequestFlowCreate")).Return(mockCreateResponse, nil)
+
+				mockDestroyReq := &flow.RequestFlowofPort{PortId: portID, FlowId: flowID}
+				mockDCF.On("Destroy", context.TODO(), mockDestroyReq).Return(mockValidateResponse, nil)
+				flowID++
 			}
-			mockDCF.On("ListPorts", context.TODO(), &flow.RequestListPorts{}).Return(mockRes, nil)
+		}
+	})
 
-			if policy.Spec.Rules != nil {
-				var flowID uint32 = 0
-				for range policy.Spec.Rules {
-					mockValidateResponse := &flow.ResponseFlow{}
-					mockDCF.On("Validate", context.TODO(), mock.AnythingOfType("*flow.RequestFlowCreate")).Return(mockValidateResponse, nil)
+	Context("when the controller is reconciling", func() {
 
-					mockCreateResponse := &flow.ResponseFlowCreate{FlowId: flowID}
-					mockDCF.On("Create", context.TODO(), mock.AnythingOfType("*flow.RequestFlowCreate")).Return(mockCreateResponse, nil)
+		var createdPolicyObj *flowconfigv1.NodeFlowConfig
 
-					mockDestroyReq := &flow.RequestFlowofPort{PortId: portID, FlowId: flowID}
-					mockDCF.On("Destroy", context.TODO(), mockDestroyReq).Return(mockValidateResponse, nil)
-					flowID++
-				}
-			}
+		Context("when a new NodeFlowConfig spec is created", func() {
+			It("should update the controller's internal config", func() {
+				Eventually(func() bool {
+					err := k8sClient.Create(ctx, policy)
+					return err == nil
+				}, timeout, interval).Should(BeTrue())
+				// Add delays after creating api object before retrieving it again
+				time.Sleep(time.Second * 5)
 
-			Expect(k8sClient.Create(ctx, policy)).Should(Succeed())
-			// Add delays after creating api object before retrieving it again
-			time.Sleep(time.Second * 5)
+				/*
+					After the policy spec is created, we expect the controller should update its internal state in its flowSets field and also update
+					it's '.Status'
+				*/
+				policyObjLookupKey := types.NamespacedName{Name: nodeName, Namespace: NodeFlowConfigNamespace}
+				createdPolicyObj = &flowconfigv1.NodeFlowConfig{}
 
-			/*
-				After the policy spec is created, we expect the controller should update its internal state in its flowSets field and also update
-				it's '.Status'
-			*/
+				Eventually(func() bool {
+					err := k8sClient.Get(ctx, policyObjLookupKey, createdPolicyObj)
+					return err == nil
+				}, timeout, interval).Should(BeTrue())
 
-			policyObjLookupKey := types.NamespacedName{Name: nodeName, Namespace: NodeFlowConfigNamespace}
-			createdPolicyObj := &flowconfigv1.NodeFlowConfig{}
+				By("updating its Status with DCF port info")
+				Expect(len(createdPolicyObj.Status.PortInfo)).Should(Equal(1))
 
-			Eventually(func() bool {
-				err := k8sClient.Get(ctx, policyObjLookupKey, createdPolicyObj)
-				return err == nil
-			}, timeout, interval).Should(BeTrue())
-
-			// Verify that Status is updated with correct Port Information
-			Eventually(len(createdPolicyObj.Status.PortInfo), timeout, interval).Should(Equal(1))
+				By("updating its flowSets with the new NodeFlowConfig")
+				Expect(nodeFlowConfigRc.flowSets.Size()).Should(Equal(1))
+			})
 		})
 
+		Context("when a NodeFlowConfig spec is updated with duplicate flow rules", func() {
+			It("should not be added to the controller's internal config", func() {
+				Eventually(func() bool {
+					err := k8sClient.Update(ctx, createdPolicyObj)
+					return err == nil
+				}, timeout, interval).Should(BeTrue())
+				// Add delays after creating api object before retrieving it again
+				time.Sleep(time.Second * 5)
+
+				/*
+					After the policy spec is updated (i.e. duplicated), we expect the controller to identify the new rule as a duplicate and should not update its internal state in its flowSets
+				*/
+				By("not updating its flowSets with a duplicate entry")
+				Expect(nodeFlowConfigRc.flowSets.Size()).Should(Equal(1))
+			})
+		})
+
+		Context("when a NodeFlowConfig spec is deleted", func() {
+			It("should reset the controller's internal config", func() {
+				Eventually(func() bool {
+					err := k8sClient.Delete(ctx, createdPolicyObj)
+					return err == nil
+				}, timeout, interval).Should(BeTrue())
+
+				// Add delays after deleting api object before validating the controller's default config
+				time.Sleep(time.Second * 5)
+				/*
+					When a NodeFlowConfig object is deleted, we expect the controller to delete all rules from its default config.
+				*/
+				By("deleting the spec from the controller's flowSets")
+				Expect(nodeFlowConfigRc.flowSets.Size()).Should(Equal(0))
+			})
+		})
 	})
 })
