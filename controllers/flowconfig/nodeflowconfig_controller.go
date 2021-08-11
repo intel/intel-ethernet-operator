@@ -113,7 +113,7 @@ func (r *NodeFlowConfigReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		return ctrl.Result{}, err
 	}
 
-	err = r.SyncFlowConfig(instance)
+	err = r.syncFlowConfig(instance)
 	if err != nil {
 		reqLogger.Info("syncPolicy returned error", "error message", err)
 		// Even though we have encountered syncPolicy error we are returning error nil to avoid requeuing
@@ -131,7 +131,7 @@ func (r *NodeFlowConfigReconciler) updateStatus(instance *flowconfigv1.NodeFlowC
 }
 
 // SyncFlowConfig is new method to apply Policy Spec.
-func (r *NodeFlowConfigReconciler) SyncFlowConfig(newPolicy *flowconfigv1.NodeFlowConfig) error {
+func (r *NodeFlowConfigReconciler) syncFlowConfig(newPolicy *flowconfigv1.NodeFlowConfig) error {
 	syncLogger := r.Log.WithName("SyncFlowConfig")
 	syncLogger.Info("syncing NodeFlowConfig")
 
@@ -231,7 +231,7 @@ func (r *NodeFlowConfigReconciler) createRules(toAdd map[string]*flowapi.Request
 		createRes, err := r.flowClient.Create(context.TODO(), req)
 		if err != nil {
 			logger.Error(err, "error calling DCF Create")
-			return NewDCFError(fmt.Sprintf("error creating flow rules: %v:", err))
+			return NewDCFError(fmt.Sprintf("error creating flow rules: %v", err))
 		}
 
 		if createRes.ErrorInfo != nil && createRes.ErrorInfo.Type != flowapi.RteFlowErrorType_RTE_FLOW_ERROR_TYPE_NONE {
@@ -359,21 +359,6 @@ func getFlowCreateRequests(fr *flowconfigv1.FlowRules) (*flowapi.RequestFlowCrea
 	// 4 - Get port information
 	rteFlowCreateRequests.PortId = fr.PortId
 	return rteFlowCreateRequests, nil
-}
-
-func isValidFlowSpecForType(b []byte, flowType string) bool {
-
-	flowTypeVal, ok := flowapi.RteFlowItemType_value[flowType]
-	if !ok {
-		return false
-	}
-	flowObj := flowapi.GetFlowItemObj(flowapi.RteFlowItemType(flowTypeVal))
-
-	if err := json.Unmarshal(b, flowObj); err != nil {
-		return false
-	}
-
-	return true
 }
 
 func (r *NodeFlowConfigReconciler) listDCFPorts() ([]flowconfigv1.PortsInformation, error) {
