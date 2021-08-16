@@ -1,0 +1,36 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2021 Intel Corporation
+
+FROM golang:1.15 as builder
+
+WORKDIR /workspace
+COPY go.mod go.sum ./
+RUN go mod download
+
+COPY labeler.go .
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GO111MODULE=on go build -a -o node_labeler labeler.go
+
+FROM registry.access.redhat.com/ubi8:8.4
+
+ARG VERSION
+### Required OpenShift Labels
+LABEL name="Intel® Ethernet Operator discovery container" \
+    vendor="Intel Corporation" \
+    version=$VERSION \
+    release="1" \
+    summary="Intel® Ethernet Operator discovery container labels kubernetes nodes that contain the PCI \
+devices as set in the config file (typically Intel Ethernet E810)" \
+    description="The container detects the relevant PCI devices, labels the nodes that contain them \
+and removes the label for the nodes that do not."
+
+RUN mkdir -p /usr/share/misc/ && \
+    cd /usr/share/misc/ && \
+    curl https://pci-ids.ucw.cz/v2.2/pci.ids.gz -o pci.ids.gz && \
+    gunzip pci.ids.gz
+
+COPY TEMP_LICENSE_COPY /licenses/LICENSE
+USER 1001
+WORKDIR /labeler-workspace
+COPY --from=builder /workspace/node_labeler .
+
+ENTRYPOINT ["bash", "-c", "/labeler-workspace/node_labeler && sleep infinity"]
