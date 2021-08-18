@@ -24,6 +24,7 @@ const (
 
 var (
 	ethtoolRegex = regexp.MustCompile(`^([a-z-]+?)(?:\s*:\s)(.+)$`)
+	devlinkRegex = regexp.MustCompile(`^\s+([\w\.]+) (.+)$`)
 )
 
 var getPCIDevices = func() ([]*ghw.PCIDevice, error) {
@@ -49,6 +50,12 @@ var getNetworkInfo = func() (*net.Info, error) {
 
 var execEthtool = func(nicName string) ([]byte, error) {
 	return exec.Command(ethtoolPath, "-i", nicName).Output()
+}
+
+var execDevlink = func(pciAddr string) ([]byte, error) {
+	devName := fmt.Sprintf("pci/%s", pciAddr)
+
+	return exec.Command("devlink", "dev", "info", devName).Output()
 }
 
 func isDeviceSupported(d *pci.Device) bool {
@@ -81,7 +88,8 @@ func GetInventory(log logr.Logger) ([]ethernetv1.Device, error) {
 				PCIAddress: pciDevice.Address,
 				Name:       pciDevice.Product.Name,
 			}
-			d = addNetInfo(log, d)
+			addNetInfo(log, &d)
+			addDDPInfo(log, &d)
 			devices = append(devices, d)
 		}
 	}
@@ -89,11 +97,11 @@ func GetInventory(log logr.Logger) ([]ethernetv1.Device, error) {
 	return devices, nil
 }
 
-func addNetInfo(log logr.Logger, device ethernetv1.Device) ethernetv1.Device {
+func addNetInfo(log logr.Logger, device *ethernetv1.Device) {
 	net, err := getNetworkInfo()
 	if err != nil {
 		log.Error(err, "failed to get network interfaces")
-		return device
+		return
 	}
 
 	nicName := ""
@@ -104,29 +112,52 @@ func addNetInfo(log logr.Logger, device ethernetv1.Device) ethernetv1.Device {
 			break
 		}
 	}
+	if nicName == "" {
+		return // NIC not found
+	}
 
-	if nicName != "" {
-		out, err := execEthtool(nicName)
-		if err != nil {
-			log.Error(err, "failed when executing", "cmd", ethtoolPath)
-			return device
-		}
-		for _, line := range strings.Split(string(out), "\n") {
-			m := ethtoolRegex.FindStringSubmatch(line)
-			if len(m) == 3 {
-				switch m[1] {
-				case "driver":
-					device.Driver = m[2]
-				case "version":
-					device.DriverVersion = m[2]
-				case "firmware-version":
-					device.Firmware.Version = m[2]
-				}
+	out, err := execEthtool(nicName)
+	if err != nil {
+		log.Error(err, "failed when executing", "cmd", ethtoolPath)
+		return
+	}
+	for _, line := range strings.Split(string(out), "\n") {
+		m := ethtoolRegex.FindStringSubmatch(line)
+		if len(m) == 3 {
+			switch m[1] {
+			case "driver":
+				device.Driver = m[2]
+			case "version":
+				device.DriverVersion = m[2]
+			case "firmware-version":
+				device.Firmware.Version = m[2]
 			}
 		}
-
 	}
-	return device
+
+}
+
+func addDDPInfo(log logr.Logger, device *ethernetv1.Device) {
+	out, err := execDevlink(device.PCIAddress)
+	if err != nil {
+		log.Error(err, "failed when executing devlink")
+		return
+	}
+	for _, line := range strings.Split(string(out), "\n") {
+		tokens := devlinkRegex.FindStringSubmatch(line)
+		if len(tokens) != 3 {
+			continue
+		}
+
+		switch tokens[1] {
+		case "fw.app.name":
+			device.DDP.PackageName = tokens[2]
+		case "fw.app":
+			device.DDP.Version = tokens[2]
+		case "fw.app.bundle_id":
+			device.DDP.TrackID = tokens[2]
+		}
+	}
 }
 
 func getDeviceMAC(pciAddr string, log logr.InfoLogger) (string, error) {

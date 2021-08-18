@@ -35,7 +35,7 @@ const (
 
 var (
 	compatibilityMap     *CompatibilityMap
-	compatMapPath        = "./compat.json"
+	compatMapPath        = "./devices.json"
 	compatibilityWildard = "*"
 
 	fwInstallDest            = "/workdir/nvmupdate/"
@@ -104,7 +104,7 @@ func (r *NodeConfigReconciler) updateStatus(nc *ethernetv1.EthernetNodeConfig, c
 
 	nc.Status = nodeStatus
 	if err := r.Status().Update(context.Background(), nc); err != nil {
-		log.Error(err, "failed to update EthernetFecNode status")
+		log.Error(err, "failed to update EthernetNodeConfig status")
 		return err
 	}
 
@@ -118,15 +118,24 @@ type NodeConfigReconciler struct {
 	namespace string
 }
 
-func NewNodeConfigReconciler(c client.Client, clientSet *clientset.Clientset, log logr.Logger,
-	nodeName, ns string) (*NodeConfigReconciler, error) {
-
+func LoadConfig(log logr.Logger) error {
 	cmpMap := make(CompatibilityMap)
 	err := utils.LoadSupportedDevices(compatMapPath, &cmpMap)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	compatibilityMap = &cmpMap
+
+	return nil
+}
+
+func NewNodeConfigReconciler(c client.Client, clientSet *clientset.Clientset, log logr.Logger,
+	nodeName, ns string) (*NodeConfigReconciler, error) {
+
+	err := LoadConfig(log)
+	if err != nil {
+		return nil, err
+	}
 
 	return &NodeConfigReconciler{
 		Client:    c,
@@ -178,8 +187,8 @@ func (r *NodeConfigReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		return reconcile.Result{}, nil
 	}
 
-	nodeConfig := &ethernetv1.EthernetNodeConfig{}
-	if err := r.Client.Get(ctx, req.NamespacedName, nodeConfig); err != nil {
+	nodeConfig := ethernetv1.EthernetNodeConfig{}
+	if err := r.Client.Get(ctx, req.NamespacedName, &nodeConfig); err != nil {
 		if k8serrors.IsNotFound(err) {
 			log.V(4).Info("not found - creating")
 			return reconcile.Result{}, r.CreateEmptyNodeConfigIfNeeded(r.Client)
@@ -190,11 +199,11 @@ func (r *NodeConfigReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 
 	if len(nodeConfig.Spec.Config) == 0 {
 		log.V(4).Info("Nothing to do")
-		r.updateCondition(nodeConfig, metav1.ConditionFalse, UpdateNotRequested, "Inventory up to date")
+		r.updateCondition(&nodeConfig, metav1.ConditionFalse, UpdateNotRequested, "Inventory up to date")
 		return reconcile.Result{}, nil
 	}
 
-	r.updateCondition(nodeConfig, metav1.ConditionFalse, UpdateInProgress, "Update started")
+	r.updateCondition(&nodeConfig, metav1.ConditionFalse, UpdateInProgress, "Update started")
 
 	updateQueue := make(deviceUpdateQueue)
 	// main loop that iterates over all configs in node CR
@@ -202,7 +211,7 @@ func (r *NodeConfigReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	inv, err := getInventory(log)
 	if err != nil {
 		log.Error(err, "Failed to retrieve inventory")
-		r.updateCondition(nodeConfig, metav1.ConditionFalse, UpdateFailed, err.Error())
+		r.updateCondition(&nodeConfig, metav1.ConditionFalse, UpdateFailed, err.Error())
 		return reconcile.Result{}, nil
 	}
 
@@ -218,7 +227,7 @@ func (r *NodeConfigReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	}
 
 	if len(updateQueue) == 0 {
-		r.updateCondition(nodeConfig, metav1.ConditionFalse, UpdateFailed, updateErr.Error())
+		r.updateCondition(&nodeConfig, metav1.ConditionFalse, UpdateFailed, updateErr.Error())
 		return reconcile.Result{}, nil
 	}
 
@@ -242,9 +251,9 @@ func (r *NodeConfigReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	//TODO: Add node power-cycle and uncordon
 
 	if updateErr != nil {
-		r.updateCondition(nodeConfig, metav1.ConditionFalse, UpdateFailed, updateErr.Error())
+		r.updateCondition(&nodeConfig, metav1.ConditionFalse, UpdateFailed, updateErr.Error())
 	} else {
-		r.updateCondition(nodeConfig, metav1.ConditionTrue, UpdateSucceeded, "Updated successfully")
+		r.updateCondition(&nodeConfig, metav1.ConditionTrue, UpdateSucceeded, "Updated successfully")
 	}
 
 	log.V(2).Info("Reconciled")

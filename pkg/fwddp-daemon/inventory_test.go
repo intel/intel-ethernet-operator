@@ -135,6 +135,9 @@ var _ = Describe("InventoryTest", func() {
 			Expect(d[0].DriverVersion).To(BeEmpty())
 			Expect(d[0].Firmware.MAC).To(BeEmpty())
 			Expect(d[0].Firmware.Version).To(BeEmpty())
+			Expect(d[0].DDP.PackageName).To(BeEmpty())
+			Expect(d[0].DDP.Version).To(BeEmpty())
+			Expect(d[0].DDP.TrackID).To(BeEmpty())
 		})
 
 		var _ = It("will return []ethernetv1.Device partial inventory if ethtool was not available", func() {
@@ -153,6 +156,9 @@ var _ = Describe("InventoryTest", func() {
 			}
 			execEthtool = func(string) ([]byte, error) {
 				return nil, fmt.Errorf("Error when calling ethtool")
+			}
+			execDevlink = func(string) ([]byte, error) {
+				return nil, fmt.Errorf("Error when calling devlink")
 			}
 
 			compatibilityMap = &CompatibilityMap{
@@ -175,6 +181,9 @@ var _ = Describe("InventoryTest", func() {
 			Expect(d[0].DriverVersion).To(BeEmpty())
 			Expect(d[0].Firmware.MAC).To(Equal("aa:bb:cc:dd:ee:ff"))
 			Expect(d[0].Firmware.Version).To(BeEmpty())
+			Expect(d[0].DDP.PackageName).To(BeEmpty())
+			Expect(d[0].DDP.Version).To(BeEmpty())
+			Expect(d[0].DDP.TrackID).To(BeEmpty())
 		})
 
 		var _ = It("will return inventory", func() {
@@ -207,6 +216,35 @@ supports-priv-flags: yes
 `), nil
 			}
 
+			execDevlink = func(string) ([]byte, error) {
+				return []byte(`
+pci/0000:51:00.0:
+  driver ice
+  serial_number b4-96-91-ff-ff-af-6d-68
+  versions:
+      fixed:
+        board.id M17659-003
+      running:
+        fw.mgmt 5.4.5
+        fw.mgmt.api 1.7
+        fw.mgmt.build 0x391f7640
+        fw.undi 1.2898.0
+        fw.psid.api 2.40
+        fw.bundle_id 0x80007064
+        fw.app.name ICE OS Default Package
+        fw.app 1.3.4.0
+        fw.app.bundle_id 0x00000000
+        fw.netlist 2.40.2000-6.22.0
+        fw.netlist.build 0x0ee8f468
+      stored:
+        fw.undi 1.2898.0
+        fw.psid.api 2.40
+        fw.bundle_id 0x80007064
+        fw.netlist 2.40.2000-6.22.0
+        fw.netlist.build 0x0ee8f468
+`), nil
+			}
+
 			compatibilityMap = &CompatibilityMap{
 				"dev1": Compatibility{
 					SupportedDevice: utils.SupportedDevice{
@@ -227,6 +265,9 @@ supports-priv-flags: yes
 			Expect(d[0].DriverVersion).To(Equal("2.8.20-k"))
 			Expect(d[0].Firmware.MAC).To(Equal("aa:bb:cc:dd:ee:ff"))
 			Expect(d[0].Firmware.Version).To(Equal("3.31 0x80000d31 1.1767.0"))
+			Expect(d[0].DDP.PackageName).To(Equal("ICE OS Default Package"))
+			Expect(d[0].DDP.Version).To(Equal("1.3.4.0"))
+			Expect(d[0].DDP.TrackID).To(Equal("0x00000000"))
 		})
 	})
 })
