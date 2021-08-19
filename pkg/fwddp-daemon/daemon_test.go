@@ -116,6 +116,7 @@ var _ = Describe("FirmwareDaemonTest", func() {
 		nvmupdateExec = func(cmd *exec.Cmd, log logr.Logger) error {
 			return nil
 		}
+
 		fwInstallDest = "./workdir/nvmupdate/"
 	})
 

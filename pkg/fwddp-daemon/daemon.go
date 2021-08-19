@@ -41,11 +41,13 @@ var (
 	fwInstallDest            = "/workdir/nvmupdate/"
 	nvmupdatePackageFilename = "nvmupdate.tar.gz"
 	nvmupdate64eDirSuffix    = "E810/Linux_x64/"
+	updateOutFile            = "update.xml"
 	nvmupdateVersionFilename = "version.txt"
 
 	getInventory  = GetInventory
 	getIDs        = getDeviceIDs
 	nvmupdateExec = runExecWithLog
+	execCmd       = utils.ExecCmd
 
 	utilsDownloadFile = utils.DownloadFile
 	utilsUntar        = utils.Untar
@@ -61,16 +63,18 @@ type Compatibility struct {
 
 func nvmupdate64eDir(p string) string     { return path.Join(p, nvmupdate64eDirSuffix) }
 func nvmupdate64eCfgPath(p string) string { return path.Join(nvmupdate64eDir(p), "nvmupdate.cfg") }
+func updateResultPath(p string) string    { return path.Join(nvmupdate64eDir(p), updateOutFile) }
 
 type UpdateConditionReason string
 
 const (
-	UpdateCondition    string                = "Updated"
-	UpdateUnknown      UpdateConditionReason = "Unknown"
-	UpdateInProgress   UpdateConditionReason = "InProgress"
-	UpdateFailed       UpdateConditionReason = "Failed"
-	UpdateNotRequested UpdateConditionReason = "NotRequested"
-	UpdateSucceeded    UpdateConditionReason = "Succeeded"
+	UpdateCondition        string                = "Updated"
+	UpdateUnknown          UpdateConditionReason = "Unknown"
+	UpdateInProgress       UpdateConditionReason = "InProgress"
+	UpdatePostUpdateReboot UpdateConditionReason = "PostUpdateReboot"
+	UpdateFailed           UpdateConditionReason = "Failed"
+	UpdateNotRequested     UpdateConditionReason = "NotRequested"
+	UpdateSucceeded        UpdateConditionReason = "Succeeded"
 )
 
 func (r *NodeConfigReconciler) updateCondition(nc *ethernetv1.EthernetNodeConfig, status metav1.ConditionStatus,
@@ -197,58 +201,94 @@ func (r *NodeConfigReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		return reconcile.Result{}, err
 	}
 
+	postUpdateReboot := false
+	condition := meta.FindStatusCondition(nodeConfig.Status.Conditions, UpdateCondition)
+	if condition != nil {
+		if condition.Reason == string(UpdatePostUpdateReboot) {
+			// State where daemon is up again after post-firmware-update node reboot.
+			log.V(4).Info("Post-update node reboot completed, finishing update...")
+			postUpdateReboot = true
+		} else if condition.ObservedGeneration == nodeConfig.GetGeneration() {
+			log.V(4).Info("Created object was handled previously, ignoring")
+			return reconcile.Result{}, nil
+		}
+	}
+
 	if len(nodeConfig.Spec.Config) == 0 {
 		log.V(4).Info("Nothing to do")
 		r.updateCondition(&nodeConfig, metav1.ConditionFalse, UpdateNotRequested, "Inventory up to date")
 		return reconcile.Result{}, nil
 	}
 
-	r.updateCondition(&nodeConfig, metav1.ConditionFalse, UpdateInProgress, "Update started")
-
-	updateQueue := make(deviceUpdateQueue)
-	// main loop that iterates over all configs in node CR
-
-	inv, err := getInventory(log)
-	if err != nil {
-		log.Error(err, "Failed to retrieve inventory")
-		r.updateCondition(&nodeConfig, metav1.ConditionFalse, UpdateFailed, err.Error())
-		return reconcile.Result{}, nil
-	}
-
 	var updateErr error
-	for _, deviceConfig := range nodeConfig.Spec.Config {
-		artifacts, err := r.prepare(deviceConfig, inv)
+	if !postUpdateReboot {
+		r.updateCondition(&nodeConfig, metav1.ConditionFalse, UpdateInProgress, "Update started")
+
+		inv, err := getInventory(log)
 		if err != nil {
-			log.Error(err, "Failed to prepare artifacts for", "device", deviceConfig.PCIAddress)
-			updateErr = multierr.Append(updateErr, err)
-			continue
+			log.Error(err, "Failed to retrieve inventory")
+			r.updateCondition(&nodeConfig, metav1.ConditionFalse, UpdateFailed, err.Error())
+			return reconcile.Result{}, nil
 		}
-		updateQueue[deviceConfig.PCIAddress] = artifacts
-	}
 
-	if len(updateQueue) == 0 {
-		r.updateCondition(&nodeConfig, metav1.ConditionFalse, UpdateFailed, updateErr.Error())
-		return reconcile.Result{}, nil
-	}
-
-	// TODO:Add leader election or multi-leader/parallel operation (including node drain, cordon, etc)
-	for pciAddr, artifacts := range updateQueue {
-		if artifacts.fwPath != "" {
-			err := r.updateFirmware(pciAddr, artifacts.fwPath)
+		updateQueue := make(deviceUpdateQueue)
+		for _, deviceConfig := range nodeConfig.Spec.Config {
+			artifacts, err := r.prepare(deviceConfig, inv)
 			if err != nil {
-				log.Error(err, "Failed to to update firmware", "device", pciAddr)
+				log.Error(err, "Failed to prepare artifacts for", "device", deviceConfig.PCIAddress)
 				updateErr = multierr.Append(updateErr, err)
-				// Skip DDP update on device
+				continue
+			}
+			updateQueue[deviceConfig.PCIAddress] = artifacts
+		}
+
+		if len(updateQueue) == 0 {
+			r.updateCondition(&nodeConfig, metav1.ConditionFalse, UpdateFailed, updateErr.Error())
+			return reconcile.Result{}, nil
+		}
+
+		// TODO:Add leader election or multi-leader/parallel operation (including node drain, cordon, etc)
+		rebootRequired := false
+		for pciAddr, artifacts := range updateQueue {
+			if artifacts.fwPath != "" {
+				err := r.updateFirmware(pciAddr, artifacts.fwPath)
+				if err != nil {
+					log.Error(err, "Failed to update firmware", "device", pciAddr)
+					updateErr = multierr.Append(updateErr, err)
+					// Skip DDP update on device
+					continue
+				}
+
+				r, err := isRebootRequired(updateResultPath(artifacts.fwPath))
+				if err != nil {
+					log.Error(err, "Failed to extract reboot required flag from file")
+					continue
+				}
+
+				if r {
+					log.V(4).Info("Node reboot required to complete firmware update", "device", pciAddr)
+					rebootRequired = true
+				}
+			}
+
+			if artifacts.ddpPath != "" {
+				// TODO: Update DDP
 				continue
 			}
 		}
 
-		if artifacts.ddpPath != "" {
-			// TODO: Update DDP
-			continue
+		if rebootRequired {
+			log.V(2).Info("Rebooting the node...")
+			r.updateCondition(&nodeConfig, metav1.ConditionFalse, UpdatePostUpdateReboot, "Post-update node reboot")
+			err := r.rebootNode()
+			if err != nil {
+				log.Error(err, "Failed to reboot the node")
+				updateErr = multierr.Append(updateErr, err)
+			}
 		}
 	}
-	//TODO: Add node power-cycle and uncordon
+
+	//TODO: Add uncordon and release leader lock
 
 	if updateErr != nil {
 		r.updateCondition(&nodeConfig, metav1.ConditionFalse, UpdateFailed, updateErr.Error())
@@ -399,7 +439,8 @@ func (r *NodeConfigReconciler) updateFirmware(pciAddr, fwPath string) error {
 	}
 
 	log.V(2).Info("Updating", "MAC", mac)
-	cmd = exec.Command(nvmupdate64e, "-u", "-m", mac, "-c", nvmupdate64eCfgPath(fwPath), "-l")
+	cmd = exec.Command(nvmupdate64e, "-u", "-m", mac, "-c", nvmupdate64eCfgPath(fwPath), "-o", updateResultPath(fwPath), "-l")
+
 	cmd.SysProcAttr = rootAttr
 	cmd.Dir = nvmupdate64eDir(fwPath)
 	err = nvmupdateExec(cmd, log)
@@ -534,4 +575,15 @@ func (r *NodeConfigReconciler) CreateEmptyNodeConfigIfNeeded(c client.Client) er
 		log.Error(updateErr, "failed to update status")
 	}
 	return updateErr
+}
+
+func (r *NodeConfigReconciler) rebootNode() error {
+	log := r.log.WithName("rebootNode")
+	// systemd-run command borrowed from openshift/sriov-network-operator
+	_, err := execCmd([]string{"chroot", "--userspec", "0", "/",
+		"systemd-run",
+		"--unit", "ethernet-daemon-reboot",
+		"--description", "ethernet-daemon reboot",
+		"/bin/sh", "-c", "systemctl stop kubelet.service; reboot"}, log)
+	return err
 }
