@@ -31,26 +31,28 @@ import (
 const (
 	nvmupdate64e             = "./nvmupdate64e"
 	nvmupdateVersionFilesize = 10
-)
 
-var (
-	compatibilityMap     *CompatibilityMap
-	compatMapPath        = "./devices.json"
 	compatibilityWildard = "*"
 
-	fwInstallDest            = "/workdir/nvmupdate/"
 	nvmupdatePackageFilename = "nvmupdate.tar.gz"
+	ddpPackageFilename       = "ddp.tar.gz"
 	nvmupdate64eDirSuffix    = "E810/Linux_x64/"
 	updateOutFile            = "update.xml"
 	nvmupdateVersionFilename = "version.txt"
+)
+
+var (
+	compatMapPath    = "./devices.json"
+	compatibilityMap *CompatibilityMap
+	fwInstallDest    = "/workdir/nvmupdate/"
 
 	getInventory  = GetInventory
 	getIDs        = getDeviceIDs
 	nvmupdateExec = runExecWithLog
 	execCmd       = utils.ExecCmd
 
-	utilsDownloadFile = utils.DownloadFile
-	utilsUntar        = utils.Untar
+	downloadFile = utils.DownloadFile
+	untarFile    = utils.Untar
 )
 
 type CompatibilityMap map[string]Compatibility
@@ -354,14 +356,14 @@ func (r *NodeConfigReconciler) prepareFirmware(config ethernetv1.DeviceNodeConfi
 	}
 
 	log.V(4).Info("Downloading", "url", config.DeviceConfig.FWURL)
-	err = utilsDownloadFile(path.Join(targetPath, nvmupdatePackageFilename), config.DeviceConfig.FWURL,
+	err = downloadFile(path.Join(targetPath, nvmupdatePackageFilename), config.DeviceConfig.FWURL,
 		config.DeviceConfig.FWChecksum, log)
 	if err != nil {
 		return "", err
 	}
 
-	log.V(4).Info("File downloaded - extracting")
-	err = utilsUntar(path.Join(targetPath, nvmupdatePackageFilename), targetPath, log)
+	log.V(4).Info("FW file downloaded - extracting")
+	err = untarFile(path.Join(targetPath, nvmupdatePackageFilename), targetPath, log)
 	if err != nil {
 		return "", err
 	}
@@ -459,10 +461,34 @@ func runExecWithLog(cmd *exec.Cmd, log logr.Logger) error {
 
 func (r *NodeConfigReconciler) prepareDDP(config ethernetv1.DeviceNodeConfig) (string, error) {
 	log := r.log.WithName("prepareDDP")
-	// TODO: Download DDP profile, extract if required and return path if successful.
-	// For now, return the URL instead
-	_ = log
-	return config.DeviceConfig.DDPURL, nil
+
+	if config.DeviceConfig.DDPURL == "" {
+		log.V(4).Info("Empty DDPURL")
+		return "", nil
+	}
+
+	targetPath := path.Join(fwInstallDest, config.PCIAddress)
+
+	err := utils.CreateFolder(targetPath, log)
+	if err != nil {
+		return "", err
+	}
+
+	log.V(4).Info("Downloading", "url", config.DeviceConfig.DDPURL)
+	fullPath := path.Join(targetPath, ddpPackageFilename)
+	err = downloadFile(fullPath, config.DeviceConfig.DDPURL,
+		config.DeviceConfig.DDPChecksum, log)
+	if err != nil {
+		return "", err
+	}
+
+	log.V(4).Info("DDP file downloaded - extracting")
+	err = untarFile(fullPath, targetPath, log)
+	if err != nil {
+		return "", err
+	}
+
+	return targetPath, nil
 }
 
 func (r *NodeConfigReconciler) verifyCompatibility(fwPath, ddpPath string, dev ethernetv1.Device, force bool) error {

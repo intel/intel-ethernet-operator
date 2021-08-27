@@ -107,10 +107,10 @@ var _ = Describe("FirmwareDaemonTest", func() {
 		getInventory = func(_ logr.Logger) ([]ethernetv1.Device, error) {
 			return data.Inventory, nil
 		}
-		utilsDownloadFile = func(path, url, checksum string, _ logr.Logger) error {
+		downloadFile = func(path, url, checksum string, _ logr.Logger) error {
 			return nil
 		}
-		utilsUntar = func(srcPath string, dstPath string, log logr.Logger) error {
+		untarFile = func(srcPath string, dstPath string, log logr.Logger) error {
 			return nil
 		}
 		nvmupdateExec = func(cmd *exec.Cmd, log logr.Logger) error {
@@ -262,7 +262,7 @@ var _ = Describe("FirmwareDaemonTest", func() {
 			data.Inventory[0].PCIAddress = "00:00:00.1"
 
 			downloadErr := gerrors.New("Unable to download")
-			utilsDownloadFile = func(path, url, checksum string, _ logr.Logger) error {
+			downloadFile = func(path, url, checksum string, _ logr.Logger) error {
 				return downloadErr
 			}
 
@@ -290,7 +290,7 @@ var _ = Describe("FirmwareDaemonTest", func() {
 			data.Inventory[0].PCIAddress = "00:00:00.1"
 
 			untarErr := gerrors.New("Unable to untar")
-			utilsUntar = func(srcPath string, dstPath string, log logr.Logger) error {
+			untarFile = func(srcPath string, dstPath string, log logr.Logger) error {
 				return untarErr
 			}
 
