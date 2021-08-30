@@ -37,4 +37,13 @@ resources:
   webhooks:
     validation: true
     webhookVersion: v1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: intel.com
+  group: flowconfig
+  kind: FlowConfigNodeAgentDeployment
+  path: github.com/otcshare/intel-ethernet-operator/apis/flowconfig/v1
+  version: v1
 version: "3"

@@ -21,6 +21,7 @@ import (
 	ethernetv1 "github.com/otcshare/intel-ethernet-operator/apis/ethernet/v1"
 	flowconfigv1 "github.com/otcshare/intel-ethernet-operator/apis/flowconfig/v1"
 	ethernetcontrollers "github.com/otcshare/intel-ethernet-operator/controllers/ethernet"
+	flowconfigcontrollers "github.com/otcshare/intel-ethernet-operator/controllers/flowconfig"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -55,9 +56,9 @@ func main() {
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
-		Scheme:                 scheme,
-		MetricsBindAddress:     metricsAddr,
-		Port:                   9443,
+		Scheme:             scheme,
+		MetricsBindAddress: metricsAddr,
+		Port:               9443,
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
 		LeaderElectionID:       "8ee6d2ed.intel.com",
@@ -84,6 +85,14 @@ func main() {
 		}
 	}
 
+	if err = (&flowconfigcontrollers.FlowConfigNodeAgentDeploymentReconciler{
+		Client: mgr.GetClient(),
+		Log:    ctrl.Log.WithName("controllers").WithName("flowconfig").WithName("FlowConfigNodeAgentDeployment"),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "FlowConfigNodeAgentDeployment")
+		os.Exit(1)
+	}
 	//+kubebuilder:scaffold:builder
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {

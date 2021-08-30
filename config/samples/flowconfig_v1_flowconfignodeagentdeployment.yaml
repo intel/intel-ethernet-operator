@@ -1,0 +1,7 @@
+apiVersion: flowconfig.intel.com/v1
+kind: FlowConfigNodeAgentDeployment
+metadata:
+  name: flowconfignodeagentdeployment-sample
+spec:
+  # Add fields here
+  foo: bar
