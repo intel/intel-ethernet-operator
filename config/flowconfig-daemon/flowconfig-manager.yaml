@@ -9,6 +9,7 @@ spec:
   # selector:
   #   matchLabels:
   #     control-plane: flowconfig-daemon
+  DCFVfPoolName: intel.com/intel_cvl0_vfio
   template:
     metadata:
       labels:

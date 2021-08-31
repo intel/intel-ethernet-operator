@@ -6,6 +6,7 @@ metadata:
   name: flowconfig-daemon-flowconfig-daemon
   namespace: intel-ethernet-operator-system
 spec:
+  DCFVfPoolName: intel.com/intel_cvl0_vfio
   template:
     metadata:
       annotations:
