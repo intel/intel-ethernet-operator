@@ -1,0 +1,7 @@
+# json patch to convert the manager.yaml from Deployment to DaemonSet 
+- op: replace
+  path: /apiVersion
+  value: flowconfig.intel.com/v1
+- op: replace
+  path: /kind
+  value: FlowConfigNodeAgentDeployment

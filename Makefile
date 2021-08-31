@@ -161,8 +161,10 @@ uninstall: manifests kustomize ## Uninstall CRDs from the K8s cluster specified 
 deploy: manifests flowconfig-manifests kustomize ## Deploy controller to the K8s cluster specified in ~/.kube/config.
 	cd config/manager && $(KUSTOMIZE) edit set image controller=${IMG}
 	$(KUSTOMIZE) build config/default | kubectl apply -f -
+	kubectl apply -f assests/flowconfig-daemon/daemon.yaml
 
 undeploy: ## Undeploy controller from the K8s cluster specified in ~/.kube/config.
+	kubectl delete -f assests/flowconfig-daemon/daemon.yaml
 	$(KUSTOMIZE) build config/default | kubectl delete -f -
 
 

@@ -1,21 +1,50 @@
-apiVersion: apps/v1
-kind: DaemonSet
+apiVersion: flowconfig.intel.com/v1
+kind: FlowConfigNodeAgentDeployment
 metadata:
   labels:
     control-plane: flowconfig-daemon
   name: flowconfig-daemon-flowconfig-daemon
   namespace: intel-ethernet-operator-system
 spec:
-  selector:
-    matchLabels:
-      control-plane: flowconfig-daemon
   template:
     metadata:
+      annotations:
+        k8s.v1.cni.cncf.io/networks: unified-flow-operator-sriov-cvl0-admin
       labels:
         control-plane: flowconfig-daemon
-        name: flowconfig-daemon
     spec:
       containers:
+      - args:
+        - /entrypoint.sh
+        command:
+        - /bin/bash
+        - -c
+        - --
+        env:
+        - name: PYTHONUNBUFFERED
+          value: "1"
+        - name: PYTHONIOENCODING
+          value: UTF-8
+        image: dcf-tool:v21.08
+        imagePullPolicy: Never
+        name: uft
+        resources:
+          limits:
+            hugepages-2Mi: 2Gi
+            intel.com/intel_cvl0_vfio: 1
+          requests:
+            hugepages-2Mi: 2Gi
+            intel.com/intel_cvl0_vfio: 1
+        securityContext:
+          capabilities:
+            add:
+            - IPC_LOCK
+            - SYS_NICE
+        volumeMounts:
+        - mountPath: /dev/hugepages
+          name: hugepage
+        - mountPath: /lib/firmware/updates/intel/ice/ddp
+          name: iceddp
       - command:
         - /flowconfig-daemon
         env:
@@ -40,14 +69,15 @@ spec:
           requests:
             cpu: 100m
             memory: 20Mi
-        securityContext:
-          privileged: true
-        volumeMounts:
-        - mountPath: /var/run/dcf/
-          name: dcfsockdir
       serviceAccountName: controller-manager
       terminationGracePeriodSeconds: 10
-      volumes:
-      - hostPath:
-          path: /var/run/dcf/
-        name: dcfsockdir
+---
+apiVersion: k8s.cni.cncf.io/v1
+kind: NetworkAttachmentDefinition
+metadata:
+  annotations:
+    k8s.v1.cni.cncf.io/resourceName: intel.com/intel_cvl0_vfio
+  name: flowconfig-daemon-sriov-cvl0-admin
+  namespace: intel-ethernet-operator-system
+spec:
+  config: '{ "type": "sriov", "cniVersion": "0.3.1", "name": "sriov-network", "trust": "on" }'

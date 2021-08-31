@@ -5,11 +5,20 @@ namespace: intel-ethernet-operator-system
 namePrefix: flowconfig-daemon-
 resources:
 - flowconfig-manager.yaml
+- sriov_nad.yaml
 patchesStrategicMerge:
-- add_env.yaml
-- add_privilege.yaml
-- add_dcf_volume.yaml
+- add_uft_container.yaml
+# - add_env.yaml
 images:
 - name: daemon-image
   newName: flowconfig-daemon
   newTag: 0.0.1
+
+# Apply patch to convert manager to be a DaemonSet
+patches:
+- path: convert_to_fcdeployment.yaml
+  target:
+    group: apps
+    kind: DaemonSet
+    name: flowconfig-daemon
+    version: v1
