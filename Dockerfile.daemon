@@ -1,0 +1,33 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2020-2021 Intel Corporation
+
+FROM golang:1.15 as builder
+
+WORKDIR /workspace
+
+COPY go.mod go.sum ./
+
+RUN go mod download
+
+COPY cmd cmd/
+COPY pkg pkg/
+COPY apis apis/
+
+# Build
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GO111MODULE=on go build -a -o fwddp_daemon cmd/fwddp-daemon/main.go
+
+FROM registry.access.redhat.com/ubi8:8.4
+
+ARG VERSION
+### Required OpenShift Labels
+LABEL name="Intel Ethernet Operator - daemonset" \
+    vendor="Intel Corporation" \
+    version=$VERSION \
+    release="1" \
+    summary="Manages the FW and DPP updates of E810 NICs" \
+    description="The daemonset container is responsible for building the nodes inventory and configuring the FW and DDP updates on E810 series NICs"
+
+WORKDIR /
+COPY --from=builder /workspace/fwddp_daemon .
+
+ENTRYPOINT ["/fwddp_daemon"]
