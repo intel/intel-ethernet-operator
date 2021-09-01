@@ -10,6 +10,7 @@ import (
 type DeviceSelector struct {
 	VendorID   string `json:"vendorId,omitempty"`
 	DeviceID   string `json:"deviceId,omitempty"`
+	// +kubebuilder:validation:Pattern=`^[a-fA-F0-9]{4}:[a-fA-F0-9]{2}:[01][a-fA-F0-9]\.[0-7]$`
 	PCIAddress string `json:"pciAddress,omitempty"`
 	Driver     string `json:"driver,omitempty"`
 }

@@ -50,7 +50,7 @@ func initTestData() TestData {
 			Spec: ethernetv1.EthernetNodeConfigSpec{
 				Config: []ethernetv1.DeviceNodeConfig{
 					{
-						PCIAddress: "00:00:00.1",
+						PCIAddress: "0000:00:00.1",
 						DeviceConfig: ethernetv1.DeviceConfig{
 							DDPURL: "http://testddpurl",
 							FWURL:  "http://testfwurl",
@@ -68,7 +68,7 @@ func initTestData() TestData {
 		},
 		Inventory: []ethernetv1.Device{
 			{
-				PCIAddress:    "00:00:00.0",
+				PCIAddress:    "0000:00:00.0",
 				Name:          "TestName",
 				Driver:        "TestDriver",
 				DriverVersion: "TestDriverVersion",
@@ -252,14 +252,14 @@ var _ = Describe("FirmwareDaemonTest", func() {
 			Expect(nodeConfigs.Items[0].Status.Conditions).To(HaveLen(1))
 			Expect(nodeConfigs.Items[0].Status.Conditions[0].Status).To(Equal(metav1.ConditionFalse))
 			Expect(nodeConfigs.Items[0].Status.Conditions[0].Reason).To(Equal(string(UpdateFailed)))
-			Expect(nodeConfigs.Items[0].Status.Conditions[0].Message).To(Equal("Device 00:00:00.1 not found"))
+			Expect(nodeConfigs.Items[0].Status.Conditions[0].Message).To(Equal("Device 0000:00:00.1 not found"))
 		})
 
 		var _ = It("will update condition to UpdateFailed if not able to download firmware", func() {
 			Expect(k8sClient.Create(context.TODO(), &data.Node)).To(Succeed())
 			Expect(k8sClient.Create(context.TODO(), &data.NodeConfig)).To(Succeed())
 
-			data.Inventory[0].PCIAddress = "00:00:00.1"
+			data.Inventory[0].PCIAddress = "0000:00:00.1"
 
 			downloadErr := gerrors.New("Unable to download")
 			downloadFile = func(path, url, checksum string, _ logr.Logger) error {
@@ -287,7 +287,7 @@ var _ = Describe("FirmwareDaemonTest", func() {
 			Expect(k8sClient.Create(context.TODO(), &data.Node)).To(Succeed())
 			Expect(k8sClient.Create(context.TODO(), &data.NodeConfig)).To(Succeed())
 
-			data.Inventory[0].PCIAddress = "00:00:00.1"
+			data.Inventory[0].PCIAddress = "0000:00:00.1"
 
 			untarErr := gerrors.New("Unable to untar")
 			untarFile = func(srcPath string, dstPath string, log logr.Logger) error {
@@ -315,7 +315,7 @@ var _ = Describe("FirmwareDaemonTest", func() {
 			Expect(k8sClient.Create(context.TODO(), &data.Node)).To(Succeed())
 			Expect(k8sClient.Create(context.TODO(), &data.NodeConfig)).To(Succeed())
 
-			data.Inventory[0].PCIAddress = "00:00:00.1"
+			data.Inventory[0].PCIAddress = "0000:00:00.1"
 
 			fwErr := gerrors.New("Unable to update firmware")
 			nvmupdateExec = func(cmd *exec.Cmd, log logr.Logger) error {
@@ -343,7 +343,7 @@ var _ = Describe("FirmwareDaemonTest", func() {
 			Expect(k8sClient.Create(context.TODO(), &data.Node)).To(Succeed())
 			Expect(k8sClient.Create(context.TODO(), &data.NodeConfig)).To(Succeed())
 
-			data.Inventory[0].PCIAddress = "00:00:00.1"
+			data.Inventory[0].PCIAddress = "0000:00:00.1"
 
 			rootAttr := &syscall.SysProcAttr{
 				Credential: &syscall.Credential{Uid: 0, Gid: 0},
@@ -370,6 +370,53 @@ var _ = Describe("FirmwareDaemonTest", func() {
 			Expect(nodeConfigs.Items[0].Status.Conditions[0].Status).To(Equal(metav1.ConditionTrue))
 			Expect(nodeConfigs.Items[0].Status.Conditions[0].Reason).To(Equal(string(UpdateSucceeded)))
 			Expect(nodeConfigs.Items[0].Status.Conditions[0].Message).To(Equal("Updated successfully"))
+		})
+
+		var _ = It("will fail because of PCIAddress not matching pattern", func() {
+
+			Expect(k8sClient.Create(context.TODO(), &data.Node)).To(Succeed())
+
+			// Valid pattern: ^[a-fA-F0-9]{2,4}:[a-fA-F0-9]{2}:[01][a-fA-F0-9]\.[0-7]$
+
+			data.NodeConfig.Spec.Config[0].PCIAddress = "0:00:00.1"
+			err := k8sClient.Create(context.TODO(), &data.NodeConfig)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("spec.config.PCIAddress: Invalid value:"))
+
+			data.NodeConfig.Spec.Config[0].PCIAddress = "0000:00:00.a"
+			err = k8sClient.Create(context.TODO(), &data.NodeConfig)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("spec.config.PCIAddress: Invalid value:"))
+
+			data.NodeConfig.Spec.Config[0].PCIAddress = "0:00:00"
+			err = k8sClient.Create(context.TODO(), &data.NodeConfig)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("spec.config.PCIAddress: Invalid value:"))
+
+			data.NodeConfig.Spec.Config[0].PCIAddress = "0:00:00"
+			err = k8sClient.Create(context.TODO(), &data.NodeConfig)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("spec.config.PCIAddress: Invalid value:"))
+
+			data.NodeConfig.Spec.Config[0].PCIAddress = "0000:00:20.1"
+			err = k8sClient.Create(context.TODO(), &data.NodeConfig)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("spec.config.PCIAddress: Invalid value:"))
+
+			data.NodeConfig.Spec.Config[0].PCIAddress = "0000:00:0.1"
+			err = k8sClient.Create(context.TODO(), &data.NodeConfig)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("spec.config.PCIAddress: Invalid value:"))
+
+			data.NodeConfig.Spec.Config[0].PCIAddress = "0000:0:00.1"
+			err = k8sClient.Create(context.TODO(), &data.NodeConfig)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("spec.config.PCIAddress: Invalid value:"))
+
+			data.NodeConfig.Spec.Config[0].PCIAddress = "0000:00:00.*"
+			err = k8sClient.Create(context.TODO(), &data.NodeConfig)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("spec.config.PCIAddress: Invalid value:"))
 		})
 	})
 

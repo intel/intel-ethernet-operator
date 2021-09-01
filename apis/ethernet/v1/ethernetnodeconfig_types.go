@@ -8,6 +8,7 @@ import (
 )
 
 type DeviceNodeConfig struct {
+	// +kubebuilder:validation:Pattern=`^[a-fA-F0-9]{4}:[a-fA-F0-9]{2}:[01][a-fA-F0-9]\.[0-7]$`
 	PCIAddress   string       `json:"PCIAddress"`
 	DeviceConfig DeviceConfig `json:"deviceConfig"`
 }
