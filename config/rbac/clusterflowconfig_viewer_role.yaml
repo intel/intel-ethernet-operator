@@ -1,0 +1,20 @@
+# permissions for end users to view clusterflowconfigs.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: clusterflowconfig-viewer-role
+rules:
+- apiGroups:
+  - flowconfig.intel.com
+  resources:
+  - clusterflowconfigs
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - flowconfig.intel.com
+  resources:
+  - clusterflowconfigs/status
+  verbs:
+  - get

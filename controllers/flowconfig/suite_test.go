@@ -13,8 +13,6 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	"github.com/otcshare/intel-ethernet-operator/pkg/flowconfig/flowsets"
-	mock "github.com/otcshare/intel-ethernet-operator/pkg/flowconfig/rpc/v1/flow/mocks"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -23,6 +21,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/envtest/printer"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+
+	"github.com/otcshare/intel-ethernet-operator/pkg/flowconfig/flowsets"
+	mock "github.com/otcshare/intel-ethernet-operator/pkg/flowconfig/rpc/v1/flow/mocks"
 
 	flowconfigv1 "github.com/otcshare/intel-ethernet-operator/apis/flowconfig/v1"
 	//+kubebuilder:scaffold:imports
@@ -61,6 +62,9 @@ var _ = BeforeSuite(func() {
 	cfg, err = testEnv.Start()
 	Expect(err).ToNot(HaveOccurred())
 	Expect(cfg).ToNot(BeNil())
+
+	err = flowconfigv1.AddToScheme(scheme.Scheme)
+	Expect(err).NotTo(HaveOccurred())
 
 	err = flowconfigv1.AddToScheme(scheme.Scheme)
 	Expect(err).NotTo(HaveOccurred())
