@@ -15,8 +15,8 @@ type ClusterFlowConfigSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
-	// Foo is an example field of ClusterFlowConfig. Edit clusterflowconfig_types.go to remove/update
-	Foo string `json:"foo,omitempty"`
+	// Rules is a list of FlowCreate rules
+	Rules []*ClusterFlowRule `json:"rules,omitempty"`
 }
 
 // ClusterFlowConfigStatus defines the observed state of ClusterFlowConfig
@@ -48,4 +48,12 @@ type ClusterFlowConfigList struct {
 
 func init() {
 	SchemeBuilder.Register(&ClusterFlowConfig{}, &ClusterFlowConfigList{})
+}
+
+// ClusterFlowRules struct for flow rules creation and validation
+type ClusterFlowRule struct {
+	// PortId  uint32               `json:"portId,omitempty"`
+	Attr    *FlowAttr            `json:"attr,omitempty"`
+	Pattern []*FlowItem          `json:"pattern,omitempty"`
+	Action  []*ClusterFlowAction `json:"action,omitempty"`
 }

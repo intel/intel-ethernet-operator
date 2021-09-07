@@ -74,6 +74,32 @@ rules:
 - apiGroups:
   - flowconfig.intel.com
   resources:
+  - clusterflowconfigs
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - flowconfig.intel.com
+  resources:
+  - clusterflowconfigs/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - flowconfig.intel.com
+  resources:
+  - clusterflowconfigs/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - flowconfig.intel.com
+  resources:
   - flowconfignodeagentdeployments
   verbs:
   - create

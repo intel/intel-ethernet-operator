@@ -1,0 +1,29 @@
+apiVersion: flowconfig.intel.com/v1
+kind: ClusterFlowConfig
+metadata:
+  name: silpixa00399841
+spec:
+  rules:
+    - pattern:
+        - type: RTE_FLOW_ITEM_TYPE_ETH
+        - type: RTE_FLOW_ITEM_TYPE_VLAN
+        - type: RTE_FLOW_ITEM_TYPE_VLAN
+        - type: RTE_FLOW_ITEM_TYPE_PPPOES
+        - type: RTE_FLOW_ITEM_TYPE_PPPOE_PROTO_ID
+          spec:
+            protoId: 0xc023
+          mask:
+            protoId: 0xFFFF
+        - type: RTE_FLOW_ITEM_TYPE_END
+      action:
+        - type: to-pod-interface
+          conf:
+            podInterface: net0
+            podSelector:
+                matchLabels:
+                  app: vagf
+                  role: controlplane
+                  serverProvider: vodafone
+      attr:
+        ingress: 1
+      # priority: 0
