@@ -55,5 +55,16 @@ spec:
           requests:
             cpu: 100m
             memory: 20Mi
+        env:
+        - name: ETHERNET_NODE_LABEL
+          value: "ethernet.intel.com/intel-ethernet-present"
+        - name: ETHERNET_NODE_LABELER_IMAGE
+          value: $ETHERNET_NODE_LABELER_IMAGE
+        - name: ETHERNET_DAEMON_IMAGE
+          value: $ETHERNET_DAEMON_IMAGE
+        - name: ETHERNET_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
       serviceAccountName: controller-manager
       terminationGracePeriodSeconds: 10

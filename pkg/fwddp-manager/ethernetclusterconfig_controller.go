@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright (c) 2021 Intel Corporation
 
-package ethernet
+package fwddp_manager
 
 import (
 	"context"
@@ -32,6 +32,9 @@ var NAMESPACE = os.Getenv("ETHERNET_NAMESPACE")
 //+kubebuilder:rbac:groups=ethernet.intel.com,resources=ethernetclusterconfigs/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=ethernet.intel.com,resources=ethernetclusterconfigs/finalizers,verbs=update
 //+kubebuilder:rbac:groups="",resources=nodes,verbs=list;watch
+//+kubebuilder:rbac:groups=apps,resources=daemonsets;deployments;deployments/finalizers,verbs=*
+//+kubebuilder:rbac:groups="",resources=namespaces;serviceaccounts;configmaps,verbs=*
+//+kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=roles;rolebindings;clusterroles;clusterrolebindings,verbs=*
 
 func (r *EthernetClusterConfigReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := r.Log.WithValues("ethernetclusterconfig", req.NamespacedName)

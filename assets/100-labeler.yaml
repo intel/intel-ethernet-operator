@@ -79,7 +79,7 @@ spec:
       serviceAccount: clv-discovery
       serviceAccountName: clv-discovery
       containers:
-        - image: {{ .ETHERNET_NAMESPACE }}
+        - image: {{ .ETHERNET_NODE_LABELER_IMAGE }}
           imagePullPolicy: IfNotPresent
           name: clv-discovery
           securityContext:

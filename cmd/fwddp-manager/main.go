@@ -4,8 +4,14 @@
 package main
 
 import (
+	"context"
 	"flag"
+	"github.com/otcshare/intel-ethernet-operator/pkg/fwddp-manager"
+	"github.com/otcshare/intel-ethernet-operator/pkg/fwddp-manager/assets"
+	appsv1 "k8s.io/api/apps/v1"
 	"os"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"time"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
@@ -19,7 +25,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	ethernetv1 "github.com/otcshare/intel-ethernet-operator/apis/ethernet/v1"
-	ethernetcontrollers "github.com/otcshare/intel-ethernet-operator/controllers/ethernet"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -39,7 +44,7 @@ func main() {
 	var metricsAddr string
 	var enableLeaderElection bool
 	var probeAddr string
-	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
+	flag.StringVar(&metricsAddr, "metrics-bind-address", "0", "The address the metric endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
 		"Enable leader election for controller manager. "+
@@ -52,20 +57,22 @@ func main() {
 
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 
-	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
+	restConfig := ctrl.GetConfigOrDie()
+	mgr, err := ctrl.NewManager(restConfig, ctrl.Options{
 		Scheme:                 scheme,
 		MetricsBindAddress:     metricsAddr,
 		Port:                   9443,
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
 		LeaderElectionID:       "8ee6d2ed.intel.com",
+		Namespace:              fwddp_manager.NAMESPACE,
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
 		os.Exit(1)
 	}
 
-	if err = (&ethernetcontrollers.EthernetClusterConfigReconciler{
+	if err = (&fwddp_manager.EthernetClusterConfigReconciler{
 		Client: mgr.GetClient(),
 		Log:    ctrl.Log.WithName("controllers").WithName("ethernet").WithName("EthernetClusterConfig"),
 		Scheme: mgr.GetScheme(),
@@ -81,6 +88,37 @@ func main() {
 	}
 	if err := mgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
 		setupLog.Error(err, "unable to set up ready check")
+		os.Exit(1)
+	}
+
+	var adHocClient client.Client
+	if adHocClient, err = client.New(restConfig, client.Options{Scheme: scheme}); err != nil {
+		setupLog.Error(err, "failed to create client")
+		os.Exit(1)
+	}
+
+	owner := new(appsv1.Deployment)
+	if err := adHocClient.Get(
+		context.Background(),
+		client.ObjectKey{Name: "intel-ethernet-operator-controller-manager", Namespace: fwddp_manager.NAMESPACE},
+		owner,
+	); err != nil {
+		setupLog.Error(err, "unable to get operator deployment")
+		os.Exit(1)
+	}
+
+	if err := (&assets.Manager{
+		Client:    adHocClient,
+		Log:       ctrl.Log.WithName("manager"),
+		EnvPrefix: "ETHERNET_",
+		Scheme:    scheme,
+		Owner:     owner,
+		Assets: []assets.Asset{
+			{Path: "assets/100-labeler.yaml"},
+			{Path: "assets/200-daemon.yaml", BlockingReadiness: assets.ReadinessPollConfig{Retries: 30, Delay: 20 * time.Second}},
+		},
+	}).LoadAndDeploy(context.Background()); err != nil {
+		setupLog.Error(err, "failed to deploy the assets")
 		os.Exit(1)
 	}
 

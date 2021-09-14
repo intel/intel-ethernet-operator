@@ -61,7 +61,7 @@ var _ = AfterSuite(func() {
 	Expect(err).ToNot(HaveOccurred())
 })
 
-func TestMain(t *testing.T) {
+func TestLabeler(t *testing.T) {
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "Main suite")
 }

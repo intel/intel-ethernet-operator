@@ -3,12 +3,19 @@
 
 export APP_NAME=intel-ethernet-operator
 
+IMAGE_REGISTRY ?= ger-is-registry.caas.intel.com/openness-operators
+TLS_VERIFY ?= false
+
 # VERSION defines the project version for the bundle.
 # Update this value when you upgrade the version of your project.
 # To re-generate a bundle for another specific version without changing the standard setup, you can:
 # - use the VERSION as arg of the bundle target (e.g make bundle VERSION=0.0.2)
 # - use environment variables to overwrite this value (e.g export VERSION=0.0.2)
 VERSION ?= 0.0.1
+
+# dependent images
+export ETHERNET_DAEMON_IMAGE ?= $(IMAGE_REGISTRY)/intel-ethernet-daemon:$(VERSION)
+export ETHERNET_NODE_LABELER_IMAGE ?= $(IMAGE_REGISTRY)/intel-ethernet-labeler:$(VERSION)
 
 # CHANNELS define the bundle channels used in the bundle.
 # Add a new line here if you would like to change its default config. (E.g CHANNELS = "preview,fast,stable")
@@ -112,20 +119,26 @@ test: manifests generate fmt vet ## Run tests.
 ##@ Build
 
 build: generate fmt vet ## Build manager binary.
-	go build -o bin/manager main.go
+	go build -o bin/manager cmd/fwddp-manager/main.go
 
 daemon: generate fmt vet
 	go build -o bin/fwddp-daemon cmd/fwddp-daemon/main.go
 
 run: manifests generate fmt vet ## Run a controller from your host.
-	go run ./main.go
+	go run ./cmd/fwddp-manager/main.go
 
 docker-build: test ## Build docker image with the manager.
-	docker build -t ${IMG} ${DOCKERARGS} .
-	docker image tag ${IMG} ${IMAGE_TAG_LATEST}
+	podman build -t ${IMAGE_REGISTRY}/${IMG} ${DOCKERARGS} .
+	podman image tag ${IMAGE_REGISTRY}/${IMG} ${IMAGE_REGISTRY}/${IMAGE_TAG_LATEST}
+
+docker-build-daemon:
+	podman build --file Dockerfile.daemon --tag ${ETHERNET_DAEMON_IMAGE} ${DOCKERARGS} .
 
 docker-push: ## Push docker image with the manager.
-	docker push ${IMG}
+	podman push ${IMAGE_REGISTRY}/${IMG} --tls-verify=$(TLS_VERIFY)
+
+docker-push-daemon: ## Push docker image with the manager.
+	podman push ${ETHERNET_DAEMON_IMAGE} --tls-verify=$(TLS_VERIFY)
 
 ##@ Deployment
 
@@ -136,8 +149,8 @@ uninstall: manifests kustomize ## Uninstall CRDs from the K8s cluster specified 
 	$(KUSTOMIZE) build config/crd | kubectl delete -f -
 
 deploy: manifests kustomize ## Deploy controller to the K8s cluster specified in ~/.kube/config.
-	cd config/manager && $(KUSTOMIZE) edit set image controller=${IMG}
-	$(KUSTOMIZE) build config/default | kubectl apply -f -
+	cd config/manager && $(KUSTOMIZE) edit set image controller=${IMAGE_REGISTRY}/${IMG}
+	$(KUSTOMIZE) build config/default | envsubst | kubectl apply -f -
 
 undeploy: ## Undeploy controller from the K8s cluster specified in ~/.kube/config.
 	$(KUSTOMIZE) build config/default | kubectl delete -f -

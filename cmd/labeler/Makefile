@@ -1,8 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # Copyright (c) 2021 Intel Corporation
 
-VERSION ?= 1.0.0
-IMG_VERSION := v$(VERSION)
+VERSION ?= 0.0.1
 TLS_VERIFY ?= true
 
 # Operator image registry
@@ -12,7 +11,7 @@ ifneq ($(strip $(IMAGE_REGISTRY)),)
 override IMAGE_REGISTRY:=$(addsuffix /,$(IMAGE_REGISTRY))
 endif
 
-export LABELER_IMAGE ?= $(IMAGE_REGISTRY)ethernet-operator-labeler:$(IMG_VERSION)
+export LABELER_IMAGE ?= $(IMAGE_REGISTRY)intel-ethernet-labeler:$(VERSION)
 
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
@@ -36,7 +35,7 @@ vet:
 # Build the docker image
 image:
 	cp ../../LICENSE TEMP_LICENSE_COPY
-	podman build . -t ${LABELER_IMAGE} --build-arg=VERSION=$(IMG_VERSION)
+	podman build . -t ${LABELER_IMAGE} --build-arg=VERSION=$(VERSION)
 
 # Push the docker image
 push: image

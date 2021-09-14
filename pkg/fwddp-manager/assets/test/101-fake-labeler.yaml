@@ -1,0 +1,67 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2021 Intel Corporation
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: any-namespace
+---
+
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: any-service-account
+  namespace: any-namespace
+---
+
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: any-cluster-role
+rules:
+- apiGroups: [""]
+  resources: ["nodes"]
+  verbs: ["get", "update"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: any-cluster-role-binding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: any-cluster-role
+  namespace: any-namespace
+subjects:
+- kind: ServiceAccount
+  name: any-service-account
+  namespace: any-namespace
+userNames:
+- system:serviceaccount:any-namespace:any-cluster-account
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  labels:
+    app: any-daemon
+  name: any-daemon
+  namespace: any-namespace
+spec:
+  minReadySeconds: 10
+  selector:
+    matchLabels:
+      app: any-app
+  template:
+    metadata:
+      labels:
+        app: any-app
+      name: test-app
+    spec:
+      serviceAccount: any-service-account
+      serviceAccountName: any-service-account
+      containers:
+      - image: "any_image"
+        name: test-app
+        securityContext:
+          readOnlyRootFilesystem: true
