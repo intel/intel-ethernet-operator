@@ -53,6 +53,7 @@ var (
 
 	downloadFile = utils.DownloadFile
 	untarFile    = utils.Untar
+	linkFile     = os.Symlink
 )
 
 type CompatibilityMap map[string]Compatibility
@@ -222,71 +223,74 @@ func (r *NodeConfigReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		return reconcile.Result{}, nil
 	}
 
+	if postUpdateReboot {
+		r.updateCondition(&nodeConfig, metav1.ConditionTrue, UpdateSucceeded, "Updated successfully")
+		log.V(2).Info("Reconciled")
+		return reconcile.Result{}, nil
+	}
+
+	r.updateCondition(&nodeConfig, metav1.ConditionFalse, UpdateInProgress, "Update started")
+
+	inv, err := getInventory(log)
+	if err != nil {
+		log.Error(err, "Failed to retrieve inventory")
+		r.updateCondition(&nodeConfig, metav1.ConditionFalse, UpdateFailed, err.Error())
+		return reconcile.Result{}, nil
+	}
+
 	var updateErr error
-	if !postUpdateReboot {
-		r.updateCondition(&nodeConfig, metav1.ConditionFalse, UpdateInProgress, "Update started")
-
-		inv, err := getInventory(log)
+	updateQueue := make(deviceUpdateQueue)
+	for _, deviceConfig := range nodeConfig.Spec.Config {
+		artifacts, err := r.prepare(deviceConfig, inv)
 		if err != nil {
-			log.Error(err, "Failed to retrieve inventory")
-			r.updateCondition(&nodeConfig, metav1.ConditionFalse, UpdateFailed, err.Error())
-			return reconcile.Result{}, nil
+			log.Error(err, "Failed to prepare artifacts for", "device", deviceConfig.PCIAddress)
+			updateErr = multierr.Append(updateErr, err)
+			continue
 		}
+		updateQueue[deviceConfig.PCIAddress] = artifacts
+	}
 
-		updateQueue := make(deviceUpdateQueue)
-		for _, deviceConfig := range nodeConfig.Spec.Config {
-			artifacts, err := r.prepare(deviceConfig, inv)
+	if len(updateQueue) == 0 {
+		r.updateCondition(&nodeConfig, metav1.ConditionFalse, UpdateFailed, updateErr.Error())
+		return reconcile.Result{}, nil
+	}
+
+	// TODO:Add leader election or multi-leader/parallel operation (including node drain, cordon, etc)
+	rebootRequired := false
+	for pciAddr, artifacts := range updateQueue {
+		if artifacts.fwPath != "" {
+			err := r.updateFirmware(pciAddr, artifacts.fwPath)
 			if err != nil {
-				log.Error(err, "Failed to prepare artifacts for", "device", deviceConfig.PCIAddress)
+				log.Error(err, "Failed to update firmware", "device", pciAddr)
 				updateErr = multierr.Append(updateErr, err)
+				// Skip DDP update on device
 				continue
 			}
-			updateQueue[deviceConfig.PCIAddress] = artifacts
-		}
 
-		if len(updateQueue) == 0 {
-			r.updateCondition(&nodeConfig, metav1.ConditionFalse, UpdateFailed, updateErr.Error())
-			return reconcile.Result{}, nil
-		}
-
-		// TODO:Add leader election or multi-leader/parallel operation (including node drain, cordon, etc)
-		rebootRequired := false
-		for pciAddr, artifacts := range updateQueue {
-			if artifacts.fwPath != "" {
-				err := r.updateFirmware(pciAddr, artifacts.fwPath)
-				if err != nil {
-					log.Error(err, "Failed to update firmware", "device", pciAddr)
-					updateErr = multierr.Append(updateErr, err)
-					// Skip DDP update on device
-					continue
-				}
-
-				r, err := isRebootRequired(updateResultPath(artifacts.fwPath))
-				if err != nil {
-					log.Error(err, "Failed to extract reboot required flag from file")
-					continue
-				}
-
-				if r {
-					log.V(4).Info("Node reboot required to complete firmware update", "device", pciAddr)
-					rebootRequired = true
-				}
-			}
-
-			if artifacts.ddpPath != "" {
-				// TODO: Update DDP
-				continue
-			}
-		}
-
-		if rebootRequired {
-			log.V(2).Info("Rebooting the node...")
-			r.updateCondition(&nodeConfig, metav1.ConditionFalse, UpdatePostUpdateReboot, "Post-update node reboot")
-			err := r.rebootNode()
+			reboot, err := isRebootRequired(updateResultPath(artifacts.fwPath))
 			if err != nil {
-				log.Error(err, "Failed to reboot the node")
+				log.Error(err, "Failed to extract reboot required flag from file")
+			} else if reboot {
+				log.V(4).Info("Node reboot required to complete firmware update", "device", pciAddr)
+				rebootRequired = true
+			}
+		}
+		if artifacts.ddpPath != "" {
+			err := r.updateDDP(pciAddr, artifacts.ddpPath)
+			if err != nil {
+				log.Error(err, "Failed to update DDP", "device", pciAddr)
 				updateErr = multierr.Append(updateErr, err)
 			}
+		}
+	}
+
+	if rebootRequired {
+		log.V(2).Info("Rebooting the node...")
+		r.updateCondition(&nodeConfig, metav1.ConditionFalse, UpdatePostUpdateReboot, "Post-update node reboot")
+		err := r.rebootNode()
+		if err != nil {
+			log.Error(err, "Failed to reboot the node")
+			updateErr = multierr.Append(updateErr, err)
 		}
 	}
 
@@ -371,6 +375,40 @@ func (r *NodeConfigReconciler) prepareFirmware(config ethernetv1.DeviceNodeConfi
 	return targetPath, nil
 }
 
+func (r *NodeConfigReconciler) prepareDDP(config ethernetv1.DeviceNodeConfig) (string, error) {
+	log := r.log.WithName("prepareDDP")
+
+	if config.DeviceConfig.DDPURL == "" {
+		log.V(4).Info("Empty DDPURL")
+		return "", nil
+	}
+
+	targetPath := path.Join(fwInstallDest, config.PCIAddress)
+
+	err := utils.CreateFolder(targetPath, log)
+	if err != nil {
+		return "", err
+	}
+
+	log.V(4).Info("Downloading", "url", config.DeviceConfig.DDPURL)
+	fullPath := path.Join(targetPath, ddpPackageFilename)
+	err = downloadFile(fullPath, config.DeviceConfig.DDPURL,
+		config.DeviceConfig.DDPChecksum, log)
+	if err != nil {
+		return "", err
+	}
+
+	log.V(4).Info("DDP file downloaded - extracting")
+	// XXX so this untars into the same directory as the source file
+	// We might add more comments here explaining the mechanics and reasoning
+	err = untarFile(fullPath, targetPath, log)
+	if err != nil {
+		return "", err
+	}
+
+	return fullPath, nil
+}
+
 func (r *NodeConfigReconciler) getFWVersion(fwPath string, dev ethernetv1.Device) (string, error) {
 	log := r.log.WithName("getFWVersion")
 	if fwPath == "" {
@@ -453,42 +491,25 @@ func (r *NodeConfigReconciler) updateFirmware(pciAddr, fwPath string) error {
 	return nil
 }
 
+// ddpPath is a directory we need to link to
+// we have to link from /lib/firmware/updates/intel/ice/ddp/ice.pkg
+// (currently we ignore pciAddr and update the DDP for all installed CLV cards)
+func (r *NodeConfigReconciler) updateDDP(pciAddr, ddpPath string) error {
+	log := r.log.WithName("updateDDP")
+
+	source := "/lib/firmware/updates/intel/ice/ddp/ice.pkg"
+	target := path.Join(ddpPath, "ice.pkg")
+
+	log.V(4).Info("Linking", "source", source)
+	log.V(4).Info("Linking", "target", target)
+
+	return linkFile(source, target)
+}
+
 func runExecWithLog(cmd *exec.Cmd, log logr.Logger) error {
 	cmd.Stdout = &utils.LogWriter{Log: log, Stream: "stdout"}
 	cmd.Stderr = &utils.LogWriter{Log: log, Stream: "stderr"}
 	return cmd.Run()
-}
-
-func (r *NodeConfigReconciler) prepareDDP(config ethernetv1.DeviceNodeConfig) (string, error) {
-	log := r.log.WithName("prepareDDP")
-
-	if config.DeviceConfig.DDPURL == "" {
-		log.V(4).Info("Empty DDPURL")
-		return "", nil
-	}
-
-	targetPath := path.Join(fwInstallDest, config.PCIAddress)
-
-	err := utils.CreateFolder(targetPath, log)
-	if err != nil {
-		return "", err
-	}
-
-	log.V(4).Info("Downloading", "url", config.DeviceConfig.DDPURL)
-	fullPath := path.Join(targetPath, ddpPackageFilename)
-	err = downloadFile(fullPath, config.DeviceConfig.DDPURL,
-		config.DeviceConfig.DDPChecksum, log)
-	if err != nil {
-		return "", err
-	}
-
-	log.V(4).Info("DDP file downloaded - extracting")
-	err = untarFile(fullPath, targetPath, log)
-	if err != nil {
-		return "", err
-	}
-
-	return targetPath, nil
 }
 
 func (r *NodeConfigReconciler) verifyCompatibility(fwPath, ddpPath string, dev ethernetv1.Device, force bool) error {
