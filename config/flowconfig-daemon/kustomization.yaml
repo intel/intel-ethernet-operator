@@ -8,6 +8,7 @@ resources:
 - sriov_nad.yaml
 patchesStrategicMerge:
 - add_uft_container.yaml
+- add_volumes.yaml
 # - add_env.yaml
 images:
 - name: daemon-image

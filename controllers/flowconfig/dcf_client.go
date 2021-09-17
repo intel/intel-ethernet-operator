@@ -19,14 +19,11 @@ package flowconfig
 import (
 	"context"
 	"fmt"
-	"net"
 	"time"
 
 	flowapi "github.com/otcshare/intel-ethernet-operator/pkg/flowconfig/rpc/v1/flow"
 	"google.golang.org/grpc"
 )
-
-var dcfEndpoint = "/var/run/dcf/dcf_tool.sock"
 
 type dcfClient struct{}
 
@@ -111,10 +108,10 @@ func (dc *dcfClient) ListPorts(ctx context.Context, in *flowapi.RequestListPorts
 }
 
 func getDCFFlowClientConn() (*grpc.ClientConn, error) {
-	conn, err := grpc.Dial(dcfEndpoint, grpc.WithInsecure(),
-		grpc.WithDialer(func(addr string, timeout time.Duration) (net.Conn, error) {
-			return net.DialTimeout("unix", addr, timeout)
-		}))
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	conn, err := grpc.DialContext(ctx, "localhost:50051", grpc.WithInsecure())
 	if err != nil {
 		return nil, fmt.Errorf("unable to connect to DCF grpc endpoint: %s", err)
 	}

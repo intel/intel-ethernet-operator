@@ -17,6 +17,7 @@ type FlowConfigNodeAgentDeploymentSpec struct {
 	// Important: Run "make" to regenerate code after modifying this file
 
 	// Foo is an example field of FlowConfigNodeAgentDeployment. Edit flowconfignodeagentdeployment_types.go to remove/update
+	NADAnnotation string                  `json:"NADAnnotation,omitempty"`
 	DCFVfPoolName string                  `json:"DCFVfPoolName,omitempty"`
 	Template      *corev1.PodTemplateSpec `json:"template,omitempty"`
 }

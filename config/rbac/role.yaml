@@ -1,5 +1,3 @@
-# SPDX-License-Identifier: Apache-2.0
-# Copyright (c) 2021 Intel Corporation
 
 ---
 apiVersion: rbac.authorization.k8s.io/v1
@@ -13,6 +11,25 @@ rules:
   resources:
   - nodes
   verbs:
+  - list
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - pods
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - watch
+- apiGroups:
+  - apps
+  resources:
+  - deployments
+  verbs:
+  - delete
+  - get
   - list
   - watch
 - apiGroups:
@@ -89,6 +106,31 @@ rules:
   - flowconfig.intel.com
   resources:
   - nodeflowconfigs/status
+  verbs:
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - flowconfig.intel.com
+  resources:
+  - nodes
+  verbs:
+  - get
+  - list
+  - update
+  - watch
+- apiGroups:
+  - flowconfig.intel.com
+  resources:
+  - nodes/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - flowconfig.intel.com
+  resources:
+  - nodes/status
   verbs:
   - get
   - patch

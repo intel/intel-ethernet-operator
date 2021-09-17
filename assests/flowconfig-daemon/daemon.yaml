@@ -6,11 +6,10 @@ metadata:
   name: flowconfig-daemon-flowconfig-daemon
   namespace: intel-ethernet-operator-system
 spec:
-  DCFVfPoolName: intel.com/intel_cvl0_vfio
+  DCFVfPoolName: intel.com/cvl_uft_admin
+  NADAnnotation: flowconfig-daemon-sriov-cvl0-admin
   template:
     metadata:
-      annotations:
-        k8s.v1.cni.cncf.io/networks: unified-flow-operator-sriov-cvl0-admin
       labels:
         control-plane: flowconfig-daemon
     spec:
@@ -32,10 +31,10 @@ spec:
         resources:
           limits:
             hugepages-2Mi: 2Gi
-            intel.com/intel_cvl0_vfio: 1
+            memory: 200Mi
           requests:
             hugepages-2Mi: 2Gi
-            intel.com/intel_cvl0_vfio: 1
+            memory: 200Mi
         securityContext:
           capabilities:
             add:
@@ -70,14 +69,21 @@ spec:
           requests:
             cpu: 100m
             memory: 20Mi
-      serviceAccountName: controller-manager
+      serviceAccountName: intel-ethernet-operator-controller-manager
       terminationGracePeriodSeconds: 10
+      volumes:
+      - emptyDir:
+          medium: HugePages
+        name: hugepage
+      - hostPath:
+          path: /lib/firmware/updates/intel/ice/ddp/
+        name: iceddp
 ---
 apiVersion: k8s.cni.cncf.io/v1
 kind: NetworkAttachmentDefinition
 metadata:
   annotations:
-    k8s.v1.cni.cncf.io/resourceName: intel.com/intel_cvl0_vfio
+    k8s.v1.cni.cncf.io/resourceName: intel.com/cvl_uft_admin
   name: flowconfig-daemon-sriov-cvl0-admin
   namespace: intel-ethernet-operator-system
 spec:

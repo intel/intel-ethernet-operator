@@ -4,10 +4,12 @@ metadata:
   name: flowconfig-daemon
   namespace: system
 spec:
+  NADAnnotation: "flowconfig-daemon-sriov-cvl0-admin"
+  DCFVfPoolName: "intel.com/cvl_uft_admin"
   template:
     metadata:
       annotations:
-        k8s.v1.cni.cncf.io/networks: unified-flow-operator-sriov-cvl0-admin
+       # k8s.v1.cni.cncf.io/networks: unified-flow-operator-sriov-cvl0-admin
     spec:
       containers:
       - name: uft
@@ -26,11 +28,11 @@ spec:
           value: "UTF-8"
         resources:
           requests:
-            intel.com/intel_cvl0_vfio: 1
             hugepages-2Mi: 2Gi
+            memory: 200Mi
           limits:
-            intel.com/intel_cvl0_vfio: 1
             hugepages-2Mi: 2Gi
+            memory: 200Mi
         volumeMounts:
         - mountPath: /dev/hugepages
           name: hugepage
