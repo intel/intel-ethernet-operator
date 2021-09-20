@@ -26,6 +26,7 @@ type FlowConfigNodeAgentDeploymentReconciler struct {
 }
 
 const networkAnnotation = "k8s.v1.cni.cncf.io/networks"
+const nodeLabel = "kubernetes.io/hostname"
 
 //+kubebuilder:rbac:groups=flowconfig.intel.com,resources=flowconfignodeagentdeployments,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=flowconfig.intel.com,resources=flowconfignodeagentdeployments/status,verbs=get;update;patch
@@ -90,8 +91,13 @@ func (r *FlowConfigNodeAgentDeploymentReconciler) Reconcile(ctx context.Context,
 		podName := "flowconfig-daemon-"
 
 		pod.ObjectMeta.Name = podName
+
+		if pod.Spec.NodeSelector == nil {
+			pod.Spec.NodeSelector = make(map[string]string)
+		}
+
 		pod.ObjectMeta.Namespace = instance.Namespace
-		pod.Spec.NodeName = node.Name
+		pod.Spec.NodeSelector[nodeLabel] = node.Name
 		pod.Name += node.Name
 		numResources := r.getNodeResources(node, vfPoolName.String())
 
