@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"fmt"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
@@ -64,6 +63,5 @@ func (s *ClusterFlowActionType) UnmarshalJSON(b []byte) error {
 
 // ToPodInterfaceConf is configuration for type ToPodInterface
 type ToPodInterfaceConf struct {
-	NetInterfaceName string               `json:"podInterface,omitempty"`
-	PodSelector      metav1.LabelSelector `json:"podSelector,omitempty"`
+	NetInterfaceName string `json:"podInterface,omitempty"`
 }

@@ -15,6 +15,10 @@ type ClusterFlowConfigSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
+	// This is a label selector which selects Pods. This field follows standard label
+	// selector semantics; if present but empty, it selects all pods.
+	PodSelector metav1.LabelSelector `json:"podSelector,omitempty"`
+
 	// Rules is a list of FlowCreate rules
 	Rules []*ClusterFlowRule `json:"rules,omitempty"`
 }
