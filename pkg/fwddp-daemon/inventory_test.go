@@ -33,6 +33,7 @@ var pcis = func() ([]*ghw.PCIDevice, error) {
 				Name: "testname",
 			},
 		},
+		nil,
 	}, nil
 }
 
@@ -206,7 +207,7 @@ var _ = Describe("InventoryTest", func() {
 					`driver: i40e
 version: 2.8.20-k
 firmware-version: 3.31 0x80000d31 1.1767.0
-expansion-rom-version: 
+expansion-rom-version:
 bus-info: 0000:00:00.0
 supports-statistics: yes
 supports-test: yes

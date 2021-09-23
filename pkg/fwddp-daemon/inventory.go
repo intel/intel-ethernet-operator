@@ -172,7 +172,7 @@ func getDeviceMAC(pciAddr string, log logr.InfoLogger) (string, error) {
 			return strings.Replace(strings.ToUpper(i.Firmware.MAC), ":", "", -1), nil
 		}
 	}
-	return "", fmt.Errorf("Device %v not found", pciAddr)
+	return "", fmt.Errorf("Failed to get MAC for device %v. Device not found", pciAddr)
 }
 
 type DeviceIDs utils.SupportedDevice

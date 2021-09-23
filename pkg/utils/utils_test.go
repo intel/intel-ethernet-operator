@@ -19,6 +19,8 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"k8s.io/klog/klogr"
+
+	ctrl "sigs.k8s.io/controller-runtime"
 )
 
 func TestMain(t *testing.T) {
@@ -68,6 +70,12 @@ var _ = Describe("Utils", func() {
 			Expect(result).To(Equal(false))
 		})
 
+		var _ = It("will return false and no error if the expected is empty", func() {
+			result, err := verifyChecksum("./invalidfile", "")
+			Expect(err).ToNot(HaveOccurred())
+			Expect(result).To(Equal(false))
+		})
+
 		var _ = It("will return false if checksum does not match", func() {
 			tmpfile, err := ioutil.TempFile(".", "update")
 			Expect(err).ToNot(HaveOccurred())
@@ -107,8 +115,105 @@ var _ = Describe("Utils", func() {
 		})
 	})
 
-	var _ = Describe("Untar", func() {
+	var _ = Describe("CreateFolder", func() {
 		log := klogr.New()
+		somefolderName := "/tmp/somefolder"
+		var _ = It("will return no error if folder does not exist", func() {
+			defer os.Remove(somefolderName)
+			err := CreateFolder(somefolderName, log)
+			Expect(err).ToNot(HaveOccurred())
+
+			_, err = os.Stat(somefolderName)
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		var _ = It("will return no error if folder already exists", func() {
+			tmpfile, err := os.OpenFile(somefolderName, os.O_RDWR|os.O_CREATE, 0777)
+			defer os.Remove(tmpfile.Name())
+			Expect(err).ToNot(HaveOccurred())
+
+			err = CreateFolder(somefolderName, log)
+			Expect(err).ToNot(HaveOccurred())
+
+			_, err = os.Stat(somefolderName)
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		var _ = It("will return error if folder does not exist", func() {
+			err := CreateFolder("", log)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("no such file or directory"))
+		})
+	})
+
+	var _ = Describe("Write", func() {
+		log := klogr.New()
+		var _ = It("will return no error and a count of writtendata", func() {
+			var l LogWriter
+			l.Log = log
+			testString := []byte("randomdata")
+			n, err := l.Write(testString)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(n).To(Equal(len(testString)))
+		})
+	})
+
+	var _ = Describe("ExecCmd", func() {
+		log := ctrl.Log.WithName("EthernetDaemon-test")
+		var _ = It("will return no error if output", func() {
+			str, err := ExecCmd([]string{"ls"}, log)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(str).ToNot(Equal(""))
+		})
+
+		var _ = It("will return error if command is invalid", func() {
+			str, err := ExecCmd([]string{"grep", "--fakeparam"}, log)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("exit status 2"))
+			Expect(str).To(Equal(""))
+		})
+
+		var _ = It("will return error if command is not set", func() {
+			str, err := ExecCmd([]string{}, log)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("cmd is empty"))
+			Expect(str).To(Equal(""))
+		})
+	})
+
+	var _ = Describe("DownloadFile", func() {
+		log := ctrl.Log.WithName("EthernetDaemon-test")
+		var _ = It("will return error if url format is invalid", func() {
+			defer os.Remove("/tmp/somefileanme")
+			err := DownloadFile("/tmp/somefolder", "/tmp/fake", "", log)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("unsupported protocol"))
+		})
+
+		var _ = It("will return error if file already exists, but cannot acquire file", func() {
+			tmpfile, err := ioutil.TempFile("/tmp", "somefilename")
+			defer os.Remove(tmpfile.Name())
+			Expect(err).ToNot(HaveOccurred())
+
+			err = DownloadFile(tmpfile.Name(), "http://localhost/tmp/fake", "check", log)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("connection refused"))
+		})
+
+		var _ = It("will return no error if file already exists and checksum matches", func() {
+			err := DownloadFile("testdata/invalid.json", "/tmp/fake", "7de0bf711e9ceb9269e7315c78024a32", log)
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		var _ = It("will return error if filename is invalid", func() {
+			err := DownloadFile("", "/tmp/fake", "bf51ac6aceed5ca4227e640046ad9de4", log)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("no such file or directory"))
+		})
+	})
+
+	var _ = Describe("Untar", func() {
+		log := ctrl.Log.WithName("EthernetDaemon-test")
 		var _ = It("will return error if it's not able to open file", func() {
 			err := Untar("./somesrcfile", "./somedstfile", log)
 			Expect(err).To(HaveOccurred())

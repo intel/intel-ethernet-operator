@@ -565,5 +565,17 @@ var _ = Describe("EthernetControllerTest", func() {
 				Expect(err.Error()).To(ContainSubstring("spec.deviceConfig.ddpChecksum: Invalid value:"))
 			})
 		})
+
+		When("Manager is not set ", func() {
+			It("will return error", func() {
+				var mgr ctrl.Manager
+
+				reconciler := EthernetClusterConfigReconciler{}
+
+				err := reconciler.SetupWithManager(mgr)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("must provide a non-nil Manager"))
+			})
+		})
 	})
 })
