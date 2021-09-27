@@ -65,3 +65,12 @@ func (s *ClusterFlowActionType) UnmarshalJSON(b []byte) error {
 type ToPodInterfaceConf struct {
 	NetInterfaceName string `json:"podInterface,omitempty"`
 }
+
+// ClusterFlowActionToString returns string represention of ClusterFlowActionType
+// It returns empty string for unknown/unsupported type. Caller must handle empty string.
+func ClusterFlowActionToString(actionType ClusterFlowActionType) string {
+	if s, ok := clusterFlowActionTypeName[actionType]; ok {
+		return s
+	}
+	return ""
+}

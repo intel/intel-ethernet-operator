@@ -181,7 +181,7 @@ func (r *ClusterFlowConfigReconciler) getNodeActionsFromClusterActions(action []
 		nodeAction := &flowconfigv1.FlowAction{}
 
 		// If Action Type is custom ClusterFlowConfigAction we convert that to NodeFlowConfigAction and associated 'Conf'
-		if actType.String() == "to-pod-interface" {
+		if actType.String() == flowconfigv1.ClusterFlowActionToString(flowconfigv1.ToPodInterface) {
 			nodeAction = r.getNodeActionForPodInterface()
 		}
 
