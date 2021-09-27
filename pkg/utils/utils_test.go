@@ -195,9 +195,9 @@ var _ = Describe("Utils", func() {
 			defer os.Remove(tmpfile.Name())
 			Expect(err).ToNot(HaveOccurred())
 
-			err = DownloadFile(tmpfile.Name(), "http://localhost/tmp/fake", "check", log)
+			err = DownloadFile(tmpfile.Name(), "http://0.0.0.0/tmp/fake", "check", log)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("connection refused"))
+			Expect(err.Error()).To(ContainSubstring("Unable to download image from: http://0.0.0.0/tmp/fake err: 502 Bad Gateway"))
 		})
 
 		var _ = It("will return no error if file already exists and checksum matches", func() {
