@@ -14,7 +14,7 @@ This Operator is built on using Operator SDK v1.7.2.
 |       FlowConfig Daemon Controller        |
 +---------------------+---------------------+
                       |
-                      |gRPC(unix://var/run/dcf/dcf_tool.sock)
+                      |gRPC(localhost)
                       |
                       |
 +---------------------+---------------------+
@@ -54,16 +54,14 @@ For DCF to work, VT-d needs to be enabled in system BIOS and the iommu needs to 
 
 ### Prepare NIC
 #### Check FW and Drivers
-Update NIC's firmware with latest version and then install latest version of ICE driver.
-
-Those items for E810 hosted on Linux OS can be found here:
-- [Firmware update E810](https://www.intel.com/content/www/us/en/download/19626/non-volatile-memory-nvm-update-utility-for-intel-ethernet-network-adapters-e810-series-linux.html)
-- [ICE drivers E810](https://www.intel.com/content/www/us/en/download/19630/29746/intel-network-adapter-driver-for-e810-series-devices-under-linux.html)
+Update NIC's firmware with latest version and then install latest version of ICE driver. Please look for latest drivers on [official page](https://www.intel.com/content/www/us/en/products/details/ethernet/800-network-adapters/e810-network-adapters/docs.html?s=Newest).
 
 #### Create SR-IOV Virtual functions
 ```
 echo 4 > /sys/class/net/ens785f0/device/sriov_numvfs
 ```
+
+Create VFs for each PF you intend to use
 
 Confirm that VFs are created successfully:
 ```
@@ -77,7 +75,7 @@ Confirm that VFs are created successfully:
 ```
 
 #### Bind vfio-pci
-With DPDK [devbind script](https://github.com/DPDK/dpdk/blob/main/usertools/dpdk-devbind.py) bind vfio-pci driver to one of the VF using it's PCI address
+With DPDK [devbind script](https://github.com/DPDK/dpdk/blob/main/usertools/dpdk-devbind.py) bind vfio-pci driver to the first VF on each PF you wish to use
 
 ```
 # dpdk-devbind.py -s
@@ -99,19 +97,7 @@ Network devices using kernel driver
 
 ```
 
-If vfio-pci driver is not loaded it will be not visible on list as unused drivers. Use this command to load vfio-pci module
-```
-modprobe vfio-pci
-
-```
-It is also possible to create config file and in result module will be loaded on system startup
-```
-# echo vfio-pci > /etc/modules-load.d/vfio-pci.conf
-
-```
-
-
-Bind one VF with vfio-pci driver using it's PCI address:
+Bind each VF with vfio-pci driver using it's PCI address:
 ```
 # dpdk-devbind.py -b vfio-pci 0000:17:01.0
 ```
@@ -140,15 +126,11 @@ Clone DCF Tool repo from gitlab
 ```
 # git clone ssh://git@gitlab.devtools.intel.com:29418/zhaoyanc/dcf-tool.git
 
-OR
-# git clone https://gitlab.devtools.intel.com/zhaoyanc/dcf-tool.git
-
 # cd dcf-tool
 
-# git checkout CR_21_03
+# git checkout dev_21.08 [WILL CHANGE WHEN UFT TOOL RELEASE]
 ```
 
-DCF tool requires DPDK libraries. Instead of building dpdk library and the DCF tool in the same container, we will build dpdk library as base image for the DCF tool and DCF tool will be built on the dpdk shared lib image.
 Assuming you have the latest version of docker installed in your node.
 
 Build dcf docker image:
@@ -165,26 +147,23 @@ make dcf-image HTTP_PROXY=$http_proxy HTTPS_PROXY=$https_proxy
 #### Deploy SR-IOV device plugin and SR-IOV CNI
 
 ##### Deploy SR-IOV DP
-While still in the DCF repo and in dev/docker_image branch
-Update the "pfNames" parameters in `k8s/configMap.yaml` file to match with CVL PF names.
+Move back to Intel Ethernet Operator repo
+Update the "pfNames" parameters in `config/samples/k8s/configMap.yaml` file to match with #0 of each CVL PF
+
+NOTE: pfNames should include all vfs you intend to use on all nodes
 
 ###### Update configMap:
 
 ```
-kubectl apply -f k8s/configMap.yaml
+kubectl apply -f config/samples/k8s/configMap.yaml
 ```
 
 ###### Deploy SR-IOV Device plugin DaemonSet:
 
 ```
-kubectl apply -f k8s/sriovdp-daemonset.yaml
+kubectl apply -f config/samples/k8s/sriovdp-daemonset.yaml
 ```
 
-###### Create SR-IOV net-attach-def object
-
-```
-kubectl apply -f k8s/sriov-crd.yaml
-```
 ###### Install SR-IOV CNI
 
 Follow [SR-IOV CNI documentation](https://github.com/k8snetworkplumbingwg/sriov-cni#kubernetes-quick-start) to install it
@@ -213,51 +192,6 @@ Hugepagesize:       2048 kB
 Hugetlb:         8388608 kB
 ```
 
-An alternative way is to reserve huge pages at the system startup. A good instruction is available within [SRIOV DP DOCS](https://github.com/k8snetworkplumbingwg/sriov-network-device-plugin/tree/master/docs/dpdk)
-On some systems, it is possible to reserve 1GB and 2Mb pages. Example partial BOOT_IMAGE line that shows such allocation
-```
-BOOT_IMAGE=default_hugepagesz=1G hugepagesz=1G hugepages=4 hugepagesz=2M hugepages=1024 intel_iommu=on iommu=pt rhgb quiet
-
-```
-
-
-#### Deploy DCF tool Pod
-
-```
-kubectl apply -f k8s/pod-dcf.yaml
-```
-
-##### Verify DCF Pod
-Verify that DCF is running in K8s Pod:
-```
-kubectl logs -f dcf-tool
-
-Generating server_conf_gen.yaml file...
-Done!
-server :
-    #server_port : 50051
-    ld_lib : "/usr/local/lib/x86_64-linux-gnu/"
-ports_info :
-    - pci  : "0000:17:01.0"
-      mode : dcf
-EAL: Detected 40 lcore(s)
-EAL: Detected 1 NUMA nodes
-EAL: Multi-process socket /var/run/dpdk/dcf/mp_socket
-EAL: Selected IOVA mode 'VA'
-EAL: No available hugepages reported in hugepages-1048576kB
-EAL: Probing VFIO support...
-EAL: VFIO support initialized
-EAL:   using IOMMU type 1 (Type 1)
-EAL: Probe PCI driver: net_iavf (8086:1889) device: 0000:17:01.0 (socket 0)
-EAL: Releasing pci mapped resource for 0000:17:01.0
-EAL: Calling pci_unmap_resource for 0000:17:01.0 at 0x1100800000
-EAL: Calling pci_unmap_resource for 0000:17:01.0 at 0x1100840000
-EAL:   using IOMMU type 1 (Type 1)
-EAL: Probe PCI driver: net_ice_dcf (8086:1889) device: 0000:17:01.0 (socket 0)
-ice_load_pkg_type(): Active package is: 1.3.4.0, ICE OS Default Package
-EAL: No legacy callbacks, legacy socket not created
-```
-
 ###  Install Operator SDK
 Install Operator SDK v1.7.2 using installation instructions from [here](https://sdk.operatorframework.io/docs/installation/install-operator-sdk/).
 
@@ -265,6 +199,12 @@ Install Operator SDK v1.7.2 using installation instructions from [here](https://
 ```
 git clone https://github.com/otcshare/intel-ethernet-operator.git
 cd intel-ethernet-operator
+```
+
+##### Update DCFVfPoolName and NADAnnotation
+In "config/flowconfig-daemon/add_uft_container.yaml: Update DCFVfPoolName to match your resource pool as defined in the configMap and NADAnnotaion to match your NetworkAttachmentDefinition
+
+```
 git checkout [TO-DO]
 make docker-build HTTP_PROXY=$http_proxy HTTPS_PROXY=$https_proxy
 ```
@@ -277,49 +217,86 @@ make docker-build-flowconfig HTTP_PROXY=$http_proxy HTTPS_PROXY=$https_proxy
 make deploy
 ```
 ### Verify deployment
+The below deployment is set up on a 2 node cluster
+
 ```
 kubectl get all -n intel-ethernet-operator-system
-NAME                                                                  READY   STATUS             RESTARTS   AGE
-pod/intel-ethernet-operator-controller-manager-85b969fd99-p72hp       2/2     Running            1          11s
-pod/intel-ethernet-operator-flowconfig-daemon-flowconfig-daemo5v4sn   1/1     Running            0          11s
+NAME                                                              READY   STATUS    RESTARTS   AGE
+pod/flowconfig-daemon-silpixa00399883                             2/2     Running   0          21s
+pod/flowconfig-daemon-silpixa00401200c                            2/2     Running   0          21s
+pod/intel-ethernet-operator-controller-manager-5b68bb54fd-274t5   2/2     Running   0          29s
 
-NAME                                                                 TYPE        CLUSTER-IP       EXTERNAL-IP   PORT(S)    AGE
-service/intel-ethernet-operator-controller-manager-metrics-service   ClusterIP   10.107.170.193   <none>        8443/TCP   11s
-service/intel-ethernet-operator-webhook-service                      ClusterIP   10.107.146.57    <none>        443/TCP    11s
-
-NAME                                                                         DESIRED   CURRENT   READY   UP-TO-DATE   AVAILABLE   NODE SELECTOR   AGE
-daemonset.apps/intel-ethernet-operator-flowconfig-daemon-flowconfig-daemon   1         1         1       1            1           <none>          11s
+NAME                                                                 TYPE        CLUSTER-IP     EXTERNAL-IP   PORT(S)    AGE
+service/intel-ethernet-operator-controller-manager-metrics-service   ClusterIP   10.109.6.109   <none>        8443/TCP   29s
+service/intel-ethernet-operator-webhook-service                      ClusterIP   10.111.55.32   <none>        443/TCP    29s
 
 NAME                                                         READY   UP-TO-DATE   AVAILABLE   AGE
-deployment.apps/intel-ethernet-operator-controller-manager   1/1     1            0           11s
+deployment.apps/intel-ethernet-operator-controller-manager   1/1     1            1           29s
 
 NAME                                                                    DESIRED   CURRENT   READY   AGE
-replicaset.apps/intel-ethernet-operator-controller-manager-85b969fd99   1         1         0       11s
+replicaset.apps/intel-ethernet-operator-controller-manager-5b68bb54fd   1         1         1       29s
+
+```
+
+### Verify UFT is running
+For each 'flowconfig-daemon-[NODE_NAME]' pod, you can verfiy UFT is running correctly by getting the logs
+
+```
+kubectl -n intel-ethernet-operator-system logs flowconfig-daemon-silpixa00401200c -c uft
+Generating server_conf.yaml file...
+Done!
+server :
+    ld_lib : "/usr/local/lib64"
+ports_info :
+    - pci  : "0000:5e:01.0"
+      mode : dcf
+do eal init ...
+[{'pci': '0000:5e:01.0', 'mode': 'dcf'}]
+[{'pci': '0000:5e:01.0', 'mode': 'dcf'}]
+the dcf cmd line is: a.out -c 0x30 -n 4 -a 0000:5e:01.0,cap=dcf -d /usr/local/lib64 --file-prefix=dcf --
+EAL: Detected 88 lcore(s)
+EAL: Detected 2 NUMA nodes
+EAL: Detected shared linkage of DPDK
+EAL: Multi-process socket /var/run/dpdk/dcf/mp_socket
+EAL: Selected IOVA mode 'VA'
+EAL: No available 1048576 kB hugepages reported
+EAL: VFIO support initialized
+EAL: Using IOMMU type 1 (Type 1)
+EAL: Probe PCI driver: net_iavf (8086:1889) device: 0000:5e:01.0 (socket 0)
+EAL: Releasing PCI mapped resource for 0000:5e:01.0
+EAL: Calling pci_unmap_resource for 0000:5e:01.0 at 0x2101000000
+EAL: Calling pci_unmap_resource for 0000:5e:01.0 at 0x2101020000
+EAL: Using IOMMU type 1 (Type 1)
+EAL: Probe PCI driver: net_ice_dcf (8086:1889) device: 0000:5e:01.0 (socket 0)
+ice_load_pkg_type(): Active package is: 1.3.26.0, ICE OS Default Package (double VLAN mode)
+TELEMETRY: No legacy callbacks, legacy socket not created
+grpc server start ...
+now in server cycle
 ```
 ### Testing
 #### Create sample ACL rules:
-Change the `name` value in sample config file config/samples/flowconfig_v1_nodeflowconfig.yaml to the node name of target node.
+Change the `name` value in sample config file config/samples/flowconfig_v1_test.yaml to the node name of target node.
 
 ```
-kubectl apply -f config/samples/flowconfig_v1_nodeflowconfig.yaml
+kubectl apply -f config/samples/flowconfig_v1_test.yaml
 ```
 
-Check Ethernet Operator controller logs to verify that the ACL rules are created:
+Check Ethernet Operator logs to verify that the ACL rules are created:
 
 ```
-kubectl -n intel-ethernet-operator-system logs -f intel-ethernet-operator-controller-manager-85b969fd99-p72hp -c manager
+kubectl -n intel-ethernet-operator-system logs intel-ethernet-operator-controller-manager-5b68bb54fd-cgfz4 -c manager
 
 ...
-2021-07-12T12:30:25.482Z        DEBUG   controller-runtime.webhook.webhooks     received request        {"webhook": "/validate-flowconfig-intel-com-v1-nodeflowconfig", "UID": "a59ef48d-9e3a-47cf-bbf9-55b08fe86a85", "kind": "flowconfig.intel.com/v1, Kind=NodeFlowConfig", "resource": {"group":"flowconfig.intel.com","version":"v1","resource":"nodeflowconfigs"}}
-2021-07-12T12:30:25.483Z        INFO    nodeflowconfig-resource validate create {"name": "silpixa00385223"}
-2021-07-12T12:30:25.522Z        DEBUG   controller-runtime.webhook.webhooks     wrote response  {"webhook": "/validate-flowconfig-intel-com-v1-nodeflowconfig", "code": 200, "reason": "", "UID": "a59ef48d-9e3a-47cf-bbf9-55b08fe86a85", "allowed": true}
+2021-09-15T03:22:53.997Z        DEBUG   controller-runtime.webhook.webhooks     received request        {"webhook": "/validate-flowconfig-intel-com-v1-nodeflowconfig", "UID": "5eaaf3e2-e0ae-4b3f-adc7-1cdb1958d851", "kind": "flowconfig.intel.com/v1, Kind=NodeFlowConfig", "resource": {"group":"flowconfig.intel.com","version":"v1","resource":"nodeflowconfigs"}}
+2021-09-15T03:22:54.095Z        INFO    nodeflowconfig-resource validate create {"name": "silpixa00399883"}
+2021-09-15T03:22:54.097Z        DEBUG   controller-runtime.webhook.webhooks     wrote response  {"webhook": "/validate-flowconfig-intel-com-v1-nodeflowconfig", "code": 200, "reason": "", "UID": "5eaaf3e2-e0ae-4b3f-adc7-1cdb1958d851", "allowed": true}
 ...
 ```
 
 To read more about creating ACL rules see this [creating-rules.md](docs/flowconfig-daemon/creating-rules.md) user guide. Note that some items may require a recent [Ice COMMS DDP package](https://downloadcenter.intel.com/download/29889/Intel-Ethernet-800-Series-Telecommunication-Comms-Dynamic-Device-Personalization-DDP-Package) to be loaded.
 
 ### Clean up
-To clean up and teardown the CP operator run:
+To clean up and teardown the Ethernet operator run:
 ```
 make undeploy
 ```
