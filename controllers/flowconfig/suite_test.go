@@ -28,13 +28,14 @@ import (
 // These tests use Ginkgo (BDD-style Go testing framework). Refer to
 // http://onsi.github.io/ginkgo/ to learn more about Ginkgo.
 var (
-	cfg              *rest.Config
-	k8sClient        client.Client
-	testEnv          *envtest.Environment
-	nodeName         = "testk8snode"
-	mockDCF          *mock.FlowServiceClient
-	nodeFlowConfigRc *NodeFlowConfigReconciler
-	metricsAddr      = ":38080"
+	cfg                   *rest.Config
+	k8sClient             client.Client
+	testEnv               *envtest.Environment
+	nodeName              = "testk8snode"
+	mockDCF               *mock.FlowServiceClient
+	nodeFlowConfigRc      *NodeFlowConfigReconciler
+	nodeAgentDeploymentRc *FlowConfigNodeAgentDeploymentReconciler
+	metricsAddr           = ":38080"
 )
 
 func TestAPIs(t *testing.T) {
@@ -86,6 +87,15 @@ var _ = BeforeSuite(func() {
 	err = nodeFlowConfigRc.SetupWithManager(k8sManager)
 	Expect(err).ToNot(HaveOccurred())
 
+	nodeAgentDeploymentRc = &FlowConfigNodeAgentDeploymentReconciler{
+		Client: k8sManager.GetClient(),
+		Log:    ctrl.Log.WithName("controllers").WithName("NodeAgentDeployment"),
+		Scheme: k8sManager.GetScheme(),
+	}
+
+	err = nodeAgentDeploymentRc.SetupWithManager(k8sManager)
+	Expect(err).ToNot(HaveOccurred())
+
 	// Start manager
 	go func() {
 		defer GinkgoRecover()
@@ -93,9 +103,9 @@ var _ = BeforeSuite(func() {
 		Expect(err).ToNot(HaveOccurred())
 	}()
 
-	// Set k8sClient from Manager
-	k8sClient = k8sManager.GetClient()
-	Expect(k8sClient).ToNot(BeNil())
+	k8sClient, err = client.New(cfg, client.Options{Scheme: k8sManager.GetScheme()})
+	Expect(err).NotTo(HaveOccurred())
+	Expect(k8sClient).NotTo(BeNil())
 
 }, 60)
 
