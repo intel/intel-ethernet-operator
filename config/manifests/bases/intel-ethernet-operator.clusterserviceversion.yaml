@@ -1,0 +1,61 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2021 Intel Corporation
+apiVersion: operators.coreos.com/v1alpha1
+kind: ClusterServiceVersion
+metadata:
+  annotations:
+    alm-examples: '[]'
+    capabilities: Basic Install
+  name: intel-ethernet-operator.v0.0.0
+  namespace: placeholder
+spec:
+  apiservicedefinitions: {}
+  customresourcedefinitions:
+    owned:
+    - description: EthernetClusterConfig is the Schema for the ethernetclusterconfigs
+        API
+      displayName: Ethernet Cluster Config
+      kind: EthernetClusterConfig
+      name: ethernetclusterconfigs.ethernet.intel.com
+      statusDescriptors:
+      - description: Indicates the synchronization status of the CR
+        displayName: Sync Status
+        path: syncStatus
+      version: v1
+    - description: EthernetNodeConfig is the Schema for the ethernetnodeconfigs API
+      displayName: Ethernet Node Config
+      kind: EthernetNodeConfig
+      name: ethernetnodeconfigs.ethernet.intel.com
+      version: v1
+  description: TODO
+  displayName: Intel Ethernet Operator
+  icon:
+  - base64data: ""
+    mediatype: ""
+  install:
+    spec:
+      deployments: null
+    strategy: ""
+  installModes:
+  - supported: true
+    type: OwnNamespace
+  - supported: true
+    type: SingleNamespace
+  - supported: false
+    type: MultiNamespace
+  - supported: false
+    type: AllNamespaces
+  keywords:
+  - CLV
+  - E810
+  - DDP
+  - Firmware
+  - Update
+  links:
+  - name: Intel Ethernet Operator
+    url: https://intel-ethernet-operator.domain
+  maturity: alpha
+  provider:
+    name: Intel Corporation
+    url: https://www.intel.com/content/www/us/en/products/details/ethernet/800-controllers/e810-controllers/docs.html
+  version: 0.0.0
