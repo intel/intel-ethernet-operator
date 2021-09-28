@@ -68,6 +68,7 @@ type EthernetClusterConfigStatus struct {
 
 //+kubebuilder:object:root=true
 //+kubebuilder:subresource:status
+//+kubebuilder:resource:shortName=ecc
 
 // EthernetClusterConfig is the Schema for the ethernetclusterconfigs API
 type EthernetClusterConfig struct {

@@ -50,6 +50,7 @@ type EthernetNodeConfigStatus struct {
 
 //+kubebuilder:object:root=true
 //+kubebuilder:subresource:status
+//+kubebuilder:resource:shortName=enc
 
 // EthernetNodeConfig is the Schema for the ethernetnodeconfigs API
 type EthernetNodeConfig struct {
