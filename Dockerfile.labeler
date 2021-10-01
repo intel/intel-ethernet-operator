@@ -7,8 +7,11 @@ WORKDIR /workspace
 COPY go.mod go.sum ./
 RUN go mod download
 
-COPY labeler.go .
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GO111MODULE=on go build -a -o node_labeler labeler.go
+COPY cmd cmd/
+COPY pkg pkg/
+COPY apis apis/
+
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GO111MODULE=on go build -a -o node_labeler cmd/labeler/main.go
 
 FROM registry.access.redhat.com/ubi8:8.4
 
@@ -28,7 +31,6 @@ RUN mkdir -p /usr/share/misc/ && \
     curl https://pci-ids.ucw.cz/v2.2/pci.ids.gz -o pci.ids.gz && \
     gunzip pci.ids.gz
 
-COPY TEMP_LICENSE_COPY /licenses/LICENSE
 USER 1001
 WORKDIR /labeler-workspace
 COPY --from=builder /workspace/node_labeler .

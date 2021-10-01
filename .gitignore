@@ -27,3 +27,4 @@ testbin/*
 # operator-sdk generated files
 config/crd/bases/
 bundle/
+bundle.Dockerfile

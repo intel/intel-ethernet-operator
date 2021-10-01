@@ -1,23 +1,20 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright (c) 2021 Intel Corporation
 
-package main
+package labeler
 
 import (
 	"context"
 	"fmt"
-	"os"
-
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
-	"github.com/otcshare/intel-ethernet-operator/pkg/utils"
-
 	"github.com/jaypipes/ghw"
+	"github.com/otcshare/intel-ethernet-operator/pkg/utils"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
+	"os"
 )
 
-const (
+var (
 	deviceConfig = "./devices.json"
 )
 
@@ -65,7 +62,7 @@ func findSupportedDevice(supportedList *utils.SupportedDevices) (bool, error) {
 
 	present, err := getPCIDevices()
 	if err != nil {
-		return false, fmt.Errorf("Failed to get PCI devices: %v", err)
+		return false, fmt.Errorf("failed to get PCI devices: %v", err)
 	}
 
 	for _, dev := range present {
@@ -113,30 +110,19 @@ func setNodeLabel(nodeName, label string, isDevicePresent bool) error {
 	return nil
 }
 
-func deviceDiscovery(deviceConfig string) error {
-	supportedList, err := utils.LoadSupportedDevices(deviceConfig)
-	if err != nil {
-		return fmt.Errorf("Failed to load devices: %v", err)
+func DeviceDiscovery() error {
+	supportedDevices := new(utils.SupportedDevices)
+	if err := utils.LoadSupportedDevices(deviceConfig, supportedDevices); err != nil {
+		return fmt.Errorf("failed to load devices: %v", err)
 	}
-	if len(supportedList) == 0 {
-		return fmt.Errorf("No devices configured")
+	if len(*supportedDevices) == 0 {
+		return fmt.Errorf("no devices configured")
 	}
 
-	devFound, err := findSupportedDevice(&supportedList)
+	devFound, err := findSupportedDevice(supportedDevices)
 	if err != nil {
-		return fmt.Errorf("Failed to find device: %v", err)
+		return fmt.Errorf("failed to find device: %v", err)
 	}
 
 	return setNodeLabel(os.Getenv("NODENAME"), os.Getenv("NODELABEL"), devFound)
-}
-
-func main() {
-	err := deviceDiscovery(deviceConfig)
-	if err != nil {
-		fmt.Printf("Device discovery failed: %v\n", err)
-		os.Exit(1)
-	}
-	fmt.Printf("Device discovery finished successfully\n")
-
-	os.Exit(0)
 }

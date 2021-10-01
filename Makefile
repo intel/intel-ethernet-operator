@@ -142,7 +142,7 @@ docker-build-daemon:
 	podman build --file Dockerfile.daemon --build-arg=VERSION=$(VERSION) --tag ${ETHERNET_DAEMON_IMAGE} ${DOCKERARGS} .
 
 docker-build-labeler:
-	podman build --file cmd/labeler/Dockerfile --build-arg=VERSION=$(VERSION) --tag ${ETHERNET_NODE_LABELER_IMAGE} ${DOCKERARGS} cmd/labeler
+	podman build --file Dockerfile.labeler --build-arg=VERSION=$(VERSION) --tag ${ETHERNET_NODE_LABELER_IMAGE} ${DOCKERARGS} .
 
 docker-push-manager:
 	podman push ${ETHERNET_MANAGER_IMAGE} --tls-verify=$(TLS_VERIFY)
