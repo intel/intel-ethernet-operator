@@ -123,13 +123,13 @@ test_daemon: manifests generate fmt vet ## Run tests only for the fwddp_daemon.
 ##@ Build
 
 build: generate fmt vet ## Build manager binary.
-	go build -o bin/manager cmd/fwddp-manager/main.go
+	go build -o bin/manager main.go
 
 daemon: generate fmt vet
 	go build -o bin/fwddp-daemon cmd/fwddp-daemon/main.go
 
 run: manifests generate fmt vet ## Run a controller from your host.
-	go run ./cmd/fwddp-manager/main.go
+	go run ./main.go
 
 docker-build: test ## Build docker image with the manager.
 	podman build -t ${IMAGE_REGISTRY}/${IMG} ${DOCKERARGS} .

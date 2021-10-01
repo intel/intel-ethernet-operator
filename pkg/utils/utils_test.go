@@ -23,7 +23,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 )
 
-func TestMain(t *testing.T) {
+func Test(t *testing.T) {
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "Main suite")
 }
@@ -197,7 +197,7 @@ var _ = Describe("Utils", func() {
 
 			err = DownloadFile(tmpfile.Name(), "http://0.0.0.0/tmp/fake", "check", log)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("Unable to download image from: http://0.0.0.0/tmp/fake err: 502 Bad Gateway"))
+			Expect(err.Error()).To(ContainSubstring("unable to download image"))
 		})
 
 		var _ = It("will return no error if file already exists and checksum matches", func() {

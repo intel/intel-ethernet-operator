@@ -7,7 +7,7 @@ import (
 	"context"
 	"flag"
 	"github.com/otcshare/intel-ethernet-operator/pkg/fwddp-manager"
-	"github.com/otcshare/intel-ethernet-operator/pkg/fwddp-manager/assets"
+	"github.com/otcshare/intel-ethernet-operator/pkg/utils/assets"
 	appsv1 "k8s.io/api/apps/v1"
 	"os"
 	"sigs.k8s.io/controller-runtime/pkg/client"

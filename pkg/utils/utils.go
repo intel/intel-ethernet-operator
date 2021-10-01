@@ -103,12 +103,12 @@ func downloadFile(path, url, checksum string) error {
 
 	r, err := http.Get(url)
 	if err != nil {
-		return err
+		return fmt.Errorf("unable to download image from: %s err: %s", url, err)
 	}
 	defer r.Body.Close()
 
 	if r.StatusCode != http.StatusOK {
-		return fmt.Errorf("Unable to download image from: %s err: %s",
+		return fmt.Errorf("unable to download image from: %s err: %s",
 			url, r.Status)
 	}
 

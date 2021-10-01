@@ -12,9 +12,10 @@ COPY go.sum go.sum
 # and so that source changes don't invalidate our downloaded layer
 RUN go mod download
 
-COPY cmd/fwddp-manager/main.go main.go
+COPY main.go main.go
 COPY apis/ apis/
 COPY pkg/fwddp-manager/ pkg/fwddp-manager/
+COPY pkg/utils/ pkg/utils/
 
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GO111MODULE=on go build -a -o manager main.go
 
