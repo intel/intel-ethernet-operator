@@ -22,6 +22,16 @@ rules:
   - list
   - watch
 - apiGroups:
+  - ""
+  resources:
+  - pods
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - watch
+- apiGroups:
   - apps
   resources:
   - daemonsets
@@ -30,10 +40,18 @@ rules:
   verbs:
   - '*'
 - apiGroups:
+  - apps
+  resources:
+  - deployments
+  verbs:
+  - delete
+  - get
+  - list
+  - watch
+- apiGroups:
   - ethernet.intel.com
   resources:
   - ethernetclusterconfigs
-  - ethernetnodeconfigs
   verbs:
   - create
   - delete
@@ -52,6 +70,83 @@ rules:
   - ethernet.intel.com
   resources:
   - ethernetclusterconfigs/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - flowconfig.intel.com
+  resources:
+  - flowconfignodeagentdeployments
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - flowconfig.intel.com
+  resources:
+  - flowconfignodeagentdeployments/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - flowconfig.intel.com
+  resources:
+  - flowconfignodeagentdeployments/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - flowconfig.intel.com
+  resources:
+  - nodeflowconfigs
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - flowconfig.intel.com
+  resources:
+  - nodeflowconfigs/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - flowconfig.intel.com
+  resources:
+  - nodeflowconfigs/status
+  verbs:
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - flowconfig.intel.com
+  resources:
+  - nodes
+  verbs:
+  - get
+  - list
+  - update
+  - watch
+- apiGroups:
+  - flowconfig.intel.com
+  resources:
+  - nodes/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - flowconfig.intel.com
+  resources:
+  - nodes/status
   verbs:
   - get
   - patch

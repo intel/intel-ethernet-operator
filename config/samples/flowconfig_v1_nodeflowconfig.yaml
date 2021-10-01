@@ -1,0 +1,7 @@
+apiVersion: flowconfig.intel.com/v1
+kind: NodeFlowConfig
+metadata:
+  name: nodeflowconfig-sample
+spec:
+  # Add fields here
+  foo: bar

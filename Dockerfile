@@ -14,8 +14,10 @@ RUN go mod download
 
 COPY main.go main.go
 COPY apis/ apis/
-COPY pkg/fwddp-manager/ pkg/fwddp-manager/
-COPY pkg/utils/ pkg/utils/
+
+COPY controllers/ controllers/
+COPY pkg/ pkg/
+
 
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GO111MODULE=on go build -a -o manager main.go
 

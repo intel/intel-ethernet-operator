@@ -24,3 +24,7 @@ resources:
 - ethernetclusterconfig_viewer_role.yaml
 - ethernetnodeconfig_editor_role.yaml
 - ethernetnodeconfig_viewer_role.yaml
+- nodeflowconfig_editor_role.yaml
+- nodeflowconfig_viewer_role.yaml
+- flowconfignodeagentdeployment_editor_role.yaml
+- flowconfignodeagentdeployment_viewer_role.yaml

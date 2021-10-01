@@ -37,6 +37,8 @@ BUNDLE_DEFAULT_CHANNEL := --default-channel=$(DEFAULT_CHANNEL)
 endif
 BUNDLE_METADATA_OPTS ?= $(BUNDLE_CHANNELS) $(BUNDLE_DEFAULT_CHANNEL)
 
+APP_NAME ?= intel-ethernet-operator
+FCDAEMON_NAME ?= flowconfig-daemon
 # IMAGE_TAG_BASE defines the docker.io namespace and part of the image name for remote images.
 # This variable is used to construct full image tags for bundle and catalog images.
 #
@@ -51,6 +53,16 @@ BUNDLE_IMG ?= $(IMAGE_TAG_BASE)-bundle:v$(VERSION)
 # Versioned image tag
 IMAGE_TAG_LATEST?=$(APP_NAME):latest
 IMAGE_TAG_VERSION=$(APP_NAME):$(VERSION)
+
+# Image URL to use all building/pushing image targets
+IMG ?= $(IMAGE_TAG_VERSION)
+
+# FlowConfigDaemon image tag
+FCDAEMON_IMAGE_TAG_LATEST?=$(FCDAEMON_NAME):latest
+FCDAEMON_IMAGE_TAG_VERSION=$(FCDAEMON_NAME):$(VERSION)
+# Image URL to use all building/pushing FlowConfigDaemon image targets
+FCDAEMON_IMG?=$(FCDAEMON_IMAGE_TAG_VERSION)
+FCDAEMON_DOCKERFILE = images/Dockerfile.FlowConfigDaemon
 
 # Produce CRDs that work back to Kubernetes 1.11 (no version conversion)
 CRD_OPTIONS ?= "crd:trivialVersions=true,preserveUnknownFields=false"
@@ -100,6 +112,12 @@ help: ## Display this help.
 manifests: controller-gen ## Generate WebhookConfiguration, ClusterRole and CustomResourceDefinition objects.
 	$(CONTROLLER_GEN) $(CRD_OPTIONS) rbac:roleName=manager-role webhook paths="./..." output:crd:artifacts:config=config/crd/bases
 
+# Generate flowconfig-daemon deployment assets
+.PHONY: flowconfig-manifests
+flowconfig-manifests: manifests kustomize
+	cd config/flowconfig-daemon && $(KUSTOMIZE) edit set image daemon-image=${FCDAEMON_IMG}
+	$(KUSTOMIZE) build config/flowconfig-daemon -o assests/flowconfig-daemon/daemon.yaml
+
 generate: controller-gen ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
 	$(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="./..."
 
@@ -125,6 +143,9 @@ test_daemon: manifests generate fmt vet ## Run tests only for the fwddp_daemon.
 build: generate fmt vet ## Build manager binary.
 	go build -o bin/manager main.go
 
+# Build flowconfig-daemon binary
+flowconfig-daemon: generate fmt vet
+	go build -o bin/flowconfig-daemon cmd/flowconfig-daemon/main.go
 daemon: generate fmt vet
 	go build -o bin/fwddp-daemon cmd/fwddp-daemon/main.go
 
@@ -153,6 +174,12 @@ docker-push-daemon:
 docker-push-labeler:
 	podman push ${ETHERNET_NODE_LABELER_IMAGE} --tls-verify=$(TLS_VERIFY)
 
+# Build FlowConfigDaemon docker image
+.PHONY: docker-build-flowconfig
+docker-build-flowconfig:
+	docker build . -f ${FCDAEMON_DOCKERFILE} -t ${FCDAEMON_IMG} $(DOCKERARGS)
+	docker image tag ${FCDAEMON_IMG} ${FCDAEMON_IMAGE_TAG_LATEST}
+
 ##@ Deployment
 
 install: manifests kustomize ## Install CRDs into the K8s cluster specified in ~/.kube/config.
@@ -161,12 +188,16 @@ install: manifests kustomize ## Install CRDs into the K8s cluster specified in ~
 uninstall: manifests kustomize ## Uninstall CRDs from the K8s cluster specified in ~/.kube/config.
 	$(KUSTOMIZE) build config/crd | oc delete -f -
 
-deploy: manifests kustomize ## Deploy controller to the K8s cluster specified in ~/.kube/config.
+
+deploy: manifests flowconfig-manifests kustomize ## Deploy controller to the K8s cluster specified in ~/.kube/config.
 	cd config/manager && $(KUSTOMIZE) edit set image controller=${IMAGE_REGISTRY}/${IMG}
 	$(KUSTOMIZE) build config/default | envsubst | oc apply -f -
+	oc apply -f assests/flowconfig-daemon/daemon.yaml
 
 undeploy: ## Undeploy controller from the K8s cluster specified in ~/.kube/config.
+	oc delete -f assests/flowconfig-daemon/daemon.yaml
 	$(KUSTOMIZE) build config/default | oc delete -f -
+
 
 CONTROLLER_GEN = $(shell pwd)/bin/controller-gen
 controller-gen: ## Download controller-gen locally if necessary.

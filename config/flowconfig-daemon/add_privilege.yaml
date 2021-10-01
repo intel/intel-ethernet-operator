@@ -1,0 +1,15 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: flowconfig-daemon
+  namespace: system
+spec:
+  template:
+    metadata:
+      labels:
+        name: flowconfig-daemon
+    spec:
+      containers:
+        - name: flowconfig-daemon
+          securityContext:
+            privileged: true
