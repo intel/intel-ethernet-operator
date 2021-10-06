@@ -13,6 +13,16 @@ TLS_VERIFY ?= false
 # - use environment variables to overwrite this value (e.g export VERSION=0.0.2)
 VERSION ?= 0.0.1
 
+# Set default K8CLI tool to 'kubectl' if it's not defined. To change this you can export this in env. e.g., export K8CLI=oc
+ifeq (,$(K8CLI))
+K8CLI=kubectl
+endif
+
+# Set default IMGTOOL tool to 'docker' if it's not defined. To change this you can export this in env. e.g., export IMGTOOL=podman
+ifeq (,$(IMGTOOL))
+IMGTOOL=docker
+endif
+
 export ETHERNET_MANAGER_IMAGE ?= $(IMAGE_REGISTRY)/$(APP_NAME)-manager:$(VERSION)
 # dependent images
 export ETHERNET_DAEMON_IMAGE ?= $(IMAGE_REGISTRY)/$(APP_NAME)-daemon:$(VERSION)
@@ -38,7 +48,7 @@ endif
 BUNDLE_METADATA_OPTS ?= $(BUNDLE_CHANNELS) $(BUNDLE_DEFAULT_CHANNEL)
 
 APP_NAME ?= intel-ethernet-operator
-FCDAEMON_NAME ?= flowconfig-daemon
+FCDAEMON_NAME ?= $(APP_NAME)-flowconfig-daemon
 # IMAGE_TAG_BASE defines the docker.io namespace and part of the image name for remote images.
 # This variable is used to construct full image tags for bundle and catalog images.
 #
@@ -61,7 +71,7 @@ IMG ?= $(IMAGE_TAG_VERSION)
 FCDAEMON_IMAGE_TAG_LATEST?=$(FCDAEMON_NAME):latest
 FCDAEMON_IMAGE_TAG_VERSION=$(FCDAEMON_NAME):$(VERSION)
 # Image URL to use all building/pushing FlowConfigDaemon image targets
-FCDAEMON_IMG?=$(FCDAEMON_IMAGE_TAG_VERSION)
+FCDAEMON_IMG?=$(IMAGE_REGISTRY)/$(FCDAEMON_IMAGE_TAG_VERSION)
 FCDAEMON_DOCKERFILE = images/Dockerfile.FlowConfigDaemon
 
 # Produce CRDs that work back to Kubernetes 1.11 (no version conversion)
@@ -89,7 +99,7 @@ endif
 SHELL = /usr/bin/env bash -o pipefail 
 .SHELLFLAGS = -ec
 
-all: build daemon
+all: build daemon flowconfig-daemon
 
 ##@ General
 
@@ -153,50 +163,53 @@ run: manifests generate fmt vet ## Run a controller from your host.
 	go run ./main.go
 
 docker-build: test ## Build docker image with the manager.
-	podman build -t ${IMAGE_REGISTRY}/${IMG} ${DOCKERARGS} .
-	podman image tag ${IMAGE_REGISTRY}/${IMG} ${IMAGE_REGISTRY}/${IMAGE_TAG_LATEST}
+	$(IMGTOOL) build -t ${IMAGE_REGISTRY}/${IMG} ${DOCKERARGS} .
+	$(IMGTOOL) image tag ${IMAGE_REGISTRY}/${IMG} ${IMAGE_REGISTRY}/${IMAGE_TAG_LATEST}
 
 docker-build-manager:
-	podman build --file Dockerfile --build-arg=VERSION=$(VERSION) --tag ${ETHERNET_MANAGER_IMAGE} ${DOCKERARGS} .
+	$(IMGTOOL) build --file Dockerfile --build-arg=VERSION=$(VERSION) --tag ${ETHERNET_MANAGER_IMAGE} ${DOCKERARGS} .
 
 docker-build-daemon:
-	podman build --file Dockerfile.daemon --build-arg=VERSION=$(VERSION) --tag ${ETHERNET_DAEMON_IMAGE} ${DOCKERARGS} .
+	$(IMGTOOL) build --file Dockerfile.daemon --build-arg=VERSION=$(VERSION) --tag ${ETHERNET_DAEMON_IMAGE} ${DOCKERARGS} .
 
 docker-build-labeler:
-	podman build --file Dockerfile.labeler --build-arg=VERSION=$(VERSION) --tag ${ETHERNET_NODE_LABELER_IMAGE} ${DOCKERARGS} .
+	$(IMGTOOL) build --file Dockerfile.labeler --build-arg=VERSION=$(VERSION) --tag ${ETHERNET_NODE_LABELER_IMAGE} ${DOCKERARGS} .
 
 docker-push-manager:
-	podman push ${ETHERNET_MANAGER_IMAGE} --tls-verify=$(TLS_VERIFY)
+	$(call push_image,${ETHERNET_MANAGER_IMAGE})
 
 docker-push-daemon:
-	podman push ${ETHERNET_DAEMON_IMAGE} --tls-verify=$(TLS_VERIFY)
+	$(call push_image,${ETHERNET_DAEMON_IMAGE})
 
 docker-push-labeler:
-	podman push ${ETHERNET_NODE_LABELER_IMAGE} --tls-verify=$(TLS_VERIFY)
+	$(call push_image,${ETHERNET_NODE_LABELER_IMAGE})
 
 # Build FlowConfigDaemon docker image
 .PHONY: docker-build-flowconfig
 docker-build-flowconfig:
-	docker build . -f ${FCDAEMON_DOCKERFILE} -t ${FCDAEMON_IMG} $(DOCKERARGS)
-	docker image tag ${FCDAEMON_IMG} ${FCDAEMON_IMAGE_TAG_LATEST}
+	$(IMGTOOL) build . -f ${FCDAEMON_DOCKERFILE} -t ${FCDAEMON_IMG} $(DOCKERARGS)
+	$(IMGTOOL) image tag ${FCDAEMON_IMG} ${FCDAEMON_IMAGE_TAG_LATEST}
+
+docker-push-flowconfig:
+	$(call push_image,${FCDAEMON_IMG})
 
 ##@ Deployment
 
 install: manifests kustomize ## Install CRDs into the K8s cluster specified in ~/.kube/config.
-	$(KUSTOMIZE) build config/crd | oc apply -f -
+	$(KUSTOMIZE) build config/crd | $(K8CLI) apply -f -
 
 uninstall: manifests kustomize ## Uninstall CRDs from the K8s cluster specified in ~/.kube/config.
-	$(KUSTOMIZE) build config/crd | oc delete -f -
+	$(KUSTOMIZE) build config/crd | $(K8CLI) delete -f -
 
 
 deploy: manifests flowconfig-manifests kustomize ## Deploy controller to the K8s cluster specified in ~/.kube/config.
 	cd config/manager && $(KUSTOMIZE) edit set image controller=${IMAGE_REGISTRY}/${IMG}
-	$(KUSTOMIZE) build config/default | envsubst | oc apply -f -
-	oc apply -f assests/flowconfig-daemon/daemon.yaml
+	$(KUSTOMIZE) build config/default | envsubst | $(K8CLI) apply -f -
+	$(K8CLI) apply -f assests/flowconfig-daemon/daemon.yaml
 
 undeploy: ## Undeploy controller from the K8s cluster specified in ~/.kube/config.
-	oc delete -f assests/flowconfig-daemon/daemon.yaml
-	$(KUSTOMIZE) build config/default | oc delete -f -
+	$(K8CLI) delete -f assests/flowconfig-daemon/daemon.yaml
+	$(KUSTOMIZE) build config/default | $(K8CLI) delete -f -
 
 
 CONTROLLER_GEN = $(shell pwd)/bin/controller-gen
@@ -230,11 +243,11 @@ bundle: manifests kustomize ## Generate bundle manifests and metadata, then vali
 
 .PHONY: bundle-build
 bundle-build: bundle ## Build the bundle image.
-	podman build -f bundle.Dockerfile -t $(BUNDLE_IMG) .
+	$(IMGTOOL) build -f bundle.Dockerfile -t $(BUNDLE_IMG) .
 
 .PHONY: bundle-push
 bundle-push: ## Push the bundle image.
-	podman push ${BUNDLE_IMG} --tls-verify=$(TLS_VERIFY)
+	$(call push_image,${BUNDLE_IMG})
 
 .PHONY: opm
 OPM = ./bin/opm
@@ -270,13 +283,17 @@ endif
 # https://github.com/operator-framework/community-operators/blob/7f1438c/docs/packaging-operator.md#updating-your-existing-operator
 .PHONY: catalog-build
 catalog-build: opm ## Build a catalog image.
-	$(OPM) index add --container-tool podman --mode semver --tag $(CATALOG_IMG) --bundles $(BUNDLE_IMGS) $(if ifeq $(TLS_VERIFY) false, --skip-tls) $(FROM_INDEX_OPT)
+	$(OPM) index add --container-tool $(IMGTOOL) --mode semver --tag $(CATALOG_IMG) --bundles $(BUNDLE_IMGS) $(if ifeq $(TLS_VERIFY) false, --skip-tls) $(FROM_INDEX_OPT)
 
 # Push the catalog image.
 .PHONY: catalog-push
 catalog-push: ## Push a catalog image.
-	podman push ${CATALOG_IMG} --tls-verify=$(TLS_VERIFY)
+	$(call push_image,${CATALOG_IMG})
 
-build_all: docker-build-manager docker-build-daemon docker-build-labeler bundle-build
+build_all: docker-build-manager docker-build-daemon docker-build-labeler docker-build-flowconfig bundle-build
 
-push_all: docker-push-manager docker-push-daemon docker-push-labeler bundle-push
+push_all: docker-push-manager docker-push-daemon docker-push-labeler docker-push-flowconfig bundle-push
+
+define push_image
+	$(if $(filter $(IMGTOOL), podman), $(IMGTOOL) push $(1) --tls-verify=$(TLS_VERIFY), $(IMGTOOL) push $(1))
+endef
