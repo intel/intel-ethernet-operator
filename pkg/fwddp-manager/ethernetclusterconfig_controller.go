@@ -28,9 +28,10 @@ type EthernetClusterConfigReconciler struct {
 
 var NAMESPACE = os.Getenv("ETHERNET_NAMESPACE")
 
-//+kubebuilder:rbac:groups=ethernet.intel.com,resources=ethernetclusterconfigs,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=ethernet.intel.com,resources=ethernetclusterconfigs/status,verbs=get;update;patch
-//+kubebuilder:rbac:groups=ethernet.intel.com,resources=ethernetclusterconfigs/finalizers,verbs=update
+//+kubebuilder:rbac:groups=ethernet.intel.com,resources=ethernetclusterconfigs;ethernetnodeconfigs,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=ethernet.intel.com,resources=ethernetclusterconfigs/status;ethernetnodeconfigs/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=ethernet.intel.com,resources=ethernetclusterconfigs/finalizers;ethernetnodeconfigs/finalizers,verbs=update
+//+kubebuilder:rbac:groups=machineconfiguration.openshift.io,resources=machineconfigs,verbs=create;get
 //+kubebuilder:rbac:groups="",resources=nodes,verbs=list;watch
 //+kubebuilder:rbac:groups=apps,resources=daemonsets;deployments;deployments/finalizers,verbs=*
 //+kubebuilder:rbac:groups="",resources=namespaces;serviceaccounts;configmaps,verbs=*

@@ -1,0 +1,23 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2021 Intel Corporation
+
+apiVersion: machineconfiguration.openshift.io/v1
+kind: MachineConfig
+metadata:
+  labels:
+    machineconfiguration.openshift.io/role: worker
+  name: 99-intel-ethernet-operator-worker
+spec:
+  kernelArguments:
+    - "firmware_class.path=/var/lib/firmware/"
+---
+
+apiVersion: machineconfiguration.openshift.io/v1
+kind: MachineConfig
+metadata:
+  labels:
+    machineconfiguration.openshift.io/role: master
+  name: 99-intel-ethernet-operator-master
+spec:
+  kernelArguments:
+    - "firmware_class.path=/var/lib/firmware/"

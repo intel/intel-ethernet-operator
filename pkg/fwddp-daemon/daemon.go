@@ -6,6 +6,7 @@ package daemon
 import (
 	"context"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"os/exec"
 	"path"
@@ -44,7 +45,12 @@ const (
 var (
 	compatMapPath    = "./devices.json"
 	compatibilityMap *CompatibilityMap
-	fwInstallDest    = "/workdir/nvmupdate/"
+	fwInstallDest    = "/host/tmp/fwddp_artifacts/nvmupdate/"
+	// /host comes from mounted folder in OCP
+	// /var/lib/firmware comes from modified kernel argument, which allows OS to read DDP profile from that path.
+	// This is done because on RHCOS /lib/firmware/* path is read-only
+	// intel/ice/ddp is default path for ICE *.pkg files
+	ddpUpdateFolder = "/host/var/lib/firmware/intel/ice/ddp/"
 
 	getInventory  = GetInventory
 	getIDs        = getDeviceIDs
@@ -53,7 +59,7 @@ var (
 
 	downloadFile = utils.DownloadFile
 	untarFile    = utils.Untar
-	linkFile     = os.Symlink
+	findDdp      = findDdpProfile
 )
 
 type CompatibilityMap map[string]Compatibility
@@ -385,7 +391,12 @@ func (r *NodeConfigReconciler) prepareDDP(config ethernetv1.DeviceNodeConfig) (s
 
 	targetPath := path.Join(fwInstallDest, config.PCIAddress)
 
-	err := utils.CreateFolder(targetPath, log)
+	err := os.RemoveAll(targetPath)
+	if err != nil {
+		return "", err
+	}
+
+	err = utils.CreateFolder(targetPath, log)
 	if err != nil {
 		return "", err
 	}
@@ -406,7 +417,25 @@ func (r *NodeConfigReconciler) prepareDDP(config ethernetv1.DeviceNodeConfig) (s
 		return "", err
 	}
 
-	return fullPath, nil
+	return findDdp(targetPath)
+}
+
+func findDdpProfile(targetPath string) (string, error) {
+	var ddpProfilesPaths []string
+	walkFunction := func(path string, info os.FileInfo, err error) error {
+		if strings.HasSuffix(info.Name(), ".pkg") && info.Mode()&os.ModeSymlink == 0 {
+			ddpProfilesPaths = append(ddpProfilesPaths, path)
+		}
+		return nil
+	}
+	err := filepath.Walk(targetPath, walkFunction)
+	if err != nil {
+		return "", err
+	}
+	if len(ddpProfilesPaths) != 1 {
+		return "", fmt.Errorf("expected to find exactly 1 file ending with '.pkg', but found %v - %v", len(ddpProfilesPaths), ddpProfilesPaths)
+	}
+	return ddpProfilesPaths[0], err
 }
 
 func (r *NodeConfigReconciler) getFWVersion(fwPath string, dev ethernetv1.Device) (string, error) {
@@ -494,16 +523,26 @@ func (r *NodeConfigReconciler) updateFirmware(pciAddr, fwPath string) error {
 // ddpPath is a directory we need to link to
 // we have to link from /lib/firmware/updates/intel/ice/ddp/ice.pkg
 // (currently we ignore pciAddr and update the DDP for all installed CLV cards)
-func (r *NodeConfigReconciler) updateDDP(pciAddr, ddpPath string) error {
+func (r *NodeConfigReconciler) updateDDP(pciAddr, ddpProfilePath string) error {
 	log := r.log.WithName("updateDDP")
 
-	source := "/lib/firmware/updates/intel/ice/ddp/ice.pkg"
-	target := path.Join(ddpPath, "ice.pkg")
+	err := os.MkdirAll(ddpUpdateFolder, 0600)
+	if err != nil {
+		return err
+	}
+	target := path.Join(ddpUpdateFolder, "ice.pkg")
 
-	log.V(4).Info("Linking", "source", source)
-	log.V(4).Info("Linking", "target", target)
+	log.V(4).Info("Copying", "source", ddpProfilePath, "target", target)
 
-	return linkFile(source, target)
+	return copy(ddpProfilePath, target)
+}
+
+func copy(src string, dst string) error {
+	data, err := ioutil.ReadFile(src)
+	if err != nil {
+		return err
+	}
+	return ioutil.WriteFile(dst, data, 0644)
 }
 
 func runExecWithLog(cmd *exec.Cmd, log logr.Logger) error {

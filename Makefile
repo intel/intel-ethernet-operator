@@ -162,7 +162,7 @@ uninstall: manifests kustomize ## Uninstall CRDs from the K8s cluster specified 
 	$(KUSTOMIZE) build config/crd | oc delete -f -
 
 deploy: manifests kustomize ## Deploy controller to the K8s cluster specified in ~/.kube/config.
-	cd config/manager && $(KUSTOMIZE) edit set image controller=${IMAGE_REGISTRY}/${IMG}
+	cd config/manager && $(KUSTOMIZE) edit set image controller=$(ETHERNET_MANAGER_IMAGE)
 	$(KUSTOMIZE) build config/default | envsubst | oc apply -f -
 
 undeploy: ## Undeploy controller from the K8s cluster specified in ~/.kube/config.

@@ -116,6 +116,7 @@ func main() {
 		Assets: []assets.Asset{
 			{Path: "assets/100-labeler.yaml"},
 			{Path: "assets/200-daemon.yaml", BlockingReadiness: assets.ReadinessPollConfig{Retries: 30, Delay: 20 * time.Second}},
+			{Path: "assets/300-machine-config.yaml"}, // TODO: find a better way
 		},
 	}).LoadAndDeploy(context.Background()); err != nil {
 		setupLog.Error(err, "failed to deploy the assets")

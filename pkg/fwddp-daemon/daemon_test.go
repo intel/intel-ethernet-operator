@@ -923,7 +923,7 @@ var _ = Describe("DaemonTests", func() {
 			Expect(nodeConfigs.Items[0].Status.Conditions).To(HaveLen(1))
 			Expect(nodeConfigs.Items[0].Status.Conditions[0].Status).To(Equal(metav1.ConditionFalse))
 			Expect(nodeConfigs.Items[0].Status.Conditions[0].Reason).To(Equal(string(UpdateFailed)))
-			Expect(nodeConfigs.Items[0].Status.Conditions[0].Message).To(HaveSuffix("no such file or directory"))
+			Expect(nodeConfigs.Items[0].Status.Conditions[0].Message).To(ContainSubstring("expected to find exactly 1 file ending with '.pkg', but found 0"))
 		})
 
 		var _ = It("will update condition to UpdateSucceeded after successful DDP update", func() {
@@ -935,13 +935,18 @@ var _ = Describe("DaemonTests", func() {
 
 			data.Inventory[0].PCIAddress = "0000:00:00.1"
 
-			linkFile = func(old, new string) error {
-				return nil // pretend success
-			}
-
 			Expect(initReconciler(reconciler, data.NodeConfig.Name, data.NodeConfig.Namespace)).To(Succeed())
 
-			_, err := reconciler.Reconcile(context.TODO(), ctrl.Request{NamespacedName: types.NamespacedName{
+			tempFile, err := ioutil.TempFile("/tmp", "daemontest")
+			Expect(err).To(Succeed())
+			defer tempFile.Close()
+
+			findDdp = func(targetPath string) (string, error) {
+				return tempFile.Name(), nil
+			}
+			ddpUpdateFolder = "/tmp"
+
+			_, err = reconciler.Reconcile(context.TODO(), ctrl.Request{NamespacedName: types.NamespacedName{
 				Namespace: data.NodeConfig.Namespace,
 				Name:      data.NodeConfig.Name,
 			}})

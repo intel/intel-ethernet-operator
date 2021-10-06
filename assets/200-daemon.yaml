@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-# Copyright (c) 2020-2021 Intel Corporation
+# Copyright (c) 2021 Intel Corporation
 
 apiVersion: v1
 kind: ServiceAccount
@@ -118,6 +118,8 @@ spec:
       containers:
         - name: fwddp-daemon
           image: "{{ .ETHERNET_DAEMON_IMAGE }}"
+          args:
+            - --zap-log-level=4
           imagePullPolicy: IfNotPresent
           volumeMounts:
             - name: host
@@ -134,6 +136,8 @@ spec:
               mountPath: "/devices.json"
               subPath: devices.json
               readOnly: true
+            - name: libmodules
+              mountPath: /lib/modules
           env:
             - name: ETHERNET_NAMESPACE
               valueFrom:
@@ -150,6 +154,7 @@ spec:
           securityContext:
             readOnlyRootFilesystem: true
             privileged: true
+            runAsUser: 0
       volumes:
         - name: host
           hostPath:
@@ -166,3 +171,6 @@ spec:
         - name: config-volume
           configMap:
             name: supported-clv-devices
+        - name: libmodules
+          hostPath:
+            path: /lib/modules
