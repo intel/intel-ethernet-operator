@@ -12,7 +12,7 @@ patchesStrategicMerge:
 # - add_env.yaml
 images:
 - name: daemon-image
-  newName: flowconfig-daemon
+  newName: ger-is-registry.caas.intel.com/openness-operators/intel-ethernet-operator-flowconfig-daemon
   newTag: 0.0.1
 
 # Apply patch to convert manager to be a DaemonSet

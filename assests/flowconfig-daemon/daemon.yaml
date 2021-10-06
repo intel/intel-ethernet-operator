@@ -60,7 +60,7 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: spec.nodeName
-        image: flowconfig-daemon:0.0.1
+        image: ger-is-registry.caas.intel.com/openness-operators/intel-ethernet-operator-flowconfig-daemon:0.0.1
         name: flowconfig-daemon
         resources:
           limits:
