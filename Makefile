@@ -3,7 +3,6 @@
 
 export APP_NAME=intel-ethernet-operator
 
-IMAGE_REGISTRY ?= ger-is-registry.caas.intel.com/openness-operators
 TLS_VERIFY ?= false
 
 # VERSION defines the project version for the bundle.
@@ -14,19 +13,10 @@ TLS_VERIFY ?= false
 VERSION ?= 0.0.1
 
 # Set default K8CLI tool to 'kubectl' if it's not defined. To change this you can export this in env. e.g., export K8CLI=oc
-ifeq (,$(K8CLI))
-K8CLI=kubectl
-endif
+K8CLI ?=kubectl
 
 # Set default IMGTOOL tool to 'docker' if it's not defined. To change this you can export this in env. e.g., export IMGTOOL=podman
-ifeq (,$(IMGTOOL))
-IMGTOOL=docker
-endif
-
-export ETHERNET_MANAGER_IMAGE ?= $(IMAGE_REGISTRY)/$(APP_NAME)-manager:$(VERSION)
-# dependent images
-export ETHERNET_DAEMON_IMAGE ?= $(IMAGE_REGISTRY)/$(APP_NAME)-daemon:$(VERSION)
-export ETHERNET_NODE_LABELER_IMAGE ?= $(IMAGE_REGISTRY)/$(APP_NAME)-labeler:$(VERSION)
+IMGTOOL ?=docker
 
 # CHANNELS define the bundle channels used in the bundle.
 # Add a new line here if you would like to change its default config. (E.g CHANNELS = "preview,fast,stable")
@@ -47,31 +37,40 @@ BUNDLE_DEFAULT_CHANNEL := --default-channel=$(DEFAULT_CHANNEL)
 endif
 BUNDLE_METADATA_OPTS ?= $(BUNDLE_CHANNELS) $(BUNDLE_DEFAULT_CHANNEL)
 
-APP_NAME ?= intel-ethernet-operator
-FCDAEMON_NAME ?= $(APP_NAME)-flowconfig-daemon
 # IMAGE_TAG_BASE defines the docker.io namespace and part of the image name for remote images.
 # This variable is used to construct full image tags for bundle and catalog images.
 #
 # For example, running 'make bundle-build bundle-push catalog-build catalog-push' will build and push both
 # intel.com/intel-ethernet-operator-bundle:$VERSION and intel.com/intel-ethernet-operator-catalog:$VERSION.
-IMAGE_TAG_BASE ?= $(IMAGE_REGISTRY)/$(APP_NAME)
+ifneq (, $(IMAGE_REGISTRY))
+IMAGE_TAG_BASE = $(IMAGE_REGISTRY)/$(APP_NAME)
+else
+IMAGE_TAG_BASE = $(APP_NAME)
+endif
 
 # BUNDLE_IMG defines the image:tag used for the bundle.
 # You can use it as an arg. (E.g make bundle-build BUNDLE_IMG=<some-registry>/<project-name-bundle>:<tag>)
 BUNDLE_IMG ?= $(IMAGE_TAG_BASE)-bundle:v$(VERSION)
 
 # Versioned image tag
-IMAGE_TAG_LATEST?=$(APP_NAME):latest
-IMAGE_TAG_VERSION=$(APP_NAME):$(VERSION)
+MANAGER_IMAGE ?= $(IMAGE_TAG_BASE)-manager
+IMAGE_TAG_LATEST?=$(MANAGER_IMAGE):latest
+IMAGE_TAG_VERSION=$(MANAGER_IMAGE):$(VERSION)
 
 # Image URL to use all building/pushing image targets
 IMG ?= $(IMAGE_TAG_VERSION)
 
+export ETHERNET_MANAGER_IMAGE ?= $(IMAGE_TAG_VERSION)
+# dependent images
+export ETHERNET_DAEMON_IMAGE ?= $(IMAGE_TAG_BASE)-daemon:$(VERSION)
+export ETHERNET_NODE_LABELER_IMAGE ?= $(IMAGE_TAG_BASE)-labeler:$(VERSION)
+
 # FlowConfigDaemon image tag
-FCDAEMON_IMAGE_TAG_LATEST?=$(FCDAEMON_NAME):latest
-FCDAEMON_IMAGE_TAG_VERSION=$(FCDAEMON_NAME):$(VERSION)
+FCDAEMON_NAME ?= $(IMAGE_TAG_BASE)-flowconfig-daemon
+FCDAEMON_IMAGE_TAG_LATEST ?= $(FCDAEMON_NAME):latest
+FCDAEMON_IMAGE_TAG_VERSION = $(FCDAEMON_NAME):$(VERSION)
 # Image URL to use all building/pushing FlowConfigDaemon image targets
-FCDAEMON_IMG?=$(IMAGE_REGISTRY)/$(FCDAEMON_IMAGE_TAG_VERSION)
+FCDAEMON_IMG?=$(FCDAEMON_IMAGE_TAG_VERSION)
 FCDAEMON_DOCKERFILE = images/Dockerfile.FlowConfigDaemon
 
 # Produce CRDs that work back to Kubernetes 1.11 (no version conversion)
@@ -163,11 +162,12 @@ run: manifests generate fmt vet ## Run a controller from your host.
 	go run ./main.go
 
 docker-build: test ## Build docker image with the manager.
-	$(IMGTOOL) build -t ${IMAGE_REGISTRY}/${IMG} ${DOCKERARGS} .
-	$(IMGTOOL) image tag ${IMAGE_REGISTRY}/${IMG} ${IMAGE_REGISTRY}/${IMAGE_TAG_LATEST}
+	$(IMGTOOL) build -t ${IMAGE_TAG_VERSION} ${DOCKERARGS} .
+	$(IMGTOOL) image tag ${IMAGE_TAG_VERSION} ${IMAGE_TAG_LATEST}
 
 docker-build-manager:
 	$(IMGTOOL) build --file Dockerfile --build-arg=VERSION=$(VERSION) --tag ${ETHERNET_MANAGER_IMAGE} ${DOCKERARGS} .
+	$(IMGTOOL) image tag ${ETHERNET_MANAGER_IMAGE} ${IMAGE_TAG_LATEST}
 
 docker-build-daemon:
 	$(IMGTOOL) build --file Dockerfile.daemon --build-arg=VERSION=$(VERSION) --tag ${ETHERNET_DAEMON_IMAGE} ${DOCKERARGS} .
@@ -203,7 +203,7 @@ uninstall: manifests kustomize ## Uninstall CRDs from the K8s cluster specified 
 
 
 deploy: manifests flowconfig-manifests kustomize ## Deploy controller to the K8s cluster specified in ~/.kube/config.
-	cd config/manager && $(KUSTOMIZE) edit set image controller=${IMAGE_REGISTRY}/${IMG}
+	cd config/manager && $(KUSTOMIZE) edit set image controller=${ETHERNET_MANAGER_IMAGE}
 	$(KUSTOMIZE) build config/default | envsubst | $(K8CLI) apply -f -
 	$(K8CLI) apply -f assests/flowconfig-daemon/daemon.yaml
 
