@@ -125,7 +125,7 @@ manifests: controller-gen ## Generate WebhookConfiguration, ClusterRole and Cust
 .PHONY: flowconfig-manifests
 flowconfig-manifests: manifests kustomize
 	cd config/flowconfig-daemon && $(KUSTOMIZE) edit set image daemon-image=${FCDAEMON_IMG}
-	$(KUSTOMIZE) build config/flowconfig-daemon -o assests/flowconfig-daemon/daemon.yaml
+	$(KUSTOMIZE) build config/flowconfig-daemon -o assets/flowconfig-daemon/daemon.yaml
 
 generate: controller-gen ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
 	$(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="./..."
@@ -205,10 +205,10 @@ uninstall: manifests kustomize ## Uninstall CRDs from the K8s cluster specified 
 deploy: manifests flowconfig-manifests kustomize ## Deploy controller to the K8s cluster specified in ~/.kube/config.
 	cd config/manager && $(KUSTOMIZE) edit set image controller=${ETHERNET_MANAGER_IMAGE}
 	$(KUSTOMIZE) build config/default | envsubst | $(K8CLI) apply -f -
-	$(K8CLI) apply -f assests/flowconfig-daemon/daemon.yaml
+	$(K8CLI) apply -f assets/flowconfig-daemon/daemon.yaml
 
 undeploy: ## Undeploy controller from the K8s cluster specified in ~/.kube/config.
-	$(K8CLI) delete -f assests/flowconfig-daemon/daemon.yaml
+	$(K8CLI) delete -f assets/flowconfig-daemon/daemon.yaml
 	$(KUSTOMIZE) build config/default | $(K8CLI) delete -f -
 
 
