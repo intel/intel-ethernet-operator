@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2021 Intel Corporation
+
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
@@ -6,10 +9,6 @@ metadata:
   labels:
     control-plane: flowconfig-daemon
 spec:
-  # selector:
-  #   matchLabels:
-  #     control-plane: flowconfig-daemon
-  DCFVfPoolName: intel.com/intel_cvl0_vfio
   template:
     metadata:
       labels:

@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2021 Intel Corporation
+
 # This configuration is for teaching kustomize how to update name ref and var substitution 
 nameReference:
 - kind: Issuer

@@ -15,7 +15,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 )
 
-// log is for logging in this package.
 var nodeflowconfiglog = logf.Log.WithName("nodeflowconfig-resource")
 
 func (r *NodeFlowConfig) SetupWebhookWithManager(mgr ctrl.Manager) error {
@@ -26,7 +25,6 @@ func (r *NodeFlowConfig) SetupWebhookWithManager(mgr ctrl.Manager) error {
 
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 
-// TODO(user): change verbs to "verbs=create;update;delete" if you want to enable deletion validation.
 //+kubebuilder:webhook:path=/validate-flowconfig-intel-com-v1-nodeflowconfig,mutating=false,failurePolicy=fail,sideEffects=None,groups=flowconfig.intel.com,resources=nodeflowconfigs,verbs=create;update,versions=v1,name=vnodeflowconfig.kb.io,admissionReviewVersions={v1,v1beta1}
 
 var _ webhook.Validator = &NodeFlowConfig{}

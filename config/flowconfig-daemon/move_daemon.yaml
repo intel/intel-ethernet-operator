@@ -1,3 +1,0 @@
-- op: copy
-  from: assests/flowconfig-daemon/daemon.yaml
-  path: /tmp/

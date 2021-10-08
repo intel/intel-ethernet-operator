@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright (c) 2021 Intel Corporation
+
 package utils
 
 import (
@@ -60,7 +63,6 @@ func TestGetFlowItemAny(t *testing.T) {
 			t.Errorf("%v", err)
 		}
 		_ = any
-		//fmt.Printf("marshalled any object: %+v\n", any)
 	}
 }
 
@@ -81,12 +83,9 @@ func TestItemAnyObjects(t *testing.T) {
 	if err != nil {
 		t.Errorf("%v", err)
 	}
-	//fmt.Printf("any.Value: %s\n", string(any.Value))
 	ipv4 := &flowapi.RteFlowItemIpv4{}
 
 	if err := ptypes.UnmarshalAny(any, ipv4); err != nil {
 		t.Errorf("%v", err)
 	}
-
-	//fmt.Printf("unmarshalled any object: %+v\n", ipv4)
 }

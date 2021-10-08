@@ -16,8 +16,9 @@ type FlowConfigNodeAgentDeploymentSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
-	// Foo is an example field of FlowConfigNodeAgentDeployment. Edit flowconfignodeagentdeployment_types.go to remove/update
-	NADAnnotation string                  `json:"NADAnnotation,omitempty"`
+	// NADAnnotation is the name reference to Network Attachement Definition required by UFT container
+	NADAnnotation string `json:"NADAnnotation,omitempty"`
+	// DCFVfPoolName is the name reference to CVL admin VF pool
 	DCFVfPoolName string                  `json:"DCFVfPoolName,omitempty"`
 	Template      *corev1.PodTemplateSpec `json:"template,omitempty"`
 }

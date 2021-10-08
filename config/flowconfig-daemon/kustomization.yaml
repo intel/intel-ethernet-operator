@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2021 Intel Corporation
+
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 # Change this namespace to match with namespace in config/default/kustomization.yaml
@@ -12,10 +15,10 @@ patchesStrategicMerge:
 # - add_env.yaml
 images:
 - name: daemon-image
-  newName: ger-is-registry.caas.intel.com/openness-operators/intel-ethernet-operator-flowconfig-daemon
+  newName: intel-ethernet-operator-flowconfig-daemon
   newTag: 0.0.1
 
-# Apply patch to convert manager to be a DaemonSet
+# Apply patch to convert manager to be a FlowConfigNodeAgentDeployment
 patches:
 - path: convert_to_fcdeployment.yaml
   target:

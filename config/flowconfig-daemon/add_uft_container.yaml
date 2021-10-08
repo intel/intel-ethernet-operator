@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2021 Intel Corporation
+
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
@@ -7,9 +10,6 @@ spec:
   NADAnnotation: "flowconfig-daemon-sriov-cvl0-admin"
   DCFVfPoolName: "intel.com/cvl_uft_admin"
   template:
-    metadata:
-      annotations:
-       # k8s.v1.cni.cncf.io/networks: unified-flow-operator-sriov-cvl0-admin
     spec:
       containers:
       - name: uft
