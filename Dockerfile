@@ -32,6 +32,7 @@ LABEL name="Intel Ethernet Operator" \
     summary="Manages the FW and DPP updates of E810 NICs" \
     description="TODO"
 
+USER 1001
 WORKDIR /
 COPY --from=builder /workspace/manager .
 COPY assets/ assets/
