@@ -29,7 +29,6 @@ var _ = Describe("NodeFlowConfig controller", func() {
 		NodeFlowConfigNamespace = "default"
 
 		timeout  = time.Second * 20
-		duration = time.Second * 10
 		interval = time.Millisecond * 250
 	)
 

@@ -4,17 +4,12 @@
 package v1
 
 import (
-	"time"
-
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
 const (
 	NodeFlowConfigNamespace = "default"
 	portID                  = 0
-	timeout                 = time.Second * 10
-	duration                = time.Second * 10
-	interval                = time.Millisecond * 250
 )
 
 var (
