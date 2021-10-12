@@ -6,7 +6,6 @@ package utils
 import (
 	"testing"
 
-	"github.com/golang/protobuf/ptypes"
 	flowapi "github.com/otcshare/intel-ethernet-operator/pkg/flowconfig/rpc/v1/flow"
 )
 
@@ -79,13 +78,13 @@ func TestItemAnyObjects(t *testing.T) {
 				}`),
 	}
 
-	any, err := GetFlowItemAny(item.Type, item.Spec)
+	anyObj, err := GetFlowItemAny(item.Type, item.Spec)
 	if err != nil {
 		t.Errorf("%v", err)
 	}
 	ipv4 := &flowapi.RteFlowItemIpv4{}
 
-	if err := ptypes.UnmarshalAny(any, ipv4); err != nil {
+	if err := anyObj.UnmarshalTo(ipv4); err != nil {
 		t.Errorf("%v", err)
 	}
 }

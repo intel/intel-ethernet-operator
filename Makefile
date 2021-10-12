@@ -297,3 +297,27 @@ push_all: docker-push-manager docker-push-daemon docker-push-labeler docker-push
 define push_image
 	$(if $(filter $(IMGTOOL), podman), $(IMGTOOL) push $(1) --tls-verify=$(TLS_VERIFY), $(IMGTOOL) push $(1))
 endef
+
+# The gen-proto target below is ony required to rebuild the protobuf for UFT
+#
+# Install protoc compiler:
+# http://google.github.io/proto-lens/installing-protoc.html
+#
+# PROTOC_ZIP=protoc-3.14.0-linux-x86_64.zip
+# curl -OL https://github.com/protocolbuffers/protobuf/releases/download/v3.14.0/$PROTOC_ZIP
+# sudo unzip -o $PROTOC_ZIP -d /usr/local bin/protoc
+# sudo unzip -o $PROTOC_ZIP -d /usr/local 'include/*'
+# rm -f $PROTOC_ZIP
+#
+# Install protoc-gen-go and protoc-gen-go-grpc plugins
+# https://grpc.io/docs/languages/go/quickstart/
+#
+# $ go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.26
+# $ go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.1
+#
+# From <https://grpc.io/docs/languages/go/quickstart/>
+.PHONY: gen-proto
+gen-proto:
+	protoc --go_out=. --go_opt=paths=source_relative \
+	--go_opt=Mpkg/flowconfig/rpc/v1/flow/flow.proto=github.com/otcshare/intel-ethernet-operator/apis/flowconfig/v1/flow \
+	--go-grpc_out=. --go-grpc_opt=paths=source_relative pkg/flowconfig/rpc/v1/flow/flow.proto

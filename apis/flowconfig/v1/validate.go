@@ -8,9 +8,8 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/golang/protobuf/ptypes"
-	"github.com/golang/protobuf/ptypes/any"
 	"github.com/otcshare/intel-ethernet-operator/pkg/flowconfig/rpc/v1/flow"
+	any "google.golang.org/protobuf/types/known/anypb"
 )
 
 // RteFlowItem Validation
@@ -18,13 +17,13 @@ import (
 func validateRteFlowItemEth(itemName string, spec, item *any.Any) error {
 	specItem := new(flow.RteFlowItemEth)
 	if spec != nil {
-		if err := ptypes.UnmarshalAny(spec, specItem); err != nil {
+		if err := spec.UnmarshalTo(specItem); err != nil {
 			return fmt.Errorf("could not unmarshal %s: %s", itemName, err)
 		}
 	}
 
 	ethItem := new(flow.RteFlowItemEth)
-	if err := ptypes.UnmarshalAny(item, ethItem); err != nil {
+	if err := item.UnmarshalTo(ethItem); err != nil {
 		return fmt.Errorf("could not unmarshal %s: %s", itemName, err)
 	}
 	var specDstAddrInt, specSrcAddrInt uint32 = 0, 0
@@ -88,13 +87,13 @@ func encodeHexMacAddress(addr []byte) (uint32, error) {
 func validateRteFlowItemVlan(itemName string, spec, item *any.Any) error {
 	specItem := new(flow.RteFlowItemVlan)
 	if spec != nil {
-		if err := ptypes.UnmarshalAny(spec, specItem); err != nil {
+		if err := spec.UnmarshalTo(specItem); err != nil {
 			return fmt.Errorf("could not unmarshal %s: %s", itemName, err)
 		}
 	}
 
 	vlanItem := new(flow.RteFlowItemVlan)
-	if err := ptypes.UnmarshalAny(item, vlanItem); err != nil {
+	if err := item.UnmarshalTo(vlanItem); err != nil {
 		return fmt.Errorf("could not unmarshal %s: %s", itemName, err)
 	}
 
@@ -120,13 +119,13 @@ func validateRteFlowItemVlan(itemName string, spec, item *any.Any) error {
 func validateRteFlowItemIpv4(itemName string, spec, item *any.Any) error {
 	specItem := new(flow.RteFlowItemIpv4)
 	if spec != nil {
-		if err := ptypes.UnmarshalAny(spec, specItem); err != nil {
+		if err := spec.UnmarshalTo(specItem); err != nil {
 			return fmt.Errorf("could not unmarshal %s: %s", itemName, err)
 		}
 	}
 
 	ipv4Item := new(flow.RteFlowItemIpv4)
-	if err := ptypes.UnmarshalAny(item, ipv4Item); err != nil {
+	if err := item.UnmarshalTo(ipv4Item); err != nil {
 		return fmt.Errorf("could not unmarshal %s: %s", itemName, err)
 	}
 
@@ -196,13 +195,13 @@ func validateRteFlowItemIpv4(itemName string, spec, item *any.Any) error {
 func validateRteFlowItemUdp(itemName string, spec, item *any.Any) error {
 	specItem := new(flow.RteFlowItemUdp)
 	if spec != nil {
-		if err := ptypes.UnmarshalAny(spec, specItem); err != nil {
+		if err := spec.UnmarshalTo(specItem); err != nil {
 			return fmt.Errorf("could not unmarshal %s: %s", itemName, err)
 		}
 	}
 
 	udpItem := new(flow.RteFlowItemUdp)
-	if err := ptypes.UnmarshalAny(item, udpItem); err != nil {
+	if err := item.UnmarshalTo(udpItem); err != nil {
 		return fmt.Errorf("could not unmarshal %s: %s", itemName, err)
 	}
 
@@ -251,13 +250,13 @@ func validateRteFlowItemUdp(itemName string, spec, item *any.Any) error {
 func validateRteFlowItemPppoe(itemName string, spec, item *any.Any) error {
 	specItem := new(flow.RteFlowItemPppoe)
 	if spec != nil {
-		if err := ptypes.UnmarshalAny(spec, specItem); err != nil {
+		if err := spec.UnmarshalTo(specItem); err != nil {
 			return fmt.Errorf("could not unmarshal %s: %s", itemName, err)
 		}
 	}
 
 	pppoeItem := new(flow.RteFlowItemPppoe)
-	if err := ptypes.UnmarshalAny(item, pppoeItem); err != nil {
+	if err := item.UnmarshalTo(pppoeItem); err != nil {
 		return fmt.Errorf("could not unmarshal %s: %s", itemName, err)
 	}
 
@@ -304,13 +303,13 @@ func validateRteFlowItemPppoe(itemName string, spec, item *any.Any) error {
 func validateRteFlowItemPppoeProtoId(itemName string, spec, item *any.Any) error {
 	specItem := new(flow.RteFlowItemPppoeProtoId)
 	if spec != nil {
-		if err := ptypes.UnmarshalAny(spec, specItem); err != nil {
+		if err := spec.UnmarshalTo(specItem); err != nil {
 			return fmt.Errorf("could not unmarshal spec (%v) %v", spec, err)
 		}
 	}
 
 	pppoeProtoIdItem := new(flow.RteFlowItemPppoeProtoId)
-	if err := ptypes.UnmarshalAny(item, pppoeProtoIdItem); err != nil {
+	if err := item.UnmarshalTo(pppoeProtoIdItem); err != nil {
 		return fmt.Errorf("could not unmarshal %s: %v", itemName, err)
 	}
 
@@ -357,7 +356,7 @@ func validateRteFlowActionConfigEmpty(spec *any.Any) error {
 func validateRteFlowActionVf(spec *any.Any) error {
 	conf := new(flow.RteFlowActionVf)
 
-	if err := ptypes.UnmarshalAny(spec, conf); err != nil {
+	if err := spec.UnmarshalTo(conf); err != nil {
 		return fmt.Errorf("could not unmarshal RTE_FLOW_ACTION_TYPE_VF configuration: %s", err)
 	}
 

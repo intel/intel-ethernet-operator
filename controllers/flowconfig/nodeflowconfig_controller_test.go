@@ -7,7 +7,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/golang/protobuf/ptypes"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	flowconfigv1 "github.com/otcshare/intel-ethernet-operator/apis/flowconfig/v1"
@@ -345,7 +344,7 @@ spec:
 
 			It("should inherit all flow patterns from the rule", func() {
 				rteFlowItemIpv4 := &flow.RteFlowItemIpv4{}
-				err = ptypes.UnmarshalAny(testRawSpec.Pattern[1].Spec, rteFlowItemIpv4)
+				err = testRawSpec.Pattern[1].Spec.UnmarshalTo(rteFlowItemIpv4)
 				Expect(err).Should(BeNil())
 
 				dstAddr := flow.Uint32ToIP(rteFlowItemIpv4.Hdr.DstAddr)
@@ -354,7 +353,7 @@ spec:
 
 			It("Should inherit all flow actions from the rule", func() {
 				rteFlowActionTypeVF := &flow.RteFlowActionVf{}
-				err = ptypes.UnmarshalAny(testRawSpec.Action[0].Conf, rteFlowActionTypeVF)
+				err = testRawSpec.Action[0].Conf.UnmarshalTo(rteFlowActionTypeVF)
 				Expect(err).Should(BeNil())
 
 				actionId := rteFlowActionTypeVF.Id

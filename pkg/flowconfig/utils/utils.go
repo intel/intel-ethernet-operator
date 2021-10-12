@@ -8,10 +8,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/golang/protobuf/proto"
-	"github.com/golang/protobuf/ptypes"
-	"github.com/golang/protobuf/ptypes/any"
 	flowapi "github.com/otcshare/intel-ethernet-operator/pkg/flowconfig/rpc/v1/flow"
+	"google.golang.org/protobuf/proto"
+	any "google.golang.org/protobuf/types/known/anypb"
 )
 
 func GetFlowItemAny(flowType string, b []byte) (*any.Any, error) {
@@ -45,10 +44,10 @@ func GetFlowItemAny(flowType string, b []byte) (*any.Any, error) {
 		return nil, fmt.Errorf("could not decode bytes %s to ptypes.Any %v", string(b), err)
 	}
 
-	// Unmarshal into protobuf Any
-	anyObj, err := ptypes.MarshalAny(flowObj.(proto.Message))
+	// Marshal into protobuf Any
+	anyObj, err := any.New(flowObj.(proto.Message))
 	if err != nil {
-		return nil, fmt.Errorf("error unmarshiling to ptypes.Any: %v", err)
+		return nil, fmt.Errorf("error marshalling into ptypes.Any: %v", err)
 	}
 	return anyObj, nil
 
@@ -66,11 +65,11 @@ func GetIPv4AnyObj(b []byte) (*any.Any, error) {
 
 	rteFlowItemIpv4, err := ipv4.ToRteFlowItemIpv4()
 	if err != nil {
-		return nil, fmt.Errorf("error unmarshiling to ptypes.Any: %v", err)
+		return nil, fmt.Errorf("error unmarshalling to ptypes.Any: %v", err)
 	}
-	anyObj, err := ptypes.MarshalAny(rteFlowItemIpv4)
+	anyObj, err := any.New(rteFlowItemIpv4)
 	if err != nil {
-		return nil, fmt.Errorf("error unmarshiling to ptypes.Any: %v", err)
+		return nil, fmt.Errorf("error marshalling to ptypes.Any: %v", err)
 	}
 	return anyObj, nil
 }
@@ -89,9 +88,9 @@ func GetEthAnyObj(b []byte) (*any.Any, error) {
 	if err != nil {
 		return nil, fmt.Errorf("error unmarshiling to ptypes.Any: %v", err)
 	}
-	anyObj, err := ptypes.MarshalAny(rteFlowItemEth)
+	anyObj, err := any.New(rteFlowItemEth)
 	if err != nil {
-		return nil, fmt.Errorf("error unmarshiling to ptypes.Any: %v", err)
+		return nil, fmt.Errorf("error marshalling to ptypes.Any: %v", err)
 	}
 	return anyObj, nil
 }
@@ -113,10 +112,10 @@ func GetFlowActionAny(actionType string, b []byte) (*any.Any, error) {
 		return nil, fmt.Errorf("error unmarshalling bytes %s to ptypes.Any: %v", string(b), err)
 	}
 
-	// Unmarshal into protobuf Any
-	anyObj, err := ptypes.MarshalAny(actionObj.(proto.Message))
+	// Marshal into protobuf Any
+	anyObj, err := any.New(actionObj.(proto.Message))
 	if err != nil {
-		return nil, fmt.Errorf("error unmarshalling to ptypes.Any: %v", err)
+		return nil, fmt.Errorf("error marshalling into ptypes.Any: %v", err)
 	}
 	return anyObj, nil
 
