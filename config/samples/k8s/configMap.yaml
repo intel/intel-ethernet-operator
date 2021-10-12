@@ -1,0 +1,31 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2021 Intel Corporation
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: sriovdp-config
+  namespace: kube-system
+data:
+  config.json: |
+    {
+        "resourceList": [{
+                "resourceName": "cvl_uft_admin",
+                "selectors": {
+                    "vendors": ["8086"],
+                    "devices": ["154c", "10ed", "1889"],
+                    "pfNames": ["enp175s0f0#0", "enp175s0f1#0"],
+                    "drivers": ["vfio-pci"]
+                }
+            },
+            {
+                "resourceName": "intel_cvl_iavf",
+                "selectors": {
+                    "vendors": ["8086"],
+                    "devices": ["154c", "10ed", "1889"],
+                    "pfNames": ["enp175s0f0", "enp175s0f1"],
+                    "drivers": ["iavf"]
+                }
+            }
+        ]
+    }

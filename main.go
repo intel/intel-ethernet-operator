@@ -6,12 +6,13 @@ package main
 import (
 	"context"
 	"flag"
-	"github.com/otcshare/intel-ethernet-operator/pkg/fwddp-manager"
+	"os"
+	"time"
+
+	fwddp_manager "github.com/otcshare/intel-ethernet-operator/pkg/fwddp-manager"
 	"github.com/otcshare/intel-ethernet-operator/pkg/utils/assets"
 	appsv1 "k8s.io/api/apps/v1"
-	"os"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"time"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
@@ -25,6 +26,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	ethernetv1 "github.com/otcshare/intel-ethernet-operator/apis/ethernet/v1"
+	flowconfigv1 "github.com/otcshare/intel-ethernet-operator/apis/flowconfig/v1"
+	flowconfigcontrollers "github.com/otcshare/intel-ethernet-operator/controllers/flowconfig"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -37,6 +40,7 @@ func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 
 	utilruntime.Must(ethernetv1.AddToScheme(scheme))
+	utilruntime.Must(flowconfigv1.AddToScheme(scheme))
 	//+kubebuilder:scaffold:scheme
 }
 
@@ -59,9 +63,9 @@ func main() {
 
 	restConfig := ctrl.GetConfigOrDie()
 	mgr, err := ctrl.NewManager(restConfig, ctrl.Options{
-		Scheme:                 scheme,
-		MetricsBindAddress:     metricsAddr,
-		Port:                   9443,
+		Scheme:             scheme,
+		MetricsBindAddress: metricsAddr,
+		Port:               9443,
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
 		LeaderElectionID:       "8ee6d2ed.intel.com",
@@ -78,6 +82,23 @@ func main() {
 		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "EthernetClusterConfig")
+		os.Exit(1)
+	}
+
+	// to disable webhook(e.g. when testing locally) run it as 'make run ENABLE_WEBHOOKS=false'
+	if os.Getenv("ENABLE_WEBHOOKS") != "false" {
+		if err = (&flowconfigv1.NodeFlowConfig{}).SetupWebhookWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create webhook", "webhook", "NodeFlowConfig")
+			os.Exit(1)
+		}
+	}
+
+	if err = (&flowconfigcontrollers.FlowConfigNodeAgentDeploymentReconciler{
+		Client: mgr.GetClient(),
+		Log:    ctrl.Log.WithName("controllers").WithName("flowconfig").WithName("FlowConfigNodeAgentDeployment"),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "FlowConfigNodeAgentDeployment")
 		os.Exit(1)
 	}
 	//+kubebuilder:scaffold:builder

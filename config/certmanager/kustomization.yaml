@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2021 Intel Corporation
+
+resources:
+- certificate.yaml
+
+configurations:
+- kustomizeconfig.yaml
