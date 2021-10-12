@@ -48,6 +48,7 @@ func (s *FlowSets) Size() int {
 }
 
 // GetCompliments returns a list of flowRecords with keys that are not in the list of keys given in the parameter
+// Calling GetCompliments() with empty key slice will return all items in the flowSets
 func (s *FlowSets) GetCompliments(keys []string) map[string]*FlowCreateRecord {
 	flowRecs := make(map[string]*FlowCreateRecord)
 	for setKey := range s.data {

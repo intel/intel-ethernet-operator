@@ -8,7 +8,7 @@ import (
 )
 
 const (
-	NodeFlowConfigNamespace = "default"
+	nodeFlowConfigNamespace = "default"
 	portID                  = 0
 )
 

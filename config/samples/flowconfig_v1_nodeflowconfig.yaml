@@ -5,6 +5,7 @@ apiVersion: flowconfig.intel.com/v1
 kind: NodeFlowConfig
 metadata:
   name: node01
+  namespace: intel-ethernet-operator-system
 spec:
   rules:
     - pattern:

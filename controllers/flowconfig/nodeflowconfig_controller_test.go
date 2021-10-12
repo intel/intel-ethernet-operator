@@ -25,7 +25,7 @@ import (
 var _ = Describe("NodeFlowConfig controller", func() {
 
 	const (
-		NodeFlowConfigNamespace = "default"
+		nodeFlowConfigNamespace = "default"
 
 		timeout  = time.Second * 20
 		interval = time.Millisecond * 250
@@ -49,7 +49,7 @@ var _ = Describe("NodeFlowConfig controller", func() {
 				},
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      nodeName,
-					Namespace: NodeFlowConfigNamespace,
+					Namespace: nodeFlowConfigNamespace,
 				},
 				Spec: flowconfigv1.NodeFlowConfigSpec{
 					Rules: []*flowconfigv1.FlowRules{
@@ -131,7 +131,7 @@ var _ = Describe("NodeFlowConfig controller", func() {
 					After the policy spec is created, we expect the controller should update its internal state in its flowSets field and also update
 					it's '.Status'
 				*/
-				policyObjLookupKey := types.NamespacedName{Name: nodeName, Namespace: NodeFlowConfigNamespace}
+				policyObjLookupKey := types.NamespacedName{Name: nodeName, Namespace: nodeFlowConfigNamespace}
 				createdPolicyObj = &flowconfigv1.NodeFlowConfig{}
 
 				Eventually(func() bool {

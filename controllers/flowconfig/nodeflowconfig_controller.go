@@ -27,9 +27,8 @@ import (
 // NodeFlowConfigReconciler reconciles a NodeFlowConfig object
 type NodeFlowConfigReconciler struct {
 	client.Client
-	Log    logr.Logger
-	Scheme *runtime.Scheme
-	// NodeName
+	Log        logr.Logger
+	Scheme     *runtime.Scheme
 	nodeName   string
 	flowSets   *flowsets.FlowSets
 	flowClient flowapi.FlowServiceClient
@@ -39,7 +38,7 @@ type NodeFlowConfigReconciler struct {
 //+kubebuilder:rbac:groups=flowconfig.intel.com,resources=nodeflowconfigs/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=flowconfig.intel.com,resources=nodeflowconfigs/finalizers,verbs=update
 
-// GetNodeFlowConfigReconciler returns an instance of NodeFlowConfigReconciler with nodeName initialized from environment variable
+// GetNodeFlowConfigReconciler returns an instance of NodeFlowConfigReconciler
 func GetNodeFlowConfigReconciler(k8sClient client.Client, logger logr.Logger, scheme *runtime.Scheme, fs *flowsets.FlowSets,
 	fc flowapi.FlowServiceClient, nodeName string) *NodeFlowConfigReconciler {
 
@@ -182,7 +181,7 @@ func (r *NodeFlowConfigReconciler) createAndDeleteRules(toAdd map[string]*flowap
 
 func (r *NodeFlowConfigReconciler) deleteAllRules() error {
 
-	toDelete := r.flowSets.GetCompliments([]string{}) // Calling GetCompliments() with empty key slice will return all items in the flowSets
+	toDelete := r.flowSets.GetCompliments([]string{})
 	delAllLogger := r.Log.WithName("deleteAllRules()")
 	delAllLogger.Info("deleting all existing rules from cache")
 
@@ -264,7 +263,6 @@ func (r *NodeFlowConfigReconciler) getToAddAndDelete(flowReqs []*flowapi.Request
 		newKeys = append(newKeys, key)
 		if key != "" {
 			if r.flowSets.Has(key) {
-				// [ahalim] TO-DO: Add logs
 				continue
 			}
 			toAdd[key] = req
@@ -277,7 +275,7 @@ func (r *NodeFlowConfigReconciler) getToAddAndDelete(flowReqs []*flowapi.Request
 }
 
 func getFlowCreateRequests(fr *flowconfigv1.FlowRules) (*flowapi.RequestFlowCreate, error) {
-
+	// TODO: consider refactoring
 	rteFlowCreateRequests := new(flowapi.RequestFlowCreate)
 	// 1 - Get flow patterns
 	for _, item := range fr.Pattern {

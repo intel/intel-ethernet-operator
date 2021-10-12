@@ -48,7 +48,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Get nodeName from ENV
 	nodeName := os.Getenv("NODE_NAME")
 	if nodeName == "" {
 		setupLog.Error(err, "unable to get K8s node name from ENV var NODE_NAME")

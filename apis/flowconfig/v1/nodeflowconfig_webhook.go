@@ -104,20 +104,20 @@ func validate(rules *FlowRules) error {
 
 func validateRteFlowAttr(attr *flow.RteFlowAttr) error {
 	if attr.Ingress > 0x1 {
-		return fmt.Errorf("invalid attr.ingress (%d), must be of value {0,1}", attr.Ingress)
+		return fmt.Errorf("invalid attr.ingress (%x), must be of value {0,1}", attr.Ingress)
 	}
 	if attr.Egress > 0x1 {
-		return fmt.Errorf("invalid attr.egress (%d), must be of value {0,1}", attr.Egress)
+		return fmt.Errorf("invalid attr.egress (%x), must be of value {0,1}", attr.Egress)
 	}
 	if attr.Transfer > 0x1 {
-		return fmt.Errorf("invalid attr.transfer (%d), must be of value {0,1}", attr.Transfer)
+		return fmt.Errorf("invalid attr.transfer (%x), must be of value {0,1}", attr.Transfer)
 	}
 
 	return nil
 }
 
 func validatePortId(id uint32) error {
-	// Port ID validation too complex right now
+	// TODO: Port ID validation
 	return nil
 }
 
@@ -258,7 +258,7 @@ func validateRteFlowAction(rteFlowAction *flow.RteFlowAction) error {
 func (r *NodeFlowConfig) ValidateCreate() error {
 	nodeflowconfiglog.Info("validate create", "name", r.Name)
 
-	//NOTE(plalx): it might be worth to check if the requested node (r.Name) exists
+	// TODO: it might be worth to check if the requested node (r.Name) exists
 
 	spec := r.Spec
 	for _, rule := range spec.Rules {
@@ -274,9 +274,6 @@ func (r *NodeFlowConfig) ValidateCreate() error {
 func (r *NodeFlowConfig) ValidateUpdate(old runtime.Object) error {
 	nodeflowconfiglog.Info("validate update", "name", r.Name)
 
-	//NOTE(plalx): it might be worth to check if the requested node (r.Name) exists
-
-	//NOTE(plalx): the old spec doesn't matter, just need to validate the updated one
 	spec := r.Spec
 	for _, rule := range spec.Rules {
 		err := validate(rule)
@@ -291,7 +288,6 @@ func (r *NodeFlowConfig) ValidateUpdate(old runtime.Object) error {
 // ValidateDelete implements webhook.Validator so a webhook will be registered for the type
 func (r *NodeFlowConfig) ValidateDelete() error {
 	nodeflowconfiglog.Info("validate delete", "name", r.Name)
-
-	// NOTE(plalx): nothing to do on deletion
+	// nothing to do on deletion
 	return nil
 }

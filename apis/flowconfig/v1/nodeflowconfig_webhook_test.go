@@ -1008,7 +1008,7 @@ var (
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "testk8snode",
-			Namespace: NodeFlowConfigNamespace,
+			Namespace: nodeFlowConfigNamespace,
 		},
 		Spec: NodeFlowConfigSpec{},
 	}
