@@ -13,10 +13,10 @@ TLS_VERIFY ?= false
 VERSION ?= 0.0.1
 
 # Set default K8CLI tool to 'kubectl' if it's not defined. To change this you can export this in env. e.g., export K8CLI=oc
-K8CLI ?=kubectl
+K8CLI ?= oc
 
 # Set default IMGTOOL tool to 'docker' if it's not defined. To change this you can export this in env. e.g., export IMGTOOL=podman
-IMGTOOL ?=docker
+IMGTOOL ?= podman
 
 # CHANNELS define the bundle channels used in the bundle.
 # Add a new line here if you would like to change its default config. (E.g CHANNELS = "preview,fast,stable")
@@ -120,12 +120,14 @@ help: ## Display this help.
 
 manifests: controller-gen ## Generate WebhookConfiguration, ClusterRole and CustomResourceDefinition objects.
 	$(CONTROLLER_GEN) $(CRD_OPTIONS) rbac:roleName=manager-role webhook paths="./..." output:crd:artifacts:config=config/crd/bases
+	FOLDER=. COPYRIGHT_FILE=COPYRIGHT ./copyright.sh
 
 # Generate flowconfig-daemon deployment assets
 .PHONY: flowconfig-manifests
 flowconfig-manifests: manifests kustomize
 	cd config/flowconfig-daemon && $(KUSTOMIZE) edit set image daemon-image=${FCDAEMON_IMG}
 	$(KUSTOMIZE) build config/flowconfig-daemon -o assets/flowconfig-daemon/daemon.yaml
+	FOLDER=. COPYRIGHT_FILE=COPYRIGHT ./copyright.sh
 
 generate: controller-gen ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
 	$(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="./..."
