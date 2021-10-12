@@ -1,3 +1,8 @@
+```text
+SPDX-License-Identifier: Apache-2.0
+Copyright (c) 2020-2021 Intel Corporation
+```
+
 # Intel Ethernet Operator
 
 ## FlowConfig Daemon Controller

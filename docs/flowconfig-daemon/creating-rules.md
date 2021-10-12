@@ -1,3 +1,8 @@
+```text
+SPDX-License-Identifier: Apache-2.0
+Copyright (c) 2020-2021 Intel Corporation
+```
+
 # Creating NodeFlowConfig Spec
 To apply flow rules, a resource of type NodeFlowConfig needs to be created. At the moment the Unified Flow Operator gives only partial support of the Generic flow API. All the supported options are described below.
 
