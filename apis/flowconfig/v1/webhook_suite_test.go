@@ -91,7 +91,7 @@ var _ = BeforeSuite(func() {
 	//+kubebuilder:scaffold:webhook
 
 	go func() {
-		err = mgr.Start(ctx)
+		err := mgr.Start(ctx)
 		if err != nil {
 			Expect(err).NotTo(HaveOccurred())
 		}
