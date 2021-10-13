@@ -12,6 +12,10 @@ import (
 	"google.golang.org/grpc"
 )
 
+const (
+	grpcUrl = "localhost:50051"
+)
+
 type dcfClient struct{}
 
 // GetDCFClient return an instance of DCF FlowServiceClient
@@ -98,7 +102,7 @@ func getDCFFlowClientConn() (*grpc.ClientConn, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	conn, err := grpc.DialContext(ctx, "localhost:50051", grpc.WithInsecure())
+	conn, err := grpc.DialContext(ctx, grpcUrl, grpc.WithInsecure())
 	if err != nil {
 		return nil, fmt.Errorf("unable to connect to DCF grpc endpoint: %s", err)
 	}
