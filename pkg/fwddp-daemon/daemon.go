@@ -40,6 +40,22 @@ const (
 	nvmupdate64eDirSuffix    = "E810/Linux_x64/"
 	updateOutFile            = "update.xml"
 	nvmupdateVersionFilename = "version.txt"
+
+	serviceTemplate = `
+[Unit]
+Description=ddp-ice configuration on boot
+AssertPathExists=/sbin/modprobe
+Requires=var.mount
+After=var.mount
+
+[Service]
+Type=oneshot
+ExecStart=/sbin/modprobe -r ice
+ExecStart=/sbin/modprobe ice
+
+[Install]
+WantedBy=multi-user.target
+`
 )
 
 var (
@@ -57,9 +73,10 @@ var (
 	nvmupdateExec = runExecWithLog
 	execCmd       = utils.ExecCmd
 
-	downloadFile = utils.DownloadFile
-	untarFile    = utils.Untar
-	findDdp      = findDdpProfile
+	downloadFile      = utils.DownloadFile
+	untarFile         = utils.Untar
+	findDdp           = findDdpProfile
+	enableIceServiceP = enableIceService
 )
 
 type CompatibilityMap map[string]Compatibility
@@ -287,6 +304,13 @@ func (r *NodeConfigReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 				log.Error(err, "Failed to update DDP", "device", pciAddr)
 				updateErr = multierr.Append(updateErr, err)
 			}
+
+			err = enableIceServiceP()
+			if err != nil {
+				log.Error(err, "Failed to enable on-startup ICE service")
+				updateErr = multierr.Append(updateErr, err)
+			}
+			rebootRequired = true
 		}
 	}
 
@@ -521,8 +545,9 @@ func (r *NodeConfigReconciler) updateFirmware(pciAddr, fwPath string) error {
 }
 
 // ddpPath is a directory we need to link to
-// we have to link from /lib/firmware/updates/intel/ice/ddp/ice.pkg
+// we have to link from /var/lib/firmware/intel/ice/ddp/ice.pkg
 // (currently we ignore pciAddr and update the DDP for all installed CLV cards)
+//TODO: add logic to avoid reboot if same configuration is applied
 func (r *NodeConfigReconciler) updateDDP(pciAddr, ddpProfilePath string) error {
 	log := r.log.WithName("updateDDP")
 
@@ -534,10 +559,27 @@ func (r *NodeConfigReconciler) updateDDP(pciAddr, ddpProfilePath string) error {
 
 	log.V(4).Info("Copying", "source", ddpProfilePath, "target", target)
 
-	return copy(ddpProfilePath, target)
+	return copyFile(ddpProfilePath, target)
 }
 
-func copy(src string, dst string) error {
+func enableIceService() error {
+	iceServicePath := "/etc/systemd/system/ice.service"
+	serviceInfo, err := os.Create(path.Join("/host", iceServicePath))
+	if err != nil {
+		return err
+	}
+
+	_, err = serviceInfo.WriteString(serviceTemplate)
+	if err != nil {
+		return err
+	}
+
+	//create symlink to enable service on startUp
+	cmd := exec.Command("chroot", "/host", "systemctl", "enable", "ice.service")
+	return cmd.Run()
+}
+
+func copyFile(src string, dst string) error {
 	data, err := ioutil.ReadFile(src)
 	if err != nil {
 		return err
@@ -666,7 +708,7 @@ func (r *NodeConfigReconciler) CreateEmptyNodeConfigIfNeeded(c client.Client) er
 func (r *NodeConfigReconciler) rebootNode() error {
 	log := r.log.WithName("rebootNode")
 	// systemd-run command borrowed from openshift/sriov-network-operator
-	_, err := execCmd([]string{"chroot", "--userspec", "0", "/",
+	_, err := execCmd([]string{"chroot", "--userspec", "0", "/host",
 		"systemd-run",
 		"--unit", "ethernet-daemon-reboot",
 		"--description", "ethernet-daemon reboot",
