@@ -34,7 +34,7 @@ spec:
             hugepages-2Mi: 2Gi
             memory: 200Mi
         volumeMounts:
-        - mountPath: /dev/hugepages
-          name: hugepage
+        - name: hugepage
+          mountPath: /dev/hugepages
         - name: iceddp
           mountPath: /lib/firmware/updates/intel/ice/ddp
