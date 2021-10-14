@@ -193,16 +193,7 @@ var _ = Describe("FlowConfigNodeAgentDeployment controller", func() {
 		value, isError = requests.AsInt64()
 		Expect(isError).To(BeTrue())
 		Expect(value).Should(Equal(int64(amount)))
-
-		var isFound bool
-		for key, value := range pod.Annotations {
-			if key == "k8s.v1.cni.cncf.io/networks" {
-				if value == networkString {
-					isFound = true
-				}
-			}
-		}
-		Expect(isFound).Should(BeTrue())
+		Expect(pod.Annotations).Should(HaveKeyWithValue("k8s.v1.cni.cncf.io/networks", networkString))
 
 		for _, check := range checkers {
 			check(pod)
