@@ -42,6 +42,7 @@ func (dc *dcfClient) Create(ctx context.Context, in *flowapi.RequestFlowCreate, 
 	client := flowapi.NewFlowServiceClient(conn)
 	return client.Create(ctx, in, opts...)
 }
+
 func (dc *dcfClient) Destroy(ctx context.Context, in *flowapi.RequestFlowofPort, opts ...grpc.CallOption) (*flowapi.ResponseFlow, error) {
 	conn, err := getDCFFlowClientConn()
 	if err != nil {
@@ -61,6 +62,7 @@ func (dc *dcfClient) Query(ctx context.Context, in *flowapi.RequestFlowofPort, o
 	client := flowapi.NewFlowServiceClient(conn)
 	return client.Query(ctx, in, opts...)
 }
+
 func (dc *dcfClient) List(ctx context.Context, in *flowapi.RequestofPort, opts ...grpc.CallOption) (*flowapi.ResponseFlowList, error) {
 	conn, err := getDCFFlowClientConn()
 	if err != nil {
@@ -70,6 +72,7 @@ func (dc *dcfClient) List(ctx context.Context, in *flowapi.RequestofPort, opts .
 	client := flowapi.NewFlowServiceClient(conn)
 	return client.List(ctx, in, opts...)
 }
+
 func (dc *dcfClient) Flush(ctx context.Context, in *flowapi.RequestofPort, opts ...grpc.CallOption) (*flowapi.ResponseFlow, error) {
 	conn, err := getDCFFlowClientConn()
 	if err != nil {
@@ -79,6 +82,7 @@ func (dc *dcfClient) Flush(ctx context.Context, in *flowapi.RequestofPort, opts 
 	client := flowapi.NewFlowServiceClient(conn)
 	return client.Flush(ctx, in, opts...)
 }
+
 func (dc *dcfClient) Isolate(ctx context.Context, in *flowapi.RequestIsolate, opts ...grpc.CallOption) (*flowapi.ResponseFlow, error) {
 	conn, err := getDCFFlowClientConn()
 	if err != nil {
@@ -88,6 +92,7 @@ func (dc *dcfClient) Isolate(ctx context.Context, in *flowapi.RequestIsolate, op
 	client := flowapi.NewFlowServiceClient(conn)
 	return client.Isolate(ctx, in, opts...)
 }
+
 func (dc *dcfClient) ListPorts(ctx context.Context, in *flowapi.RequestListPorts, opts ...grpc.CallOption) (*flowapi.ResponsePortList, error) {
 	conn, err := getDCFFlowClientConn()
 	if err != nil {
