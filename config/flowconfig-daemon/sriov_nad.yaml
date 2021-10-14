@@ -1,0 +1,18 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2021 Intel Corporation
+
+---
+apiVersion: "k8s.cni.cncf.io/v1"
+kind: NetworkAttachmentDefinition
+metadata:
+  namespace: intel-ethernet-operator-system
+  name: sriov-cvl0-admin
+  annotations:
+    k8s.v1.cni.cncf.io/resourceName: intel.com/cvl_uft_admin
+spec:
+  config: '{
+  "type": "sriov",
+  "cniVersion": "0.3.1",
+  "name": "sriov-network",
+  "trust": "on"
+}'

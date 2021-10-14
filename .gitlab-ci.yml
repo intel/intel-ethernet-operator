@@ -1,0 +1,26 @@
+variables:
+  REPO_NAME: https://gitlab.devtools.intel.com/OrchSW/CNO/intel-ethernet-operator/
+  # exclude testbin/ from git clean to avoid re-download testenv executables
+  GIT_CLEAN_FLAGS: -ffdx -e testbin/
+  
+stages:
+  - build
+  - test
+  - container-image
+
+build-code-job:
+  stage: build
+  script:
+    - make
+    - make flowconfig-daemon
+
+build-container-job:
+  stage: container-image
+  script:
+    - make docker-build
+    - make docker-build-flowconfig
+
+test-code-job:
+  stage: test
+  script:
+    - make test

@@ -14,8 +14,10 @@ RUN go mod download
 
 COPY main.go main.go
 COPY apis/ apis/
-COPY pkg/fwddp-manager/ pkg/fwddp-manager/
-COPY pkg/utils/ pkg/utils/
+
+COPY controllers/ controllers/
+COPY pkg/ pkg/
+
 
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GO111MODULE=on go build -a -o manager main.go
 
@@ -30,6 +32,7 @@ LABEL name="Intel Ethernet Operator" \
     summary="Manages the FW and DPP updates of E810 NICs" \
     description="TODO"
 
+USER 1001
 WORKDIR /
 COPY --from=builder /workspace/manager .
 COPY assets/ assets/

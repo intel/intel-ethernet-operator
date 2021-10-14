@@ -3,7 +3,6 @@
 
 export APP_NAME=intel-ethernet-operator
 
-IMAGE_REGISTRY ?= ger-is-registry.caas.intel.com/openness-operators
 TLS_VERIFY ?= false
 
 # VERSION defines the project version for the bundle.
@@ -13,10 +12,11 @@ TLS_VERIFY ?= false
 # - use environment variables to overwrite this value (e.g export VERSION=0.0.2)
 VERSION ?= 0.0.1
 
-export ETHERNET_MANAGER_IMAGE ?= $(IMAGE_REGISTRY)/$(APP_NAME)-manager:$(VERSION)
-# dependent images
-export ETHERNET_DAEMON_IMAGE ?= $(IMAGE_REGISTRY)/$(APP_NAME)-daemon:$(VERSION)
-export ETHERNET_NODE_LABELER_IMAGE ?= $(IMAGE_REGISTRY)/$(APP_NAME)-labeler:$(VERSION)
+# Set default K8CLI tool to 'kubectl' if it's not defined. To change this you can export this in env. e.g., export K8CLI=oc
+K8CLI ?= oc
+
+# Set default IMGTOOL tool to 'docker' if it's not defined. To change this you can export this in env. e.g., export IMGTOOL=podman
+IMGTOOL ?= podman
 
 # CHANNELS define the bundle channels used in the bundle.
 # Add a new line here if you would like to change its default config. (E.g CHANNELS = "preview,fast,stable")
@@ -42,15 +42,36 @@ BUNDLE_METADATA_OPTS ?= $(BUNDLE_CHANNELS) $(BUNDLE_DEFAULT_CHANNEL)
 #
 # For example, running 'make bundle-build bundle-push catalog-build catalog-push' will build and push both
 # intel.com/intel-ethernet-operator-bundle:$VERSION and intel.com/intel-ethernet-operator-catalog:$VERSION.
-IMAGE_TAG_BASE ?= $(IMAGE_REGISTRY)/$(APP_NAME)
+ifneq (, $(IMAGE_REGISTRY))
+IMAGE_TAG_BASE = $(IMAGE_REGISTRY)/$(APP_NAME)
+else
+IMAGE_TAG_BASE = $(APP_NAME)
+endif
 
 # BUNDLE_IMG defines the image:tag used for the bundle.
 # You can use it as an arg. (E.g make bundle-build BUNDLE_IMG=<some-registry>/<project-name-bundle>:<tag>)
 BUNDLE_IMG ?= $(IMAGE_TAG_BASE)-bundle:v$(VERSION)
 
 # Versioned image tag
-IMAGE_TAG_LATEST?=$(APP_NAME):latest
-IMAGE_TAG_VERSION=$(APP_NAME):$(VERSION)
+MANAGER_IMAGE ?= $(IMAGE_TAG_BASE)-manager
+IMAGE_TAG_LATEST?=$(MANAGER_IMAGE):latest
+IMAGE_TAG_VERSION=$(MANAGER_IMAGE):$(VERSION)
+
+# Image URL to use all building/pushing image targets
+IMG ?= $(IMAGE_TAG_VERSION)
+
+export ETHERNET_MANAGER_IMAGE ?= $(IMAGE_TAG_VERSION)
+# dependent images
+export ETHERNET_DAEMON_IMAGE ?= $(IMAGE_TAG_BASE)-daemon:$(VERSION)
+export ETHERNET_NODE_LABELER_IMAGE ?= $(IMAGE_TAG_BASE)-labeler:$(VERSION)
+
+# FlowConfigDaemon image tag
+FCDAEMON_NAME ?= $(IMAGE_TAG_BASE)-flowconfig-daemon
+FCDAEMON_IMAGE_TAG_LATEST ?= $(FCDAEMON_NAME):latest
+FCDAEMON_IMAGE_TAG_VERSION = $(FCDAEMON_NAME):$(VERSION)
+# Image URL to use all building/pushing FlowConfigDaemon image targets
+FCDAEMON_IMG?=$(FCDAEMON_IMAGE_TAG_VERSION)
+FCDAEMON_DOCKERFILE = images/Dockerfile.FlowConfigDaemon
 
 # Produce CRDs that work back to Kubernetes 1.11 (no version conversion)
 CRD_OPTIONS ?= "crd:trivialVersions=true,preserveUnknownFields=false"
@@ -77,7 +98,7 @@ endif
 SHELL = /usr/bin/env bash -o pipefail 
 .SHELLFLAGS = -ec
 
-all: build daemon
+all: build daemon flowconfig-daemon
 
 ##@ General
 
@@ -99,6 +120,13 @@ help: ## Display this help.
 
 manifests: controller-gen ## Generate WebhookConfiguration, ClusterRole and CustomResourceDefinition objects.
 	$(CONTROLLER_GEN) $(CRD_OPTIONS) rbac:roleName=manager-role webhook paths="./..." output:crd:artifacts:config=config/crd/bases
+	FOLDER=. COPYRIGHT_FILE=COPYRIGHT ./copyright.sh
+
+# Generate flowconfig-daemon deployment assets
+.PHONY: flowconfig-manifests
+flowconfig-manifests: manifests kustomize
+	cd config/flowconfig-daemon && $(KUSTOMIZE) edit set image daemon-image=${FCDAEMON_IMG}
+	$(KUSTOMIZE) build config/flowconfig-daemon -o assets/flowconfig-daemon/daemon.yaml
 	FOLDER=. COPYRIGHT_FILE=COPYRIGHT ./copyright.sh
 
 generate: controller-gen ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
@@ -126,6 +154,9 @@ test_daemon: manifests generate fmt vet ## Run tests only for the fwddp_daemon.
 build: generate fmt vet ## Build manager binary.
 	go build -o bin/manager main.go
 
+# Build flowconfig-daemon binary
+flowconfig-daemon: generate fmt vet
+	go build -o bin/flowconfig-daemon cmd/flowconfig-daemon/main.go
 daemon: generate fmt vet
 	go build -o bin/fwddp-daemon cmd/fwddp-daemon/main.go
 
@@ -133,41 +164,55 @@ run: manifests generate fmt vet ## Run a controller from your host.
 	go run ./main.go
 
 docker-build: test ## Build docker image with the manager.
-	podman build -t ${IMAGE_REGISTRY}/${IMG} ${DOCKERARGS} .
-	podman image tag ${IMAGE_REGISTRY}/${IMG} ${IMAGE_REGISTRY}/${IMAGE_TAG_LATEST}
+	$(IMGTOOL) build -t ${IMAGE_TAG_VERSION} ${DOCKERARGS} .
+	$(IMGTOOL) image tag ${IMAGE_TAG_VERSION} ${IMAGE_TAG_LATEST}
 
 docker-build-manager:
-	podman build --file Dockerfile --build-arg=VERSION=$(VERSION) --tag ${ETHERNET_MANAGER_IMAGE} ${DOCKERARGS} .
+	$(IMGTOOL) build --file Dockerfile --build-arg=VERSION=$(VERSION) --tag ${ETHERNET_MANAGER_IMAGE} ${DOCKERARGS} .
+	$(IMGTOOL) image tag ${ETHERNET_MANAGER_IMAGE} ${IMAGE_TAG_LATEST}
 
 docker-build-daemon:
-	podman build --file Dockerfile.daemon --build-arg=VERSION=$(VERSION) --tag ${ETHERNET_DAEMON_IMAGE} ${DOCKERARGS} .
+	$(IMGTOOL) build --file Dockerfile.daemon --build-arg=VERSION=$(VERSION) --tag ${ETHERNET_DAEMON_IMAGE} ${DOCKERARGS} .
 
 docker-build-labeler:
-	podman build --file Dockerfile.labeler --build-arg=VERSION=$(VERSION) --tag ${ETHERNET_NODE_LABELER_IMAGE} ${DOCKERARGS} .
+	$(IMGTOOL) build --file Dockerfile.labeler --build-arg=VERSION=$(VERSION) --tag ${ETHERNET_NODE_LABELER_IMAGE} ${DOCKERARGS} .
 
 docker-push-manager:
-	podman push ${ETHERNET_MANAGER_IMAGE} --tls-verify=$(TLS_VERIFY)
+	$(call push_image,${ETHERNET_MANAGER_IMAGE})
 
 docker-push-daemon:
-	podman push ${ETHERNET_DAEMON_IMAGE} --tls-verify=$(TLS_VERIFY)
+	$(call push_image,${ETHERNET_DAEMON_IMAGE})
 
 docker-push-labeler:
-	podman push ${ETHERNET_NODE_LABELER_IMAGE} --tls-verify=$(TLS_VERIFY)
+	$(call push_image,${ETHERNET_NODE_LABELER_IMAGE})
+
+# Build FlowConfigDaemon docker image
+.PHONY: docker-build-flowconfig
+docker-build-flowconfig:
+	$(IMGTOOL) build . -f ${FCDAEMON_DOCKERFILE} -t ${FCDAEMON_IMG} $(DOCKERARGS)
+	$(IMGTOOL) image tag ${FCDAEMON_IMG} ${FCDAEMON_IMAGE_TAG_LATEST}
+
+docker-push-flowconfig:
+	$(call push_image,${FCDAEMON_IMG})
 
 ##@ Deployment
 
 install: manifests kustomize ## Install CRDs into the K8s cluster specified in ~/.kube/config.
-	$(KUSTOMIZE) build config/crd | oc apply -f -
+	$(KUSTOMIZE) build config/crd | $(K8CLI) apply -f -
 
 uninstall: manifests kustomize ## Uninstall CRDs from the K8s cluster specified in ~/.kube/config.
-	$(KUSTOMIZE) build config/crd | oc delete -f -
+	$(KUSTOMIZE) build config/crd | $(K8CLI) delete -f -
 
-deploy: manifests kustomize ## Deploy controller to the K8s cluster specified in ~/.kube/config.
-	cd config/manager && $(KUSTOMIZE) edit set image controller=$(ETHERNET_MANAGER_IMAGE)
-	$(KUSTOMIZE) build config/default | envsubst | oc apply -f -
+
+deploy: manifests flowconfig-manifests kustomize ## Deploy controller to the K8s cluster specified in ~/.kube/config.
+	cd config/manager && $(KUSTOMIZE) edit set image controller=${ETHERNET_MANAGER_IMAGE}
+	$(KUSTOMIZE) build config/default | envsubst | $(K8CLI) apply -f -
+	$(K8CLI) apply -f assets/flowconfig-daemon/daemon.yaml
 
 undeploy: ## Undeploy controller from the K8s cluster specified in ~/.kube/config.
-	$(KUSTOMIZE) build config/default | oc delete -f -
+	$(K8CLI) delete -f assets/flowconfig-daemon/daemon.yaml
+	$(KUSTOMIZE) build config/default | $(K8CLI) delete -f -
+
 
 CONTROLLER_GEN = $(shell pwd)/bin/controller-gen
 controller-gen: ## Download controller-gen locally if necessary.
@@ -200,11 +245,11 @@ bundle: manifests kustomize ## Generate bundle manifests and metadata, then vali
 
 .PHONY: bundle-build
 bundle-build: bundle ## Build the bundle image.
-	podman build -f bundle.Dockerfile -t $(BUNDLE_IMG) .
+	$(IMGTOOL) build -f bundle.Dockerfile -t $(BUNDLE_IMG) .
 
 .PHONY: bundle-push
 bundle-push: ## Push the bundle image.
-	podman push ${BUNDLE_IMG} --tls-verify=$(TLS_VERIFY)
+	$(call push_image,${BUNDLE_IMG})
 
 .PHONY: opm
 OPM = ./bin/opm
@@ -240,13 +285,41 @@ endif
 # https://github.com/operator-framework/community-operators/blob/7f1438c/docs/packaging-operator.md#updating-your-existing-operator
 .PHONY: catalog-build
 catalog-build: opm ## Build a catalog image.
-	$(OPM) index add --container-tool podman --mode semver --tag $(CATALOG_IMG) --bundles $(BUNDLE_IMGS) $(if ifeq $(TLS_VERIFY) false, --skip-tls) $(FROM_INDEX_OPT)
+	$(OPM) index add --container-tool $(IMGTOOL) --mode semver --tag $(CATALOG_IMG) --bundles $(BUNDLE_IMGS) $(if ifeq $(TLS_VERIFY) false, --skip-tls) $(FROM_INDEX_OPT)
 
 # Push the catalog image.
 .PHONY: catalog-push
 catalog-push: ## Push a catalog image.
-	podman push ${CATALOG_IMG} --tls-verify=$(TLS_VERIFY)
+	$(call push_image,${CATALOG_IMG})
 
-build_all: docker-build-manager docker-build-daemon docker-build-labeler bundle-build
+build_all: docker-build-manager docker-build-daemon docker-build-labeler docker-build-flowconfig bundle-build
 
-push_all: docker-push-manager docker-push-daemon docker-push-labeler bundle-push
+push_all: docker-push-manager docker-push-daemon docker-push-labeler docker-push-flowconfig bundle-push
+
+define push_image
+	$(if $(filter $(IMGTOOL), podman), $(IMGTOOL) push $(1) --tls-verify=$(TLS_VERIFY), $(IMGTOOL) push $(1))
+endef
+
+# The gen-proto target below is ony required to rebuild the protobuf for UFT
+#
+# Install protoc compiler:
+# http://google.github.io/proto-lens/installing-protoc.html
+#
+# PROTOC_ZIP=protoc-3.14.0-linux-x86_64.zip
+# curl -OL https://github.com/protocolbuffers/protobuf/releases/download/v3.14.0/$PROTOC_ZIP
+# sudo unzip -o $PROTOC_ZIP -d /usr/local bin/protoc
+# sudo unzip -o $PROTOC_ZIP -d /usr/local 'include/*'
+# rm -f $PROTOC_ZIP
+#
+# Install protoc-gen-go and protoc-gen-go-grpc plugins
+# https://grpc.io/docs/languages/go/quickstart/
+#
+# $ go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.26
+# $ go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.1
+#
+# From <https://grpc.io/docs/languages/go/quickstart/>
+.PHONY: gen-proto
+gen-proto:
+	protoc --go_out=. --go_opt=paths=source_relative \
+	--go_opt=Mpkg/flowconfig/rpc/v1/flow/flow.proto=github.com/otcshare/intel-ethernet-operator/apis/flowconfig/v1/flow \
+	--go-grpc_out=. --go-grpc_opt=paths=source_relative pkg/flowconfig/rpc/v1/flow/flow.proto

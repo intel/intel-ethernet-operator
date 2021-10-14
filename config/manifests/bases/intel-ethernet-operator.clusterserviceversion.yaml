@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 # Copyright (c) 2021 Intel Corporation
+
 apiVersion: operators.coreos.com/v1alpha1
 kind: ClusterServiceVersion
 metadata:
@@ -12,8 +13,7 @@ spec:
   apiservicedefinitions: {}
   customresourcedefinitions:
     owned:
-    - description: EthernetClusterConfig is the Schema for the ethernetclusterconfigs
-        API
+    - description: EthernetClusterConfig is the Schema for the ethernetclusterconfigs API
       displayName: Ethernet Cluster Config
       kind: EthernetClusterConfig
       name: ethernetclusterconfigs.ethernet.intel.com
@@ -26,6 +26,16 @@ spec:
       displayName: Ethernet Node Config
       kind: EthernetNodeConfig
       name: ethernetnodeconfigs.ethernet.intel.com
+      version: v1
+    - description: FlowConfigNodeAgentDeployment is the Schema for the flowconfignodeagentdeployments API
+      displayName: Flow Config Node Agent Deployment
+      kind: FlowConfigNodeAgentDeployment
+      name: flowconfignodeagentdeployments.flowconfig.intel.com
+      version: v1
+    - description: NodeFlowConfig is the Schema for the nodeflowconfigs API
+      displayName: Node Flow Config
+      kind: NodeFlowConfig
+      name: nodeflowconfigs.flowconfig.intel.com
       version: v1
   description: TODO
   displayName: Intel Ethernet Operator

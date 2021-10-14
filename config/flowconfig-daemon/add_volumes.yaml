@@ -1,0 +1,20 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2021 Intel Corporation
+
+
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: flowconfig-daemon
+  namespace: system
+spec:
+  template:
+    spec:
+      volumes:
+      - name: hugepage
+        emptyDir:
+          medium: HugePages
+      # ddp package directory is needed by the dpdk ice driver
+      - name: iceddp
+        hostPath:
+          path: /lib/firmware/updates/intel/ice/ddp/

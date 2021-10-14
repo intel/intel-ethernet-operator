@@ -1,0 +1,40 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2021 Intel Corporation
+
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: flowconfig-daemon
+  namespace: system
+spec:
+  NADAnnotation: "flowconfig-daemon-sriov-cvl0-admin"
+  DCFVfPoolName: "intel.com/cvl_uft_admin"
+  template:
+    spec:
+      containers:
+      - name: uft
+        image: dcf-tool:v21.08
+        imagePullPolicy: Never
+        securityContext:
+          capabilities:
+            add: ["IPC_LOCK", "SYS_NICE"]
+        command: [ "/bin/bash", "-c", "--" ]
+        args: [ "/entrypoint.sh" ]
+        env:
+        # Required for getting python print logs
+        - name: PYTHONUNBUFFERED
+          value: "1"
+        - name: PYTHONIOENCODING
+          value: "UTF-8"
+        resources:
+          requests:
+            hugepages-2Mi: 2Gi
+            memory: 200Mi
+          limits:
+            hugepages-2Mi: 2Gi
+            memory: 200Mi
+        volumeMounts:
+        - name: hugepage
+          mountPath: /dev/hugepages
+        - name: iceddp
+          mountPath: /lib/firmware/updates/intel/ice/ddp
