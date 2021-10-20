@@ -4,8 +4,11 @@
 package flowconfig
 
 import (
+	"fmt"
+	"math/rand"
 	"path/filepath"
 	"testing"
+	"time"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -35,7 +38,6 @@ var (
 	mockDCF               *mock.FlowServiceClient
 	nodeFlowConfigRc      *NodeFlowConfigReconciler
 	nodeAgentDeploymentRc *FlowConfigNodeAgentDeploymentReconciler
-	metricsAddr           = ":38080"
 )
 
 func TestAPIs(t *testing.T) {
@@ -65,6 +67,8 @@ var _ = BeforeSuite(func() {
 
 	// +kubebuilder:scaffold:scheme
 
+	r1 := rand.New(rand.NewSource(time.Now().UnixNano()))
+	var metricsAddr = fmt.Sprintf(":%d", (r1.Intn(100) + 38080))
 	k8sManager, err := ctrl.NewManager(cfg, ctrl.Options{
 		Scheme:             scheme.Scheme,
 		MetricsBindAddress: metricsAddr,
