@@ -544,9 +544,8 @@ func (r *NodeConfigReconciler) updateFirmware(pciAddr, fwPath string) error {
 	return nil
 }
 
-// ddpPath is a directory we need to link to
-// we have to link from /var/lib/firmware/intel/ice/ddp/ice.pkg
-// (currently we ignore pciAddr and update the DDP for all installed CLV cards)
+// ddpProfilePath is the path to our extracted DDP profile
+// we copy it to ddpUpdateFolder
 //TODO: add logic to avoid reboot if same configuration is applied
 func (r *NodeConfigReconciler) updateDDP(pciAddr, ddpProfilePath string) error {
 	log := r.log.WithName("updateDDP")
@@ -555,8 +554,18 @@ func (r *NodeConfigReconciler) updateDDP(pciAddr, ddpProfilePath string) error {
 	if err != nil {
 		return err
 	}
-	target := path.Join(ddpUpdateFolder, "ice.pkg")
 
+	devId, err := execCmd([]string{"sh", "-c", "lspci -vs " + pciAddr +
+		" | awk '/Device Serial/ {print $NF}' | sed s/-//g"}, log)
+	if err != nil {
+		return err
+	}
+	devId = strings.TrimSuffix(devId, "\n")
+	if devId == "" {
+		return fmt.Errorf("failed to extract devId")
+	}
+
+	target := path.Join(ddpUpdateFolder, "ice-"+devId+".pkg")
 	log.V(4).Info("Copying", "source", ddpProfilePath, "target", target)
 
 	return copyFile(ddpProfilePath, target)

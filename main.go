@@ -63,9 +63,9 @@ func main() {
 
 	restConfig := ctrl.GetConfigOrDie()
 	mgr, err := ctrl.NewManager(restConfig, ctrl.Options{
-		Scheme:             scheme,
-		MetricsBindAddress: metricsAddr,
-		Port:               9443,
+		Scheme:                 scheme,
+		MetricsBindAddress:     metricsAddr,
+		Port:                   9443,
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
 		LeaderElectionID:       "8ee6d2ed.intel.com",

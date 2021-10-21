@@ -958,7 +958,7 @@ var _ = Describe("DaemonTests", func() {
 			Expect(nodeConfigs.Items).To(HaveLen(1))
 			Expect(nodeConfigs.Items[0].Status.Conditions).To(HaveLen(1))
 			Expect(nodeConfigs.Items[0].Status.Conditions[0].Reason).To(Equal(string(UpdateFailed)))
-			Expect(nodeConfigs.Items[0].Status.Conditions[0].Message).To(Equal("Failed to reboot"))
+			Expect(nodeConfigs.Items[0].Status.Conditions[0].Message).To(ContainSubstring("Failed to reboot"))
 		})
 	})
 

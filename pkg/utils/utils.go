@@ -249,10 +249,10 @@ func ExecCmd(args []string, log logr.Logger) (string, error) {
 
 	log.V(4).Info("executing command", "cmd", cmd)
 
-	out, err := cmd.Output()
+	out, err := cmd.CombinedOutput()
 	if err != nil {
 		log.Error(err, "failed to execute command", "cmd", args, "output", string(out))
-		return "", err
+		return string(out), err
 	}
 
 	output := string(out)

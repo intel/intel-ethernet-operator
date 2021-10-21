@@ -170,7 +170,7 @@ var _ = Describe("Utils", func() {
 			str, err := ExecCmd([]string{"grep", "--fakeparam"}, log)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("exit status 2"))
-			Expect(str).To(Equal(""))
+			Expect(str).To(ContainSubstring("grep: unrecognized option '--fakeparam'"))
 		})
 
 		var _ = It("will return error if command is not set", func() {
