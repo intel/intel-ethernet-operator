@@ -200,8 +200,51 @@ var _ = Describe("Utils", func() {
 			Expect(err.Error()).To(ContainSubstring("unable to download image"))
 		})
 
-		var _ = It("will return no error if file already exists and checksum matches", func() {
-			err := DownloadFile("testdata/invalid.json", "/tmp/fake", "7de0bf711e9ceb9269e7315c78024a32", log)
+		var _ = It("will return a download error if file already exists and checksum matches, but no file with url found", func() {
+			filePath := "/tmp/updatefile_101.tar.gz"
+			url := "/tmp/fake"
+
+			err := ioutil.WriteFile(filePath, []byte("1010101"), 0666)
+			Expect(err).To(BeNil())
+			defer os.Remove(filePath)
+
+			err = DownloadFile(filePath, url, "63effa2530d088a06f071bc5f016f8d4", log)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("unsupported protocol"))
+		})
+
+		var _ = It("will return a download error if file already exists, checksum matches and url file found, but url does not match", func() {
+			filePath := "/tmp/updatefile_101.tar.gz"
+			fileWithUrl := filePath + ".url"
+			url := "/tmp/fake"
+
+			err := ioutil.WriteFile(filePath, []byte("1010101"), 0666)
+			Expect(err).To(BeNil())
+			defer os.Remove(filePath)
+
+			err = ioutil.WriteFile(fileWithUrl, []byte(filePath), 0666)
+			Expect(err).To(BeNil())
+			defer os.Remove(fileWithUrl)
+
+			err = DownloadFile(filePath, url, "63effa2530d088a06f071bc5f016f8d4", log)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("unsupported protocol"))
+		})
+
+		var _ = It("will return no error if file already exists, checksum matches and url matches", func() {
+			filePath := "/tmp/updatefile_101.tar.gz"
+			fileWithUrl := filePath + ".url"
+			url := "/tmp/fake"
+
+			err := ioutil.WriteFile(filePath, []byte("1010101"), 0666)
+			Expect(err).To(BeNil())
+			defer os.Remove(filePath)
+
+			err = ioutil.WriteFile(fileWithUrl, []byte(url), 0666)
+			Expect(err).To(BeNil())
+			defer os.Remove(fileWithUrl)
+
+			err = DownloadFile(filePath, url, "63effa2530d088a06f071bc5f016f8d4", log)
 			Expect(err).ToNot(HaveOccurred())
 		})
 

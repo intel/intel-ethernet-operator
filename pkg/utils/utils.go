@@ -12,6 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"net/http"
 	"os"
 	"os/exec"
@@ -129,20 +130,37 @@ func downloadFile(path, url, checksum string) error {
 	return nil
 }
 
+func verifyUrl(fileWithUrl, url string) bool {
+	urlMatches := false
+
+	oldUrl, err := ioutil.ReadFile(fileWithUrl)
+
+	if (err == nil) && (len(oldUrl) > 0) && (string(oldUrl) == url) {
+		urlMatches = true
+	}
+
+	return urlMatches
+}
+
 // DownloadFile downloads file from provided URL to provided path. If checksum value is
 // not empty, it first checks if file already exists in path and skips downloading
 // if calculated MD5 value matches provided one.
+//
+// Note: If there are any issues with the caching of the downloaded file, there
+// should be considered removing of the verification of already stored binary feature.
 func DownloadFile(path, url, checksum string, log logr.Logger) error {
+	fileWithUrl := path + ".url"
 	_, err := os.Stat(path)
 	if err == nil {
 		ret, err := verifyChecksum(path, checksum)
 		if err != nil {
 			return err
 		}
-		if ret {
+		if ret && verifyUrl(fileWithUrl, url) {
 			log.V(4).Info("File already downloaded", "path", path)
 			return nil
 		}
+		_ = os.Remove(fileWithUrl)
 		err = os.Remove(path)
 		if err != nil {
 			return fmt.Errorf("Unable to remove old file: %s",
@@ -152,11 +170,16 @@ func DownloadFile(path, url, checksum string, log logr.Logger) error {
 		return err
 	}
 
-	log.V(4).Info("Downloading file", "url", url)
 	if err := downloadFile(path, url, checksum); err != nil {
 		log.Error(err, "Unable to download file")
 		return err
 	}
+
+	err = ioutil.WriteFile(fileWithUrl, []byte(url), 0644)
+	if err == nil {
+		log.V(4).Info("Url stored", "url", url)
+	}
+
 	return nil
 }
 
