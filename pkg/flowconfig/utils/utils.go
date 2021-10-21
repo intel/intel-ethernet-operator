@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"strings"
 
+	sriovutils "github.com/k8snetworkplumbingwg/sriov-network-device-plugin/pkg/utils"
 	flowapi "github.com/otcshare/intel-ethernet-operator/pkg/flowconfig/rpc/v1/flow"
 	"google.golang.org/protobuf/proto"
 	any "google.golang.org/protobuf/types/known/anypb"
@@ -96,13 +97,17 @@ func GetEthAnyObj(b []byte) (*any.Any, error) {
 }
 
 func GetFlowActionAny(actionType string, b []byte) (*any.Any, error) {
-
 	actionTypeVal, ok := flowapi.RteFlowActionType_value[actionType]
 	if !ok {
-		return nil, fmt.Errorf("invalid action type %s", actionType)
+		// due to the fact that this is action type not defined in proto it has to be handled separately
+		if actionType == "RTE_FLOW_ACTION_TYPE_VFPCIADDR" {
+			return handleActionVfPciAddr(b)
+		} else {
+			return nil, fmt.Errorf("invalid action type %s", actionType)
+		}
 	}
-	actionObj := flowapi.GetFlowActionObj(flowapi.RteFlowActionType(actionTypeVal))
 
+	actionObj := flowapi.GetFlowActionObj(flowapi.RteFlowActionType(actionTypeVal))
 	if actionObj == nil {
 		// It should not get here
 		return nil, fmt.Errorf("nil object received for action type %s", actionType)
@@ -118,5 +123,23 @@ func GetFlowActionAny(actionType string, b []byte) (*any.Any, error) {
 		return nil, fmt.Errorf("error marshalling into ptypes.Any: %v", err)
 	}
 	return anyObj, nil
+}
 
+// handleActionVfPciAddr manually extracts PCI address from user defined action message and pass it as a byte buffer
+// to function that creates RTE_FLOW_ACTION_TYPE_VF actionAny object
+func handleActionVfPciAddr(b []byte) (*any.Any, error) {
+	actionObj := flowapi.RteFlowActionVfPciAddr{}
+
+	if err := json.Unmarshal(b, &actionObj); err != nil {
+		return nil, fmt.Errorf("error unmarshalling bytes %s to ptypes.Any: %v", string(b), err)
+	}
+
+	// get VF index from PCI address
+	vfID, err := sriovutils.GetVFID(actionObj.Addr)
+	if err != nil || vfID == -1 {
+		return nil, fmt.Errorf("error unable to get VF ID for PCI: %s, Err: %v", actionObj.Addr, err)
+	}
+
+	// converted VF PCI address into VF index now can be passed once again to get ActionAny object
+	return GetFlowActionAny("RTE_FLOW_ACTION_TYPE_VF", []byte(fmt.Sprintf("{\"id\":%d}", vfID)))
 }

@@ -6,33 +6,78 @@ package utils
 import (
 	"testing"
 
+	sriovutils "github.com/k8snetworkplumbingwg/sriov-network-device-plugin/pkg/utils"
+
 	flowapi "github.com/otcshare/intel-ethernet-operator/pkg/flowconfig/rpc/v1/flow"
 )
 
 func TestGetFlowActionAny(t *testing.T) {
 
 	actionData := []struct {
-		Type string
-		Conf []byte
+		name        string
+		Type        string
+		Conf        []byte
+		expectedErr bool
+		expectedAny bool
 	}{
 		{
-			Type: "RTE_FLOW_ACTION_TYPE_VF",
-			Conf: []byte(`
-				 { "id": 1 }
-				`),
+			name: "tc1",
+			Type: "RTE_FLOW_ACTION_TYPE_VF", Conf: []byte(`{ "id": 1 }`),
+			expectedErr: false, expectedAny: true,
 		},
 		{
-			Type: "RTE_FLOW_ACTION_TYPE_END",
-			Conf: []byte(`{}`),
+			name: "tc2",
+			Type: "RTE_FLOW_ACTION_TYPE_END", Conf: []byte(`{}`),
+			expectedErr: false, expectedAny: true,
+		},
+		{
+			name: "tc3",
+			Type: "RTE_FLOW_ACTION_TYPE_VFPCIADDR", Conf: []byte(`{}`),
+			expectedErr: true, expectedAny: false,
+		},
+		{
+			name: "tc4",
+			Type: "RTE_FLOW_ACTION_TYPE_VFPCIADDR_OTHER", Conf: []byte(`{}`),
+			expectedErr: true, expectedAny: false,
+		},
+		{
+			name: "tc5",
+			Type: "RTE_FLOW_ACTION_TYPE_VFPCIADDR", Conf: []byte(`{"addr":"0000:01:10.0"}`),
+			expectedErr: false, expectedAny: true,
+		},
+		{
+			name: "tc6",
+			Type: "RTE_FLOW_ACTION_TYPE_VFPCIADDR", Conf: []byte(`{"addr":"0000:01:11.0"}`),
+			expectedErr: true, expectedAny: false,
+		},
+		{
+			name: "tc7",
+			Type: "RTE_FLOW_ACTION_TYPE_VFPCIADDR", Conf: []byte(`{"ip":"0000:01:11.0"}`),
+			expectedErr: true, expectedAny: false,
 		},
 	}
 
+	fs := &sriovutils.FakeFilesystem{
+		Dirs: []string{"sys/bus/pci/devices/0000:01:10.0/", "sys/bus/pci/devices/0000:01:00.0/"},
+		Symlinks: map[string]string{"sys/bus/pci/devices/0000:01:10.0/physfn": "../0000:01:00.0",
+			"sys/bus/pci/devices/0000:01:00.0/virtfn0": "../0000:01:08.0",
+			"sys/bus/pci/devices/0000:01:00.0/virtfn1": "../0000:01:09.0",
+			"sys/bus/pci/devices/0000:01:00.0/virtfn2": "../0000:01:10.0",
+		},
+	}
+	defer fs.Use()()
+
 	for _, item := range actionData {
-		any, err := GetFlowActionAny(item.Type, item.Conf)
-		if err != nil {
-			t.Errorf("%v", err)
-		}
-		_ = any
+		t.Run(item.name, func(t *testing.T) {
+			any, err := GetFlowActionAny(item.Type, item.Conf)
+			if err != nil && !item.expectedErr {
+				t.Errorf("%v", err)
+			}
+
+			if item.expectedAny && any == nil {
+				t.Errorf("Any object unexpected result: %v should be %v", any, item.expectedAny)
+			}
+		})
 	}
 }
 

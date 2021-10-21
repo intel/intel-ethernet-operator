@@ -7,22 +7,44 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/otcshare/intel-ethernet-operator/pkg/flowconfig/utils"
-
-	"github.com/otcshare/intel-ethernet-operator/pkg/flowconfig/rpc/v1/flow"
+	sriovutils "github.com/k8snetworkplumbingwg/sriov-network-device-plugin/pkg/utils"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/yaml"
+
+	"github.com/otcshare/intel-ethernet-operator/pkg/flowconfig/rpc/v1/flow"
+	"github.com/otcshare/intel-ethernet-operator/pkg/flowconfig/utils"
 )
 
 func TestValidate(t *testing.T) {
+	createVfPciAddrAction := func(address string) string {
+		return `
+---
+apiVersion: sriov.intel.com/v1
+kind: NodeFlowConfig
+metadata:
+  name: silpixa00398610d
+spec:
+  rules:
+    - pattern:
+      action:
+        - type: RTE_FLOW_ACTION_TYPE_VFPCIADDR
+          conf:
+            addr: ` + address + `
+        - type: RTE_FLOW_ACTION_TYPE_END
+      attr:
+        ingress: 1
+`
+	}
+
 	tests := []struct {
 		name    string
 		data    string
 		wantErr bool
 	}{
 		{
-			name: "invalid eth mask config",
+			name:    "invalid eth mask config",
+			wantErr: true,
 			data: `
 ---
 apiVersion: sriov.intel.com/v1
@@ -55,10 +77,10 @@ spec:
       attr:
         ingress: 1
 `,
-			wantErr: true,
 		},
 		{
-			name: "invalid eth last config",
+			name:    "invalid eth last config",
+			wantErr: true,
 			data: `
 ---
 apiVersion: sriov.intel.com/v1
@@ -91,10 +113,10 @@ spec:
       attr:
         ingress: 1
 `,
-			wantErr: true,
 		},
 		{
-			name: "valid eth config",
+			name:    "valid eth config",
+			wantErr: false,
 			data: `
 ---
 apiVersion: sriov.intel.com/v1
@@ -129,10 +151,10 @@ spec:
       attr:
         ingress: 1
 `,
-			wantErr: false,
 		},
 		{
-			name: "invalid config",
+			name:    "invalid config",
+			wantErr: true,
 			data: `
 ---
 apiVersion: sriov.intel.com/v1
@@ -165,10 +187,10 @@ spec:
       attr:
         ingress: 1
 `,
-			wantErr: true,
 		},
 		{
-			name: "empty pattern",
+			name:    "empty pattern",
+			wantErr: false,
 			data: `
 ---
 apiVersion: sriov.intel.com/v1
@@ -186,9 +208,29 @@ spec:
       attr:
         ingress: 1
 `,
+		},
+		{
+			name:    "RTE_FLOW_ACTION_TYPE_VFPCIADDR valid PCI address",
 			wantErr: false,
+			data:    createVfPciAddrAction("0000:01:10.0"),
+		},
+		{
+			name:    "RTE_FLOW_ACTION_TYPE_VFPCIADDR invalid PCI address",
+			wantErr: true,
+			data:    createVfPciAddrAction("0000:01:11.0"),
 		},
 	}
+
+	fs := &sriovutils.FakeFilesystem{
+		Dirs: []string{"sys/bus/pci/devices/0000:01:10.0/", "sys/bus/pci/devices/0000:01:00.0/"},
+		Symlinks: map[string]string{"sys/bus/pci/devices/0000:01:10.0/physfn": "../0000:01:00.0",
+			"sys/bus/pci/devices/0000:01:00.0/virtfn0": "../0000:01:08.0",
+			"sys/bus/pci/devices/0000:01:00.0/virtfn1": "../0000:01:09.0",
+			"sys/bus/pci/devices/0000:01:00.0/virtfn2": "../0000:01:10.0",
+		},
+	}
+	defer fs.Use()()
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			config := &NodeFlowConfig{}
@@ -237,6 +279,57 @@ func TestValidateRteFlowActionVf(t *testing.T) {
 				var err error
 				rteFlowAction.Conf, err = utils.GetFlowActionAny(action.Type, action.Conf.Raw)
 				if err != nil {
+					t.Errorf("error: %s", err)
+				}
+			} else {
+				rteFlowAction.Conf = nil
+			}
+
+			if err := validateRteFlowActionVf(rteFlowAction.Conf); (err != nil) != tt.wantErr {
+				t.Errorf("validateRteFlowActionVf() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestValidateRteFlowActionPciAddr(t *testing.T) {
+	tests := []struct {
+		name       string
+		conf       []byte
+		inputError bool
+		wantErr    bool
+	}{
+		{name: "valid PCI address", conf: []byte(`{"addr":"0000:01:10.0"}`), inputError: false, wantErr: false},
+		{name: "invalid PCI config", conf: []byte(`{"addr":"0000:01:11.0"}`), inputError: true, wantErr: true},
+		{name: "invalid config: Lack of addr", conf: []byte(`{"Id":253}`), inputError: true, wantErr: true},
+		{name: "empty config", inputError: false, wantErr: true},
+	}
+
+	fs := &sriovutils.FakeFilesystem{
+		Dirs: []string{"sys/bus/pci/devices/0000:01:10.0/", "sys/bus/pci/devices/0000:01:00.0/"},
+		Symlinks: map[string]string{"sys/bus/pci/devices/0000:01:10.0/physfn": "../0000:01:00.0",
+			"sys/bus/pci/devices/0000:01:00.0/virtfn0": "../0000:01:08.0",
+			"sys/bus/pci/devices/0000:01:00.0/virtfn1": "../0000:01:09.0",
+			"sys/bus/pci/devices/0000:01:00.0/virtfn2": "../0000:01:10.0",
+		},
+	}
+	defer fs.Use()()
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			action := &FlowAction{Type: "RTE_FLOW_ACTION_TYPE_VFPCIADDR"}
+			rteFlowAction := new(flow.RteFlowAction)
+
+			if tt.conf != nil {
+				action.Conf = &runtime.RawExtension{Raw: tt.conf}
+			} else {
+				action.Conf = nil
+			}
+
+			if action.Conf != nil {
+				var err error
+				rteFlowAction.Conf, err = utils.GetFlowActionAny(action.Type, action.Conf.Raw)
+				if err != nil && !tt.inputError {
 					t.Errorf("error: %s", err)
 				}
 			} else {

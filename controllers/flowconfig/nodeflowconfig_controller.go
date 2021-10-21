@@ -10,19 +10,18 @@ import (
 	"fmt"
 	"reflect"
 
-	"github.com/otcshare/intel-ethernet-operator/pkg/flowconfig/flowsets"
-	flowapi "github.com/otcshare/intel-ethernet-operator/pkg/flowconfig/rpc/v1/flow"
-	"github.com/otcshare/intel-ethernet-operator/pkg/flowconfig/utils"
+	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
-	"github.com/go-logr/logr"
-	"k8s.io/apimachinery/pkg/runtime"
-	"sigs.k8s.io/controller-runtime/pkg/client"
-
 	flowconfigv1 "github.com/otcshare/intel-ethernet-operator/apis/flowconfig/v1"
+	"github.com/otcshare/intel-ethernet-operator/pkg/flowconfig/flowsets"
+	flowapi "github.com/otcshare/intel-ethernet-operator/pkg/flowconfig/rpc/v1/flow"
+	"github.com/otcshare/intel-ethernet-operator/pkg/flowconfig/utils"
 )
 
 // NodeFlowConfigReconciler reconciles a NodeFlowConfig object
@@ -323,21 +322,23 @@ func getFlowCreateRequests(fr *flowconfigv1.FlowRules) (*flowapi.RequestFlowCrea
 	for _, action := range fr.Action {
 		rteFlowAction := new(flowapi.RteFlowAction)
 
-		val, ok := flowapi.RteFlowActionType_value[action.Type]
+		val, ok := flowapi.GetFlowActionType(action.Type)
 		if !ok {
 			return nil, fmt.Errorf("invalid action type %s", action.Type)
 		}
-		actionType := flowapi.RteFlowActionType(val)
-		rteFlowAction.Type = actionType
 
+		rteFlowAction.Type = flowapi.RteFlowActionType(val)
 		if action.Conf != nil {
 			actionAny, err := utils.GetFlowActionAny(action.Type, action.Conf.Raw)
-
 			if err != nil {
 				return nil, fmt.Errorf("error getting Spec pattern for flowtype %s : %v", actionAny, err)
 			}
+
 			rteFlowAction.Conf = actionAny
+		} else {
+			rteFlowAction.Conf = nil
 		}
+
 		rteFlowCreateRequests.Action = append(rteFlowCreateRequests.Action, rteFlowAction)
 	}
 	// 3 - Get Flow attribute

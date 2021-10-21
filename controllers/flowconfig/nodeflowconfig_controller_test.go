@@ -10,18 +10,20 @@ import (
 	"strings"
 	"time"
 
+	sriovutils "github.com/k8snetworkplumbingwg/sriov-network-device-plugin/pkg/utils"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	flowconfigv1 "github.com/otcshare/intel-ethernet-operator/apis/flowconfig/v1"
-	"github.com/otcshare/intel-ethernet-operator/pkg/flowconfig/rpc/v1/flow"
-	mocks "github.com/otcshare/intel-ethernet-operator/pkg/flowconfig/rpc/v1/flow/mocks"
-	"github.com/otcshare/intel-ethernet-operator/pkg/flowconfig/utils"
 	mock "github.com/stretchr/testify/mock"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/yaml"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
+
+	flowconfigv1 "github.com/otcshare/intel-ethernet-operator/apis/flowconfig/v1"
+	"github.com/otcshare/intel-ethernet-operator/pkg/flowconfig/rpc/v1/flow"
+	mocks "github.com/otcshare/intel-ethernet-operator/pkg/flowconfig/rpc/v1/flow/mocks"
+	"github.com/otcshare/intel-ethernet-operator/pkg/flowconfig/utils"
 )
 
 // Controller tests
@@ -128,7 +130,7 @@ var _ = Describe("NodeFlowConfig controller", func() {
 					return err == nil
 				}, timeout, interval).Should(BeTrue())
 				// Add delays after creating api object before retrieving it again
-				time.Sleep(time.Second * 5)
+				time.Sleep(time.Second * 2)
 
 				/*
 					After the policy spec is created, we expect the controller should update its internal state in its flowSets field and also update
@@ -157,7 +159,7 @@ var _ = Describe("NodeFlowConfig controller", func() {
 					return err == nil
 				}, timeout, interval).Should(BeTrue())
 				// Add delays after creating api object before retrieving it again
-				time.Sleep(time.Second * 5)
+				time.Sleep(time.Second * 2)
 
 				/*
 					After the policy spec is updated (i.e. duplicated), we expect the controller to identify the new rule as a duplicate and should not update its internal state in its flowSets
@@ -175,7 +177,7 @@ var _ = Describe("NodeFlowConfig controller", func() {
 				}, timeout, interval).Should(BeTrue())
 
 				// Add delays after deleting api object before validating the controller's default config
-				time.Sleep(time.Second * 5)
+				time.Sleep(time.Second * 2)
 				/*
 					When a NodeFlowConfig object is deleted, we expect the controller to delete all rules from its default config.
 				*/
@@ -606,6 +608,193 @@ spec:
 				err := reconciler.createRules(toAdd)
 				Expect(err.Error()).Should(Equal(expectedErr))
 			})
+		})
+	})
+
+	Context("when converting PCI address into VF index", func() {
+		var (
+			policy *flowconfigv1.NodeFlowConfig
+			portID uint32 = 0
+
+			createNodeFlowConfig = func(nodeName string, portID uint32, configurers ...func(config *flowconfigv1.NodeFlowConfig)) *flowconfigv1.NodeFlowConfig {
+				policy := &flowconfigv1.NodeFlowConfig{
+					TypeMeta: metav1.TypeMeta{
+						APIVersion: "flowconfig.intel.com/v1",
+						Kind:       "NodeFlowConfig",
+					},
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      nodeName,
+						Namespace: nodeFlowConfigNamespace,
+					},
+					Spec: flowconfigv1.NodeFlowConfigSpec{
+						Rules: []*flowconfigv1.FlowRules{
+							{
+								PortId: portID,
+								Attr: &flowconfigv1.FlowAttr{
+									Ingress: 1,
+								},
+							},
+						},
+					},
+				}
+
+				for _, config := range configurers {
+					config(policy)
+				}
+
+				return policy
+			}
+		)
+
+		It("Verify full flow", func() {
+			policy = createNodeFlowConfig(nodeName, portID, func(config *flowconfigv1.NodeFlowConfig) {
+				config.Spec.Rules[0].Action = []*flowconfigv1.FlowAction{
+					{
+						Type: "RTE_FLOW_ACTION_TYPE_VFPCIADDR",
+						Conf: &runtime.RawExtension{
+							Raw: []byte(`{ "addr": "0000:0a:11.1" }`),
+						},
+					},
+					{
+						Type: "RTE_FLOW_ACTION_TYPE_END",
+					},
+				}
+			})
+
+			mockRes := &flow.ResponsePortList{
+				Ports: []*flow.PortsInformation{
+					{
+						PortId:   0,
+						PortMode: "dcf",
+						PortPci:  "0000:01.01",
+					},
+				},
+			}
+
+			mockDCF.On("ListPorts", context.TODO(), &flow.RequestListPorts{}).Return(mockRes, nil)
+
+			if policy.Spec.Rules != nil {
+				var flowID uint32 = 0
+				for range policy.Spec.Rules {
+					mockValidateResponse := &flow.ResponseFlow{}
+					mockDCF.On("Validate", context.TODO(), mock.AnythingOfType("*flow.RequestFlowCreate")).Return(mockValidateResponse, nil)
+
+					mockCreateResponse := &flow.ResponseFlowCreate{FlowId: flowID}
+					mockDCF.On("Create", context.TODO(), mock.AnythingOfType("*flow.RequestFlowCreate")).Return(mockCreateResponse, nil)
+
+					mockDestroyReq := &flow.RequestFlowofPort{PortId: 0, FlowId: flowID}
+					mockDCF.On("Destroy", context.TODO(), mockDestroyReq).Return(mockValidateResponse, nil)
+					flowID++
+				}
+			}
+
+			Eventually(func() bool {
+				err := k8sClient.Create(context.Background(), policy)
+				return err == nil
+			}, timeout, interval).Should(BeTrue())
+
+			time.Sleep(2 * time.Second)
+			defer func() {
+				Eventually(func() bool {
+					err := k8sClient.Delete(context.Background(), policy)
+					return err == nil
+				}, timeout, interval).Should(BeTrue())
+			}()
+		})
+
+		It("Verify that function will be able to convert PCI -> VF ID correct PCI address", func() {
+			fs := &sriovutils.FakeFilesystem{
+				Dirs: []string{"sys/bus/pci/devices/0000:01:10.0/", "sys/bus/pci/devices/0000:01:00.0/"},
+				Symlinks: map[string]string{"sys/bus/pci/devices/0000:01:10.0/physfn": "../0000:01:00.0",
+					"sys/bus/pci/devices/0000:01:00.0/virtfn0": "../0000:01:08.0",
+					"sys/bus/pci/devices/0000:01:00.0/virtfn1": "../0000:01:09.0",
+					"sys/bus/pci/devices/0000:01:00.0/virtfn2": "../0000:01:10.0",
+				},
+			}
+			defer fs.Use()()
+
+			action := []*flowconfigv1.FlowAction{
+				{
+					Type: "RTE_FLOW_ACTION_TYPE_VFPCIADDR",
+					Conf: &runtime.RawExtension{
+						Raw: []byte(`{ "addr": "0000:01:10.0" }`),
+					},
+				},
+			}
+
+			flowRules := &flowconfigv1.FlowRules{
+				Action: action,
+			}
+
+			flowReqs, err := getFlowCreateRequests(flowRules)
+			Expect(err).Should(BeNil())
+			Expect(flowReqs).ShouldNot(BeNil())
+			Expect(flowReqs.PortId).Should(Equal(uint32(0)))
+			Expect(flowReqs.Attr).Should(BeNil())
+			Expect(flowReqs.Pattern).Should(BeNil())
+			Expect(len(flowReqs.Action)).Should(Equal(1))
+			Expect(flowReqs.Action[0].Type).Should(Equal(flow.RteFlowActionType_RTE_FLOW_ACTION_TYPE_VF))
+
+			rteFlowActionTypeVF := &flow.RteFlowActionVf{}
+			err = flowReqs.Action[0].Conf.UnmarshalTo(rteFlowActionTypeVF)
+			Expect(err).Should(BeNil())
+			Expect(rteFlowActionTypeVF.Id).Should(Equal(uint32(2)))
+		})
+
+		It("Verify that function will be not able to convert PCI -> VF ID - due to wrong PCI address", func() {
+			fs := &sriovutils.FakeFilesystem{
+				Dirs: []string{"sys/bus/pci/devices/0000:01:10.0/", "sys/bus/pci/devices/0000:01:00.0/"},
+				Symlinks: map[string]string{"sys/bus/pci/devices/0000:01:10.0/physfn": "../0000:01:00.0",
+					"sys/bus/pci/devices/0000:01:00.0/virtfn0": "../0000:01:08.0",
+					"sys/bus/pci/devices/0000:01:00.0/virtfn1": "../0000:01:09.0",
+					"sys/bus/pci/devices/0000:01:00.0/virtfn2": "../0000:01:10.0",
+				},
+			}
+			defer fs.Use()()
+
+			action := []*flowconfigv1.FlowAction{
+				{
+					Type: "RTE_FLOW_ACTION_TYPE_VFPCIADDR",
+					Conf: &runtime.RawExtension{
+						Raw: []byte(`{ "addr": "0000:0a:55.1" }`),
+					},
+				},
+			}
+
+			flowRules := &flowconfigv1.FlowRules{
+				Action: action,
+			}
+
+			flowReqs, err := getFlowCreateRequests(flowRules)
+			Expect(flowReqs).Should(BeNil())
+
+			expectedErr := fmt.Errorf("error getting Spec pattern for flowtype %v : error unable to get VF ID for PCI: 0000:0a:55.1, Err: %v", nil, nil)
+			Expect(err.Error()).Should(Equal(expectedErr.Error()))
+		})
+
+		It("Verify that function will be not able to convert PCI -> VF ID - missing PCI address", func() {
+			action := []*flowconfigv1.FlowAction{
+				{
+					Type: "RTE_FLOW_ACTION_TYPE_VFPCIADDR",
+				},
+			}
+
+			flowRules := &flowconfigv1.FlowRules{
+				Action: action,
+			}
+
+			flowReqs, err := getFlowCreateRequests(flowRules)
+			Expect(err).Should(BeNil())
+			Expect(flowReqs).ShouldNot(BeNil())
+			Expect(flowReqs.PortId).Should(Equal(uint32(0)))
+			Expect(flowReqs.Attr).Should(BeNil())
+			Expect(flowReqs.Pattern).Should(BeNil())
+			Expect(len(flowReqs.Action)).Should(Equal(1))
+			Expect(flowReqs.Action[0].Type).Should(Equal(flow.RteFlowActionType_RTE_FLOW_ACTION_TYPE_VF))
+
+			rteFlowActionTypeVF := &flow.RteFlowActionVf{}
+			err = flowReqs.Action[0].Conf.UnmarshalTo(rteFlowActionTypeVF)
+			Expect(err).ShouldNot(BeNil())
 		})
 	})
 })

@@ -50,9 +50,9 @@ func validate(rules *FlowRules) error {
 	for i, action := range rules.Action {
 		rteFlowAction := new(flow.RteFlowAction)
 
-		val, ok := flow.RteFlowActionType_value[action.Type]
+		val, ok := flow.GetFlowActionType(action.Type)
 		if !ok {
-			return fmt.Errorf("action[%d] invalid: unkown type: %v", i, action.Type)
+			return fmt.Errorf("action[%d] invalid: unknown type: %v", i, action.Type)
 		}
 		actionType := flow.RteFlowActionType(val)
 		rteFlowAction.Type = actionType
