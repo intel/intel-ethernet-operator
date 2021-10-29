@@ -68,6 +68,12 @@ func ipToUint32(ip net.IP) uint32 {
 	if len(ip) == 16 {
 		return binary.BigEndian.Uint32(ip[12:16])
 	}
+
+	// smaller number of bytes passed to converter will leads to runtime error
+	if len(ip) < 3 {
+		return 0
+	}
+
 	return binary.BigEndian.Uint32(ip)
 }
 
