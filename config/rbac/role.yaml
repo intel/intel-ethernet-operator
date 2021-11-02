@@ -22,7 +22,6 @@ rules:
   resources:
   - nodes
   verbs:
-  - get
   - list
   - watch
 - apiGroups:
@@ -43,15 +42,6 @@ rules:
   - deployments/finalizers
   verbs:
   - '*'
-- apiGroups:
-  - apps
-  resources:
-  - deployments
-  verbs:
-  - delete
-  - get
-  - list
-  - watch
 - apiGroups:
   - ethernet.intel.com
   resources:
@@ -131,10 +121,8 @@ rules:
   - nodeflowconfigs/status
   verbs:
   - get
-  - list
   - patch
   - update
-  - watch
 - apiGroups:
   - flowconfig.intel.com
   resources:
@@ -144,20 +132,6 @@ rules:
   - list
   - update
   - watch
-- apiGroups:
-  - flowconfig.intel.com
-  resources:
-  - nodes/finalizers
-  verbs:
-  - update
-- apiGroups:
-  - flowconfig.intel.com
-  resources:
-  - nodes/status
-  verbs:
-  - get
-  - patch
-  - update
 - apiGroups:
   - machineconfiguration.openshift.io
   resources:
