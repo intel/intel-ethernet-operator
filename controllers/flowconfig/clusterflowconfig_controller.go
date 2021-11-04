@@ -6,8 +6,10 @@ package flowconfig
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 
 	"github.com/go-logr/logr"
+	nadClientTypes "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -62,13 +64,15 @@ func (r *ClusterFlowConfigReconciler) Reconcile(ctx context.Context, req ctrl.Re
 
 	err = r.syncClusterConfigForNodes(ctx, instance)
 	if err != nil {
+		cfcLogger.Info("failed:", err)
 		return ctrl.Result{}, err
 	}
+
 	return ctrl.Result{}, nil
 }
 
 func (r *ClusterFlowConfigReconciler) syncClusterConfigForNodes(ctx context.Context, instance *flowconfigv1.ClusterFlowConfig) error {
-
+	cfcLogger := r.Log.WithValues("clusterflowconfig", instance.Namespace)
 	nodeToNodeFlowConfig := make(map[string]*flowconfigv1.NodeFlowConfig) // placeholder for node name to it's NodeFlowConfig API object
 
 	// 1. Get Pod list from PodSelector in ClusterFlowConfig instance
@@ -85,13 +89,16 @@ func (r *ClusterFlowConfigReconciler) syncClusterConfigForNodes(ctx context.Cont
 			if nodeName != "" {
 				nodeFlowConfig, err := r.getNodeFlowConfig(nodeName, nodeToNodeFlowConfig)
 				if err != nil {
-					// Log error
+					cfcLogger.Info("skipping node", nodeName, "due to problems with getting node config:", err)
+					continue
 				}
 
 				// 2.4. Update NodeFlowConfig spec for a given pod from ClusterFlowConfig instance
-				if err := r.updateNodeFlowConfigSpec(pod, nodeFlowConfig, instance); err != nil {
-					// Log error
+				if err := r.updateNodeFlowConfigSpec(&pod, nodeFlowConfig, instance); err != nil {
+					cfcLogger.Info("skipping node", nodeName, "due to problems with updating node config:", err)
+					continue
 				}
+
 				// 2.5. Add NodeFlowConfig to nodeToNodeFlowConfig map for that node
 				nodeToNodeFlowConfig[nodeName] = nodeFlowConfig
 			}
@@ -115,11 +122,11 @@ func (r *ClusterFlowConfigReconciler) getNodeFlowConfig(nodeName string, nodeToN
 		// The namespace is hardcoded for now. We need to get this namespace from Controller manager Pod(prob from ENV).
 		// assuming all NodeFlowConfig objects will be created in that same namespace only.
 		nodeFlowConfigNamespace := "intel-ethernet-operator-system"
-		nameSpcedName := types.NamespacedName{
+		nameSpacedName := types.NamespacedName{
 			Namespace: nodeFlowConfigNamespace,
 			Name:      nodeName,
 		}
-		err := r.Get(context.TODO(), nameSpcedName, nodeFlowConfig)
+		err := r.Get(context.TODO(), nameSpacedName, nodeFlowConfig)
 		if err != nil {
 			if errors.IsNotFound(err) {
 				// 2.3.3. Not found in API server; create a new instance
@@ -130,8 +137,8 @@ func (r *ClusterFlowConfigReconciler) getNodeFlowConfig(nodeName string, nodeToN
 				return nil, err
 			}
 		}
-
 	}
+
 	return nodeFlowConfig, nil
 }
 
@@ -148,14 +155,16 @@ func (r *ClusterFlowConfigReconciler) getPodsForPodSelector(ctx context.Context,
 	if err = r.List(ctx, podList, listOpts...); err != nil {
 		return nil, err
 	}
+
 	return podList, nil
 }
 
-func (r *ClusterFlowConfigReconciler) updateNodeFlowConfigSpec(pod corev1.Pod, nodeFlowConfig *flowconfigv1.NodeFlowConfig, instance *flowconfigv1.ClusterFlowConfig) error {
+func (r *ClusterFlowConfigReconciler) updateNodeFlowConfigSpec(pod *corev1.Pod, nodeFlowConfig *flowconfigv1.NodeFlowConfig, instance *flowconfigv1.ClusterFlowConfig) error {
 
 	if nodeFlowConfig.Spec.Rules == nil {
 		nodeFlowConfig.Spec.Rules = make([]*flowconfigv1.FlowRules, 0)
 	}
+
 	for _, rule := range instance.Spec.Rules {
 		newRule := &flowconfigv1.FlowRules{}
 		newRule.Pattern = rule.DeepCopy().Pattern
@@ -163,50 +172,120 @@ func (r *ClusterFlowConfigReconciler) updateNodeFlowConfigSpec(pod corev1.Pod, n
 		// newRule.PortId = portID // Cannot get portID for now; need to get this based on VF ID in the action
 		newRule.PortId = 0 // Temporary hard-coded value for testing
 
-		actions := r.getNodeActionsFromClusterActions(rule.Action)
+		actions := r.getNodeActionsFromClusterActions(rule.Action, pod)
 		newRule.Action = actions
-
 	}
 
 	return nil // [NEEDS-UPDATE]
 }
 
-// Convert ClusterFlowAction to FlowAction for NodeFlowConfig
-func (r *ClusterFlowConfigReconciler) getNodeActionsFromClusterActions(action []*flowconfigv1.ClusterFlowAction) []*flowconfigv1.FlowAction {
+// Convert ClusterFlowAction to FlowAction for NodeFlowConfig. Returns nil when there are errors in conversion.
+func (r *ClusterFlowConfigReconciler) getNodeActionsFromClusterActions(actions []*flowconfigv1.ClusterFlowAction, pod *corev1.Pod) []*flowconfigv1.FlowAction {
 	nodeActions := make([]*flowconfigv1.FlowAction, 0)
-	for _, act := range action {
-		actType := act.Type
-		_ = act.Conf
+	var isEndActionPresent bool
 
-		nodeAction := &flowconfigv1.FlowAction{}
+	for _, act := range actions {
+		actType := act.Type
+
+		if flowapi.RteFlowActionType(actType) == flowapi.RteFlowActionType_RTE_FLOW_ACTION_TYPE_END {
+			isEndActionPresent = true
+		}
 
 		// If Action Type is custom ClusterFlowConfigAction we convert that to NodeFlowConfigAction and associated 'Conf'
 		if actType.String() == flowconfigv1.ClusterFlowActionToString(flowconfigv1.ToPodInterface) {
-			nodeAction = r.getNodeActionForPodInterface()
-		}
+			var err error
+			var nodeAction *flowconfigv1.FlowAction
+			if nodeAction, err = r.getNodeActionForPodInterface(act.Conf, pod); err != nil {
+				return nil
+			}
 
-		nodeActions = append(nodeActions, nodeAction)
+			nodeActions = append(nodeActions, nodeAction)
+		} else {
+			// convert ClusterFlowAction to FlowAction
+			nodeActions = append(nodeActions, &flowconfigv1.FlowAction{
+				Type: flowapi.RteFlowActionType_name[int32(act.Type)],
+				Conf: act.Conf,
+			})
+		}
 	}
 
-	// append END action at the end of the action list
-	nodeActions = append(nodeActions, &flowconfigv1.FlowAction{
-		Type: flowapi.RteFlowActionType_RTE_FLOW_ACTION_TYPE_END.String(),
-	})
+	// append END action at the end of the action list only when there is at least one action on list and was not present in input list
+	// in other case an empty list is going to be returned
+	if len(nodeActions) > 0 && !isEndActionPresent {
+		nodeActions = append(nodeActions, &flowconfigv1.FlowAction{
+			Type: flowapi.RteFlowActionType_RTE_FLOW_ACTION_TYPE_END.String(),
+		})
+	}
 
 	return nodeActions
 }
 
-func (r *ClusterFlowConfigReconciler) getNodeActionForPodInterface() *flowconfigv1.FlowAction {
+func (r *ClusterFlowConfigReconciler) getNodeActionForPodInterface(conf *runtime.RawExtension, pod *corev1.Pod) (*flowconfigv1.FlowAction, error) {
+	var err error
+	var pciAddr string
+
+	interfaceName, err := getPodInterfaceNameFromRawExtension(conf)
+	if err != nil {
+		return nil, err
+	}
+
+	if pod == nil {
+		return nil, fmt.Errorf("pod object is nil")
+	}
+
+	// verify if POD network annotations have interface name provided within Action
+	podAnnotations, exists := pod.ObjectMeta.Annotations["k8s.v1.cni.cncf.io/network-status"]
+	if !exists {
+		return nil, fmt.Errorf("pod %s does not contains network status", pod.Name)
+	}
+
+	var networks []nadClientTypes.NetworkStatus
+	err = json.Unmarshal([]byte(podAnnotations), &networks)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal data for pod %s with error %s", pod.Name, err)
+	}
+
+	for _, network := range networks {
+		if network.Interface == interfaceName && network.DeviceInfo.Type == "pci" {
+			pciAddr = network.DeviceInfo.Pci.PciAddress
+
+			break
+		}
+	}
+
+	if pciAddr == "" {
+		return nil, fmt.Errorf("pod %s network status does not contains interface %s", pod.Name, interfaceName)
+	}
+
+	// create Action for node config controller with interface PCI address
 	flowAction := &flowconfigv1.FlowAction{
-		Type: flowapi.RteFlowActionType_RTE_FLOW_ACTION_TYPE_VF.String(),
+		Type: flowapi.RTE_FLOW_ACTION_TYPE_VFPCIADDR,
 	}
 
-	vfConf := &flowapi.RteFlowActionVf{Id: 0} // [HARD-CODED value for testing ]
-	if rawBytes, err := json.Marshal(vfConf); err == nil {
-		flowAction.Conf = &runtime.RawExtension{Raw: rawBytes}
+	// marshal PCI address into Conf field
+	vfConf := &flowapi.RteFlowActionVfPciAddr{Addr: pciAddr}
+	rawBytes, err := json.Marshal(vfConf)
+	if err != nil {
+		return nil, err
 	}
 
-	return flowAction
+	flowAction.Conf = &runtime.RawExtension{Raw: rawBytes}
+
+	return flowAction, nil
+}
+
+func getPodInterfaceNameFromRawExtension(conf *runtime.RawExtension) (string, error) {
+	if conf == nil {
+		return "", fmt.Errorf("action configuration is empty")
+	}
+
+	podInterfaceName := &flowconfigv1.ToPodInterfaceConf{}
+
+	if err := json.Unmarshal(conf.Raw, podInterfaceName); err != nil {
+		return "", fmt.Errorf("unable to unmarshal action raw data %v", err)
+	}
+
+	return podInterfaceName.NetInterfaceName, nil
 }
 
 // SetupWithManager sets up the controller with the Manager.

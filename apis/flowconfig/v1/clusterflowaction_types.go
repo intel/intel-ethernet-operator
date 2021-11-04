@@ -18,11 +18,16 @@ type ClusterFlowAction struct {
 	Conf *runtime.RawExtension `json:"conf,omitempty"`
 }
 
+// ToPodInterfaceConf is configuration for type ToPodInterface
+type ToPodInterfaceConf struct {
+	NetInterfaceName string `json:"podInterface,omitempty"`
+}
+
 // +kubebuilder:validation:Type=string
 type ClusterFlowActionType int
 
 const (
-	ToPodInterface ClusterFlowActionType = iota
+	ToPodInterface ClusterFlowActionType = 20000 // number has to greater than last RteFlowItemType_RTE_FLOW_ITEM_TYPE_... defined in flow.pb.go
 )
 
 var clusterFlowActionTypeName = map[ClusterFlowActionType]string{
@@ -59,11 +64,6 @@ func (s *ClusterFlowActionType) UnmarshalJSON(b []byte) error {
 	}
 	*s = v
 	return nil
-}
-
-// ToPodInterfaceConf is configuration for type ToPodInterface
-type ToPodInterfaceConf struct {
-	NetInterfaceName string `json:"podInterface,omitempty"`
 }
 
 // ClusterFlowActionToString returns string represention of ClusterFlowActionType

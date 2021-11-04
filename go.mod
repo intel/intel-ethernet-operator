@@ -8,6 +8,7 @@ require (
 	github.com/jaypipes/ghw v0.8.0
 	github.com/jaypipes/pcidb v0.6.0
 	github.com/k8snetworkplumbingwg/sriov-network-device-plugin v0.0.0-20210505093143-e112960e14df
+	github.com/k8snetworkplumbingwg/network-attachment-definition-client v1.2.0
 	github.com/onsi/ginkgo v1.14.1
 	github.com/onsi/gomega v1.10.2
 	github.com/stretchr/testify v1.7.0

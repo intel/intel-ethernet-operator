@@ -3,6 +3,10 @@
 
 package flow
 
+const (
+	RTE_FLOW_ACTION_TYPE_VFPCIADDR = "RTE_FLOW_ACTION_TYPE_VFPCIADDR"
+)
+
 // RteFlowActionVfPciAddr action provides information about VF PCI address
 type RteFlowActionVfPciAddr struct {
 	Addr string `protobuf:"varint,1,opt,name=addr" json:"addr,omitempty"`
@@ -16,8 +20,8 @@ func GetFlowActionType(actionType string) (int32, bool) {
 	// check user defined action types and convert it to proto defined type
 	if !ok {
 		switch actionType {
-		case "RTE_FLOW_ACTION_TYPE_VFPCIADDR":
-			val, ok = RteFlowActionType_value["RTE_FLOW_ACTION_TYPE_VF"]
+		case RTE_FLOW_ACTION_TYPE_VFPCIADDR:
+			val, ok = RteFlowActionType_value[RteFlowActionType_name[int32(RteFlowActionType_RTE_FLOW_ACTION_TYPE_VF)]]
 		}
 	}
 

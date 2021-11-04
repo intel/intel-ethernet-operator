@@ -39,6 +39,8 @@ var (
 	mockDCF               *mock.FlowServiceClient
 	nodeFlowConfigRc      *NodeFlowConfigReconciler
 	nodeAgentDeploymentRc *FlowConfigNodeAgentDeploymentReconciler
+	clusterFlowConfigRc   *ClusterFlowConfigReconciler
+	metricsAddr           = ":38080"
 )
 
 func TestAPIs(t *testing.T) {
@@ -100,8 +102,15 @@ var _ = BeforeSuite(func() {
 		Log:    ctrl.Log.WithName("controllers").WithName("NodeAgentDeployment"),
 		Scheme: k8sManager.GetScheme(),
 	}
-
 	err = nodeAgentDeploymentRc.SetupWithManager(k8sManager)
+	Expect(err).ToNot(HaveOccurred())
+
+	clusterFlowConfigRc = &ClusterFlowConfigReconciler{
+		Client: k8sManager.GetClient(),
+		Log:    ctrl.Log.WithName("controllers").WithName("ClusterFlowConfig"),
+		Scheme: k8sManager.GetScheme(),
+	}
+	err = clusterFlowConfigRc.SetupWithManager(k8sManager)
 	Expect(err).ToNot(HaveOccurred())
 
 	// Start manager
