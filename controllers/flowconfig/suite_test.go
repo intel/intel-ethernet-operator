@@ -40,7 +40,6 @@ var (
 	nodeFlowConfigRc      *NodeFlowConfigReconciler
 	nodeAgentDeploymentRc *FlowConfigNodeAgentDeploymentReconciler
 	clusterFlowConfigRc   *ClusterFlowConfigReconciler
-	metricsAddr           = ":38080"
 )
 
 func TestAPIs(t *testing.T) {
