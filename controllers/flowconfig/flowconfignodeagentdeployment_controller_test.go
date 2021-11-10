@@ -620,9 +620,10 @@ var _ = Describe("FlowConfigNodeAgentDeployment controller", func() {
 			})
 		})
 
-		// Disabling test for now - testing framework does not support garbage collection in case of OwnerReferences
-		// https://book.kubebuilder.io/reference/envtest.html#testing-considerations
-		XContext("Verify if controller correctly cleanups nodes", func() {
+		// Testing framework does not support garbage collection in envtest.
+		// Following https://book.kubebuilder.io/reference/envtest.html#testing-considerations
+		// user should test OwnerReferences to confirm that object belongs to controller
+		Context("Verify if controller correctly cleanups nodes", func() {
 			It("Delete custom resources, expected that controller will delete POD on each node", func() {
 				node := createNode(nodeName1, func(node *corev1.Node) {
 					node.Status.Capacity = make(map[corev1.ResourceName]resource.Quantity)
@@ -647,16 +648,35 @@ var _ = Describe("FlowConfigNodeAgentDeployment controller", func() {
 					Name:      fmt.Sprintf("flowconfig-daemon-%s", nodeName1),
 					Namespace: namespaceDefault}, pod)
 				Expect(err).To(BeNil())
-
 				Expect(pod.Name).Should(Equal(fmt.Sprintf("flowconfig-daemon-%s", nodeName1)))
 
-				By("Delete CR and check if POD still exists")
-				deleteFlowConfigNodeAgentDeployment(namespaceDefault)
+				instance := &flowconfigv1.FlowConfigNodeAgentDeployment{}
+				err = k8sClient.Get(context.Background(), client.ObjectKey{
+					Name:      "flowconfig-daemon-flowconfig-daemon",
+					Namespace: "default"}, instance)
+				Expect(err).To(BeNil())
 
-				Eventually(func() bool {
-					err := WaitForPodCreation(k8sClient, fmt.Sprintf("flowconfig-daemon-%s", nodeName1), namespaceDefault, timeout/2, interval)
-					return err != nil
-				}).Should(BeTrue())
+				By("Create expected OwnerReferences")
+				state := bool(true)
+				expectedOwnerReference := metav1.OwnerReference{
+					Kind:               "FlowConfigNodeAgentDeployment",
+					APIVersion:         "flowconfig.intel.com/v1",
+					Name:               instance.ObjectMeta.Name,
+					UID:                instance.ObjectMeta.UID,
+					Controller:         &state,
+					BlockOwnerDeletion: &state,
+				}
+
+				By("Delete CR and check POD references - POD will be not deleted due to envtest constraints")
+				deleteFlowConfigNodeAgentDeployment(namespaceDefault)
+				defer deletePod(fmt.Sprintf("flowconfig-daemon-%s", nodeName1), namespaceDefault)
+
+				time.Sleep(1 * time.Second)
+				err = k8sClient.Get(context.Background(), client.ObjectKey{
+					Name:      fmt.Sprintf("flowconfig-daemon-%s", nodeName1),
+					Namespace: namespaceDefault}, pod)
+				Expect(err).To(BeNil())
+				Expect(pod.ObjectMeta.OwnerReferences).To(ContainElement(expectedOwnerReference))
 			})
 		})
 	})
