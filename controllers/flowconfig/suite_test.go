@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math/rand"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -38,6 +39,7 @@ var (
 	mockDCF               *mock.FlowServiceClient
 	nodeFlowConfigRc      *NodeFlowConfigReconciler
 	nodeAgentDeploymentRc *FlowConfigNodeAgentDeploymentReconciler
+	managerMutex          = sync.Mutex{}
 )
 
 func TestAPIs(t *testing.T) {
@@ -69,6 +71,9 @@ var _ = BeforeSuite(func() {
 
 	r1 := rand.New(rand.NewSource(time.Now().UnixNano()))
 	var metricsAddr = fmt.Sprintf(":%d", (r1.Intn(100) + 38080))
+
+	managerMutex.Lock()
+
 	k8sManager, err := ctrl.NewManager(cfg, ctrl.Options{
 		Scheme:             scheme.Scheme,
 		MetricsBindAddress: metricsAddr,
@@ -100,16 +105,22 @@ var _ = BeforeSuite(func() {
 	err = nodeAgentDeploymentRc.SetupWithManager(k8sManager)
 	Expect(err).ToNot(HaveOccurred())
 
-	// Start manager
-	go func() {
-		defer GinkgoRecover()
-		err := k8sManager.Start(ctrl.SetupSignalHandler())
-		Expect(err).ToNot(HaveOccurred())
-	}()
-
 	k8sClient, err = client.New(cfg, client.Options{Scheme: k8sManager.GetScheme()})
 	Expect(err).NotTo(HaveOccurred())
 	Expect(k8sClient).NotTo(BeNil())
+
+	managerMutex.Unlock()
+
+	// Start manager
+	go func() {
+		defer GinkgoRecover()
+
+		managerMutex.Lock()
+		defer managerMutex.Unlock()
+
+		err := k8sManager.Start(ctrl.SetupSignalHandler())
+		Expect(err).ToNot(HaveOccurred())
+	}()
 }, 60)
 
 var _ = AfterSuite(func() {
