@@ -680,6 +680,48 @@ var _ = Describe("FlowConfigNodeAgentDeployment controller", func() {
 		})
 	})
 
+	Context("Verify if controller correctly handles changes within cluster", func() {
+		It("Add node to cluster", func() {
+			node := createNode(nodeName1, func(node *corev1.Node) {
+				node.Status.Capacity = make(map[corev1.ResourceName]resource.Quantity)
+				node.Status.Capacity[vfPoolName] = *resource.NewQuantity(1, resource.DecimalSI)
+			})
+			defer deleteNode(node)
+
+			By("Create custom resource")
+			Eventually(func() bool {
+				err := k8sClient.Create(context.Background(),
+					getFlowConfigNodeAgentDeployment(namespaceDefault, func(flow *flowconfigv1.FlowConfigNodeAgentDeployment) {
+						flow.Spec.DCFVfPoolName = vfPoolName
+						flow.Spec.NADAnnotation = "flowconfig-daemon-sriov-cvl0-admin"
+					}))
+				return err == nil
+			}, timeout, interval).Should(BeTrue())
+			defer deletePod(fmt.Sprintf("flowconfig-daemon-%s", nodeName1), namespaceDefault)
+			defer deletePod(fmt.Sprintf("flowconfig-daemon-%s", nodeName2), namespaceDefault)
+			defer deleteFlowConfigNodeAgentDeployment(namespaceDefault)
+
+			By("Verify if POD was created")
+			verifyExpectedPODDefintion(namespaceDefault, fmt.Sprintf("flowconfig-daemon-%s", nodeName1), nodeName1,
+				"flowconfig-daemon-sriov-cvl0-admin", vfPoolName, 0, 1)
+
+			By("Verify that there is no second POD")
+			err := WaitForPodCreation(k8sClient, fmt.Sprintf("flowconfig-daemon-%s", nodeName2), namespaceDefault, timeout, interval)
+			Expect(err).ToNot(BeNil())
+
+			By("Create second node in cluster")
+			node2 := createNode(nodeName2, func(node *corev1.Node) {
+				node.Status.Capacity = make(map[corev1.ResourceName]resource.Quantity)
+				node.Status.Capacity[vfPoolName] = *resource.NewQuantity(1, resource.DecimalSI)
+			})
+			defer deleteNode(node2)
+
+			By("Verify that for second node a corresponding POD was created")
+			verifyExpectedPODDefintion(namespaceDefault, fmt.Sprintf("flowconfig-daemon-%s", nodeName2), nodeName2,
+				"flowconfig-daemon-sriov-cvl0-admin", vfPoolName, 0, 1)
+		})
+	})
+
 	Context("Explicit function call", func() {
 		It("getPodTemplate() - missing file with POD template", func() {
 			podTemplatePath, err := filepath.Abs(podTemplateFile)

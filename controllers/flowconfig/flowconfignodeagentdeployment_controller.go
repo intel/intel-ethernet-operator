@@ -17,10 +17,16 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/event"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	flowconfigv1 "github.com/otcshare/intel-ethernet-operator/apis/flowconfig/v1"
 )
@@ -223,6 +229,64 @@ func (r *FlowConfigNodeAgentDeploymentReconciler) getNodeResources(node corev1.N
 	return numResources
 }
 
+func (r *FlowConfigNodeAgentDeploymentReconciler) mapNodesToRequests(object client.Object) []reconcile.Request {
+	resLogger := r.Log.WithName("flowconfignodeagentdeployment")
+
+	// get all instances of CRs and create for each an event
+	crList := &flowconfigv1.FlowConfigNodeAgentDeploymentList{}
+	err := r.Client.List(context.Background(), crList)
+	if err != nil {
+		resLogger.Info("unable to list custom resources", err)
+		return []reconcile.Request{}
+	}
+
+	reconcileRequests := make([]reconcile.Request, 0)
+	for _, instance := range crList.Items {
+		reconcileRequests = append(reconcileRequests, reconcile.Request{
+			NamespacedName: types.NamespacedName{
+				Name:      instance.Name,
+				Namespace: instance.Namespace,
+			},
+		})
+	}
+
+	return reconcileRequests
+}
+
+func (r *FlowConfigNodeAgentDeploymentReconciler) getNodeFilterPredicates() predicate.Predicate {
+	pred := predicate.Funcs{
+		// Create returns true if the Create event should be processed
+		CreateFunc: func(e event.CreateEvent) bool {
+			return true
+		},
+
+		// Delete returns true if the Delete event should be processed
+		DeleteFunc: func(e event.DeleteEvent) bool {
+			if _, ok := e.Object.(*corev1.Node); ok {
+				return false
+			}
+
+			return true
+		},
+
+		// Update returns true if the Update event should be processed
+		UpdateFunc: func(e event.UpdateEvent) bool {
+			if _, ok := e.ObjectNew.(*corev1.Node); ok {
+				return false
+			}
+
+			return true
+		},
+
+		// Generic returns true if the Generic event should be processed
+		GenericFunc: func(e event.GenericEvent) bool {
+			return true
+		},
+	}
+
+	return pred
+}
+
 func (r *FlowConfigNodeAgentDeploymentReconciler) getPodTemplate() (*corev1.Pod, error) {
 	filename, _ := filepath.Abs(podTemplateFile)
 	spec, err := ioutil.ReadFile(filename)
@@ -258,5 +322,10 @@ func (r *FlowConfigNodeAgentDeploymentReconciler) SetupWithManager(mgr ctrl.Mana
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&flowconfigv1.FlowConfigNodeAgentDeployment{}).
 		Owns(&corev1.Pod{}).
+		Watches(
+			&source.Kind{Type: &corev1.Node{}},
+			handler.EnqueueRequestsFromMapFunc(r.mapNodesToRequests),
+		).
+		WithEventFilter(r.getNodeFilterPredicates()).
 		Complete(r)
 }
