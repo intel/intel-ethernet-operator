@@ -182,14 +182,9 @@ func (r *ClusterFlowConfigReconciler) updateNodeFlowConfigSpec(pod *corev1.Pod, 
 // Convert ClusterFlowAction to FlowAction for NodeFlowConfig. Returns nil when there are errors in conversion.
 func (r *ClusterFlowConfigReconciler) getNodeActionsFromClusterActions(actions []*flowconfigv1.ClusterFlowAction, pod *corev1.Pod) []*flowconfigv1.FlowAction {
 	nodeActions := make([]*flowconfigv1.FlowAction, 0)
-	var isEndActionPresent bool
 
 	for _, act := range actions {
 		actType := act.Type
-
-		if flowapi.RteFlowActionType(actType) == flowapi.RteFlowActionType_RTE_FLOW_ACTION_TYPE_END {
-			isEndActionPresent = true
-		}
 
 		// If Action Type is custom ClusterFlowConfigAction we convert that to NodeFlowConfigAction and associated 'Conf'
 		if actType.String() == flowconfigv1.ClusterFlowActionToString(flowconfigv1.ToPodInterface) {
@@ -209,9 +204,9 @@ func (r *ClusterFlowConfigReconciler) getNodeActionsFromClusterActions(actions [
 		}
 	}
 
-	// append END action at the end of the action list only when there is at least one action on list and was not present in input list
+	// append END action at the end of the action list only when there is at least one action on list
 	// in other case an empty list is going to be returned
-	if len(nodeActions) > 0 && !isEndActionPresent {
+	if len(nodeActions) > 0 {
 		nodeActions = append(nodeActions, &flowconfigv1.FlowAction{
 			Type: flowapi.RteFlowActionType_RTE_FLOW_ACTION_TYPE_END.String(),
 		})

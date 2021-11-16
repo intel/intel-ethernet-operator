@@ -66,23 +66,8 @@ var _ = Describe("Cluster Flow Config Controller tests", func() {
 		},
 			Entry("nil input", nil, nil, []*flowconfigv1.FlowAction{}),
 			Entry("empty input", []*flowconfigv1.ClusterFlowAction{}, nil, []*flowconfigv1.FlowAction{}),
-			Entry("input one end action, output one end action",
-				createClusterFlowAction([]flowconfigv1.ClusterFlowActionType{flowconfigv1.ClusterFlowActionType(flowapi.RteFlowActionType_RTE_FLOW_ACTION_TYPE_END)}),
-				nil,
-				[]*flowconfigv1.FlowAction{
-					&flowconfigv1.FlowAction{Type: flowapi.RteFlowActionType_RTE_FLOW_ACTION_TYPE_END.String()}},
-			),
 			Entry("input one action without end, output action with one end action",
 				createClusterFlowAction([]flowconfigv1.ClusterFlowActionType{flowconfigv1.ClusterFlowActionType(flowapi.RteFlowActionType_RTE_FLOW_ACTION_TYPE_DROP)}),
-				nil,
-				[]*flowconfigv1.FlowAction{
-					&flowconfigv1.FlowAction{Type: flowapi.RteFlowActionType_RTE_FLOW_ACTION_TYPE_DROP.String()},
-					&flowconfigv1.FlowAction{Type: flowapi.RteFlowActionType_RTE_FLOW_ACTION_TYPE_END.String()}},
-			),
-			Entry("any action with end action, output action with one end action",
-				createClusterFlowAction([]flowconfigv1.ClusterFlowActionType{
-					flowconfigv1.ClusterFlowActionType(flowapi.RteFlowActionType_RTE_FLOW_ACTION_TYPE_DROP),
-					flowconfigv1.ClusterFlowActionType(flowapi.RteFlowActionType_RTE_FLOW_ACTION_TYPE_END)}),
 				nil,
 				[]*flowconfigv1.FlowAction{
 					&flowconfigv1.FlowAction{Type: flowapi.RteFlowActionType_RTE_FLOW_ACTION_TYPE_DROP.String()},
