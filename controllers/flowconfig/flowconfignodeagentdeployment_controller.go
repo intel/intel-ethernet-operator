@@ -6,9 +6,13 @@ package flowconfig
 import (
 	"context"
 	"fmt"
+	"io/ioutil"
+	"path/filepath"
 	"time"
 
 	"github.com/go-logr/logr"
+	"sigs.k8s.io/yaml"
+
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -27,12 +31,18 @@ type FlowConfigNodeAgentDeploymentReconciler struct {
 	Log    logr.Logger
 	Scheme *runtime.Scheme
 
-	oldDCFVfPoolName corev1.ResourceName
-	oldNADAnnotation string
+	oldDCFVfPoolName  corev1.ResourceName
+	oldNADAnnotation  string
+	flowConfigPod     *corev1.Pod
+	uftContainerIndex int
 }
 
-const networkAnnotation = "k8s.v1.cni.cncf.io/networks"
-const nodeLabel = "kubernetes.io/hostname"
+const (
+	networkAnnotation = "k8s.v1.cni.cncf.io/networks"
+	nodeLabel         = "kubernetes.io/hostname"
+	uftContainerName  = "uft"
+	podTemplateFile   = "../../assets/flowconfig-daemon/daemon.yaml"
+)
 
 //+kubebuilder:rbac:groups=flowconfig.intel.com,resources=flowconfignodeagentdeployments,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=flowconfig.intel.com,resources=flowconfignodeagentdeployments/status,verbs=get;update;patch
@@ -57,20 +67,6 @@ func (r *FlowConfigNodeAgentDeploymentReconciler) Reconcile(ctx context.Context,
 		return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
 	}
 
-	var uftContainerIndex int
-	var uftPresent bool
-	for container := range instance.Spec.Template.Spec.Containers {
-		if instance.Spec.Template.Spec.Containers[container].Name == "uft" {
-			uftContainerIndex = container
-			uftPresent = true
-		}
-	}
-
-	if !uftPresent {
-		reqLogger.Info("ERROR: uft container not found in podSpec, no pods will be created")
-		return ctrl.Result{}, nil
-	}
-
 	vfPoolName := corev1.ResourceName(instance.Spec.DCFVfPoolName)
 
 	nodes := &corev1.NodeList{}
@@ -93,9 +89,9 @@ func (r *FlowConfigNodeAgentDeploymentReconciler) Reconcile(ctx context.Context,
 		if err != nil {
 			// if POD does not exists on NODE - create it
 			if errors.IsNotFound(err) {
-				err = r.CreatePod(instance, node, vfPoolName, uftContainerIndex)
+				err = r.CreatePod(r.flowConfigPod, instance, node, vfPoolName, r.uftContainerIndex)
 				if err != nil {
-					reqLogger.Info("Failed to create POD on node %s with error %v", node.Name, err)
+					reqLogger.Info("Failed to create POD on node with error", node.Name, err)
 				}
 			} else {
 				reqLogger.Info("Error getting pod instance on node %s with error %v", node.Name, err)
@@ -103,7 +99,7 @@ func (r *FlowConfigNodeAgentDeploymentReconciler) Reconcile(ctx context.Context,
 		} else {
 			// POD exists, verify if has still the same resources or update is needed
 			if r.oldDCFVfPoolName != vfPoolName || r.oldNADAnnotation != instance.Spec.NADAnnotation { // pool name of NAD annotation has been changed
-				if _, exists := pod.Spec.Containers[uftContainerIndex].Resources.Limits[r.oldDCFVfPoolName]; exists {
+				if _, exists := pod.Spec.Containers[r.uftContainerIndex].Resources.Limits[r.oldDCFVfPoolName]; exists {
 					// delete POD, and let the next reconciliation iteration do the creation job
 					err = r.Client.Delete(context.TODO(), pod)
 					if err != nil {
@@ -126,16 +122,17 @@ func (r *FlowConfigNodeAgentDeploymentReconciler) Reconcile(ctx context.Context,
 	return ctrl.Result{}, nil
 }
 
-func (r *FlowConfigNodeAgentDeploymentReconciler) CreatePod(instance *flowconfigv1.FlowConfigNodeAgentDeployment, node corev1.Node, vfPoolName corev1.ResourceName, uftContainerIndex int) error {
+func (r *FlowConfigNodeAgentDeploymentReconciler) CreatePod(templatePod *corev1.Pod, instance *flowconfigv1.FlowConfigNodeAgentDeployment, node corev1.Node, vfPoolName corev1.ResourceName, uftContainerIndex int) error {
 	podLogger := r.Log.WithName("flowconfignodeagentdeployment")
-	numResources := r.getNodeResources(node, vfPoolName.String())
 
+	numResources := r.getNodeResources(node, vfPoolName.String())
 	if numResources == 0 {
 		podLogger.Info("No resources present on node")
 		return nil
 	}
+
 	pod := &corev1.Pod{}
-	pod.Spec = instance.Spec.Template.Spec
+	pod.Spec = templatePod.Spec
 	podName := "flowconfig-daemon-"
 
 	pod.ObjectMeta.Name = podName
@@ -148,7 +145,7 @@ func (r *FlowConfigNodeAgentDeploymentReconciler) CreatePod(instance *flowconfig
 	pod.Spec.NodeSelector[nodeLabel] = node.Name
 	pod.Name += node.Name
 
-	uftContainer := instance.Spec.Template.Spec.Containers[uftContainerIndex]
+	uftContainer := templatePod.Spec.Containers[uftContainerIndex]
 
 	annotation := r.addAnnotations(numResources, instance)
 
@@ -179,6 +176,7 @@ func (r *FlowConfigNodeAgentDeploymentReconciler) CreatePod(instance *flowconfig
 }
 
 func (r *FlowConfigNodeAgentDeploymentReconciler) addAnnotations(numResources int64, instance *flowconfigv1.FlowConfigNodeAgentDeployment) string {
+
 	var annotation string
 	for i := int64(1); i <= numResources; i++ {
 		annotation += instance.Spec.NADAnnotation
@@ -225,7 +223,38 @@ func (r *FlowConfigNodeAgentDeploymentReconciler) getNodeResources(node corev1.N
 	return numResources
 }
 
+func (r *FlowConfigNodeAgentDeploymentReconciler) getPodTemplate() (*corev1.Pod, error) {
+	filename, _ := filepath.Abs(podTemplateFile)
+	spec, err := ioutil.ReadFile(filename)
+	if err != nil {
+		return nil, fmt.Errorf("error reading %s file: %v", podTemplateFile, err)
+	}
+
+	pod := &corev1.Pod{}
+	err = yaml.Unmarshal(spec, &pod)
+
+	var uftPresent bool
+	for container := range pod.Spec.Containers {
+		if pod.Spec.Containers[container].Name == uftContainerName {
+			r.uftContainerIndex = container
+			uftPresent = true
+		}
+	}
+
+	if !uftPresent {
+		return nil, fmt.Errorf("uft container not found in podSpec, pod definition is invalid")
+	}
+
+	return pod, err
+}
+
+// SetupWithManager sets up the controller with the Manager.
 func (r *FlowConfigNodeAgentDeploymentReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	var err error
+	if r.flowConfigPod, err = r.getPodTemplate(); err != nil {
+		return err
+	}
+
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&flowconfigv1.FlowConfigNodeAgentDeployment{}).
 		Owns(&corev1.Pod{}).

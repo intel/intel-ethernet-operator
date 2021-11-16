@@ -2,17 +2,14 @@
 # Copyright (c) 2021 Intel Corporation
 
 apiVersion: apps/v1
-kind: DaemonSet
+kind: Pod
 metadata:
   name: flowconfig-daemon
   namespace: system
+  labels:
+    name: flowconfig-daemon
 spec:
-  template:
-    metadata:
-      labels:
-        name: flowconfig-daemon
-    spec:
-      containers:
-        - name: flowconfig-daemon
-          securityContext:
-            privileged: true
+  containers:
+    - name: flowconfig-daemon
+      securityContext:
+        privileged: true

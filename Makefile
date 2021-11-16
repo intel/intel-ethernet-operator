@@ -12,10 +12,10 @@ TLS_VERIFY ?= false
 # - use environment variables to overwrite this value (e.g export VERSION=0.0.2)
 VERSION ?= 0.0.1
 
-# Set default K8CLI tool to 'kubectl' if it's not defined. To change this you can export this in env. e.g., export K8CLI=oc
+# Set default K8CLI tool to 'oc' if it's not defined. To change this you can export this in env. e.g., export K8CLI=kubectl
 K8CLI ?= oc
 
-# Set default IMGTOOL tool to 'docker' if it's not defined. To change this you can export this in env. e.g., export IMGTOOL=podman
+# Set default IMGTOOL tool to 'podman' if it's not defined. To change this you can export this in env. e.g., export IMGTOOL=docker
 IMGTOOL ?= podman
 
 # CHANNELS define the bundle channels used in the bundle.
@@ -92,10 +92,10 @@ ifdef HTTPS_PROXY
 	DOCKERARGS += --build-arg https_proxy=${HTTPS_PROXY}
 endif
 
-# Setting SHELL to bash allows bash commands to be executed by recipes. 
-# This is a requirement for 'setup-envtest.sh' in the test target. 
-# Options are set to exit when a recipe line exits non-zero or a piped command fails. 
-SHELL = /usr/bin/env bash -o pipefail 
+# Setting SHELL to bash allows bash commands to be executed by recipes.
+# This is a requirement for 'setup-envtest.sh' in the test target.
+# Options are set to exit when a recipe line exits non-zero or a piped command fails.
+SHELL = /usr/bin/env bash -o pipefail
 .SHELLFLAGS = -ec
 
 all: build daemon flowconfig-daemon
@@ -207,12 +207,11 @@ uninstall: manifests kustomize ## Uninstall CRDs from the K8s cluster specified 
 deploy: manifests flowconfig-manifests kustomize ## Deploy controller to the K8s cluster specified in ~/.kube/config.
 	cd config/manager && $(KUSTOMIZE) edit set image controller=${ETHERNET_MANAGER_IMAGE}
 	$(KUSTOMIZE) build config/default | envsubst | $(K8CLI) apply -f -
-	$(K8CLI) apply -f assets/flowconfig-daemon/daemon.yaml
+	$(K8CLI) apply -f config/flowconfig-daemon/add_flowconfigdaemon.yaml
+	$(K8CLI) apply -f config/flowconfig-daemon/sriov_nad.yaml
 
 undeploy: ## Undeploy controller from the K8s cluster specified in ~/.kube/config.
-	$(K8CLI) delete -f assets/flowconfig-daemon/daemon.yaml
 	$(KUSTOMIZE) build config/default | $(K8CLI) delete -f -
-
 
 CONTROLLER_GEN = $(shell pwd)/bin/controller-gen
 controller-gen: ## Download controller-gen locally if necessary.

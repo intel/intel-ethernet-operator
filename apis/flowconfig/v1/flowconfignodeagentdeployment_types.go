@@ -4,7 +4,6 @@
 package v1
 
 import (
-	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -19,8 +18,7 @@ type FlowConfigNodeAgentDeploymentSpec struct {
 	// NADAnnotation is the name reference to Network Attachement Definition required by UFT container
 	NADAnnotation string `json:"NADAnnotation,omitempty"`
 	// DCFVfPoolName is the name reference to CVL admin VF pool
-	DCFVfPoolName string                  `json:"DCFVfPoolName,omitempty"`
-	Template      *corev1.PodTemplateSpec `json:"template,omitempty"`
+	DCFVfPoolName string `json:"DCFVfPoolName,omitempty"`
 }
 
 // FlowConfigNodeAgentDeploymentStatus defines the observed state of FlowConfigNodeAgentDeployment

@@ -1,89 +1,72 @@
 # SPDX-License-Identifier: Apache-2.0
 # Copyright (c) 2021 Intel Corporation
 
-apiVersion: flowconfig.intel.com/v1
-kind: FlowConfigNodeAgentDeployment
+apiVersion: apps/v1
+kind: Pod
 metadata:
   labels:
     control-plane: flowconfig-daemon
-  name: flowconfig-daemon-flowconfig-daemon
+  name: flowconfig-daemon
   namespace: intel-ethernet-operator-system
 spec:
-  DCFVfPoolName: intel.com/cvl_uft_admin
-  NADAnnotation: flowconfig-daemon-sriov-cvl0-admin
-  template:
-    metadata:
-      labels:
-        control-plane: flowconfig-daemon
-    spec:
-      containers:
-      - args:
-        - /entrypoint.sh
-        command:
-        - /bin/bash
-        - -c
-        - --
-        env:
-        - name: PYTHONUNBUFFERED
-          value: "1"
-        - name: PYTHONIOENCODING
-          value: UTF-8
-        image: dcf-tool:v21.08
-        imagePullPolicy: Never
-        name: uft
-        resources:
-          limits:
-            hugepages-2Mi: 2Gi
-            memory: 200Mi
-          requests:
-            hugepages-2Mi: 2Gi
-            memory: 200Mi
-        securityContext:
-          capabilities:
-            add:
-            - IPC_LOCK
-            - SYS_NICE
-        volumeMounts:
-        - mountPath: /dev/hugepages
-          name: hugepage
-        - mountPath: /lib/firmware/updates/intel/ice/ddp
-          name: iceddp
-      - command:
-        - /flowconfig-daemon
-        env:
-        - name: WATCH_NAMESPACE
-          valueFrom:
-            fieldRef:
-              fieldPath: metadata.namespace
-        - name: NODE_NAME
-          valueFrom:
-            fieldRef:
-              fieldPath: spec.nodeName
-        image: intel-ethernet-operator-flowconfig-daemon:0.0.1
-        name: flowconfig-daemon
-        resources:
-          limits:
-            cpu: 100m
-            memory: 30Mi
-          requests:
-            cpu: 100m
-            memory: 20Mi
-      serviceAccountName: intel-ethernet-operator-controller-manager
-      terminationGracePeriodSeconds: 10
-      volumes:
-      - emptyDir:
-          medium: HugePages
-        name: hugepage
-      - hostPath:
-          path: /lib/firmware/updates/intel/ice/ddp/
-        name: iceddp
----
-apiVersion: k8s.cni.cncf.io/v1
-kind: NetworkAttachmentDefinition
-metadata:
-  annotations:
-    k8s.v1.cni.cncf.io/resourceName: intel.com/cvl_uft_admin
-  name: flowconfig-daemon-sriov-cvl0-admin
-  namespace: intel-ethernet-operator-system
-spec:
-  config: '{ "type": "sriov", "cniVersion": "0.3.1", "name": "sriov-network", "trust": "on" }'
+  containers:
+  - args:
+    - /entrypoint.sh
+    command:
+    - /bin/bash
+    - -c
+    - --
+    env:
+    - name: PYTHONUNBUFFERED
+      value: "1"
+    - name: PYTHONIOENCODING
+      value: UTF-8
+    image: dcf-tool:v21.08
+    imagePullPolicy: Never
+    name: uft
+    resources:
+      limits:
+        hugepages-2Mi: 2Gi
+        memory: 200Mi
+      requests:
+        hugepages-2Mi: 2Gi
+        memory: 200Mi
+    securityContext:
+      capabilities:
+        add:
+        - IPC_LOCK
+        - SYS_NICE
+    volumeMounts:
+    - mountPath: /dev/hugepages
+      name: hugepage
+    - mountPath: /lib/firmware/updates/intel/ice/ddp
+      name: iceddp
+  - command:
+    - /flowconfig-daemon
+    env:
+    - name: WATCH_NAMESPACE
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.namespace
+    - name: NODE_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: spec.nodeName
+    image: intel-ethernet-operator-flowconfig-daemon:0.0.1
+    name: flowconfig-daemon
+    resources:
+      limits:
+        cpu: 100m
+        memory: 30Mi
+      requests:
+        cpu: 100m
+        memory: 20Mi
+  serviceAccountName: intel-ethernet-operator-controller-manager
+  terminationGracePeriodSeconds: 10
+  volumes:
+  - emptyDir:
+      medium: HugePages
+    name: hugepage
+  - hostPath:
+      path: /lib/firmware/updates/intel/ice/ddp/
+    name: iceddp

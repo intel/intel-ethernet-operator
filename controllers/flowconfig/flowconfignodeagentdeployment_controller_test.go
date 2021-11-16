@@ -4,8 +4,12 @@
 package flowconfig
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"io/ioutil"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -115,7 +119,6 @@ var _ = Describe("FlowConfigNodeAgentDeployment controller", func() {
 	}
 
 	getFlowConfigNodeAgentDeployment := func(namespace string, configurers ...func(flow *flowconfigv1.FlowConfigNodeAgentDeployment)) *flowconfigv1.FlowConfigNodeAgentDeployment {
-		var graceTime int64 = 0
 		nodeAgent := &flowconfigv1.FlowConfigNodeAgentDeployment{
 			TypeMeta: metav1.TypeMeta{
 				APIVersion: "flowconfig.intel.com/v1",
@@ -126,23 +129,7 @@ var _ = Describe("FlowConfigNodeAgentDeployment controller", func() {
 				Namespace: namespace,
 				Labels:    map[string]string{"control-plane": "flowconfig-daemon"},
 			},
-			Spec: flowconfigv1.FlowConfigNodeAgentDeploymentSpec{
-				Template: &corev1.PodTemplateSpec{
-					ObjectMeta: metav1.ObjectMeta{
-						Labels: map[string]string{"control-plane": "flowconfig-daemon"},
-					},
-					Spec: corev1.PodSpec{
-						TerminationGracePeriodSeconds: &graceTime,
-						Containers: []corev1.Container{
-							{
-								Name:    "uft",
-								Image:   "docker.io/alpine",
-								Command: []string{"/bin/sh", "-c", "sleep INF"},
-							},
-						},
-					},
-				},
-			},
+			Spec: flowconfigv1.FlowConfigNodeAgentDeploymentSpec{},
 		}
 
 		for _, configure := range configurers {
@@ -336,12 +323,6 @@ var _ = Describe("FlowConfigNodeAgentDeployment controller", func() {
 						getFlowConfigNodeAgentDeployment(namespaceDefault, func(flow *flowconfigv1.FlowConfigNodeAgentDeployment) {
 							flow.Spec.DCFVfPoolName = vfPoolName
 							flow.Spec.NADAnnotation = "flowconfig-daemon-sriov-cvl0-admin"
-							containerToAdd := corev1.Container{
-								Name:    "ble",
-								Image:   "docker.io/alpine",
-								Command: []string{"/bin/sh", "-c", "sleep INF"},
-							}
-							flow.Spec.Template.Spec.Containers = append(flow.Spec.Template.Spec.Containers, containerToAdd)
 						}))
 					return err == nil
 				}, timeout, interval).Should(BeTrue())
@@ -350,8 +331,24 @@ var _ = Describe("FlowConfigNodeAgentDeployment controller", func() {
 
 				verifyExpectedPODDefintion(namespaceDefault, fmt.Sprintf("flowconfig-daemon-%s", nodeName1), nodeName1,
 					"flowconfig-daemon-sriov-cvl0-admin", vfPoolName, 0, 1, func(pod *corev1.Pod) {
-						Expect(pod.Spec.Containers[1].Resources.Limits).To(BeNil())
-						Expect(pod.Spec.Containers[1].Resources.Requests).To(BeNil())
+						limitsList := corev1.ResourceList{}
+						limitsList["memory"] = *resource.NewQuantity(209715200, resource.BinarySI)
+						Expect(pod.Spec.Containers[0].Resources.Limits).ToNot(BeNil())
+						Expect(pod.Spec.Containers[0].Resources.Limits).To(HaveLen(3))
+						Expect(pod.Spec.Containers[0].Resources.Limits).To(HaveKeyWithValue(corev1.ResourceName("memory"),
+							MatchQuantityObject(*resource.NewQuantity(209715200, resource.BinarySI))))
+						Expect(pod.Spec.Containers[0].Resources.Limits).To(HaveKeyWithValue(corev1.ResourceName("hugepages-2Mi"),
+							MatchQuantityObject(*resource.NewQuantity(2147483648, resource.BinarySI))))
+						Expect(pod.Spec.Containers[0].Resources.Limits).To(HaveKeyWithValue(corev1.ResourceName("intel.com/cvl_uft_admin"),
+							MatchQuantityObject(*resource.NewQuantity(1, resource.DecimalSI))))
+						Expect(pod.Spec.Containers[0].Resources.Requests).ToNot(BeNil())
+						Expect(pod.Spec.Containers[0].Resources.Requests).To(HaveLen(3))
+						Expect(pod.Spec.Containers[0].Resources.Requests).To(HaveKeyWithValue(corev1.ResourceName("memory"),
+							MatchQuantityObject(*resource.NewQuantity(209715200, resource.BinarySI))))
+						Expect(pod.Spec.Containers[0].Resources.Requests).To(HaveKeyWithValue(corev1.ResourceName("hugepages-2Mi"),
+							MatchQuantityObject(*resource.NewQuantity(2147483648, resource.BinarySI))))
+						Expect(pod.Spec.Containers[0].Resources.Requests).To(HaveKeyWithValue(corev1.ResourceName("intel.com/cvl_uft_admin"),
+							MatchQuantityObject(*resource.NewQuantity(1, resource.DecimalSI))))
 					})
 			})
 
@@ -470,35 +467,6 @@ var _ = Describe("FlowConfigNodeAgentDeployment controller", func() {
 		})
 
 		Context("Expects that controller will drop request, POD will not be created", func() {
-			It("One node, CR with POD template that does not define UFT container", func() {
-				node := createNode(nodeName1, func(node *corev1.Node) {
-					node.Status.Capacity = make(map[corev1.ResourceName]resource.Quantity)
-					node.Status.Capacity[vfPoolName] = *resource.NewQuantity(1, resource.DecimalSI)
-				})
-				defer deleteNode(node)
-
-				Eventually(func() bool {
-					err := k8sClient.Create(context.Background(),
-						getFlowConfigNodeAgentDeployment(namespaceDefault, func(flow *flowconfigv1.FlowConfigNodeAgentDeployment) {
-							flow.Spec.DCFVfPoolName = vfPoolName
-							flow.Spec.NADAnnotation = "flowconfig-daemon-sriov-cvl0-admin"
-							containerToAdd := corev1.Container{
-								Name:    "ble",
-								Image:   "docker.io/alpine",
-								Command: []string{"/bin/sh", "-c", "sleep INF"},
-							}
-							flow.Spec.Template.Spec.Containers[0].Name = "another"
-							flow.Spec.Template.Spec.Containers = append(flow.Spec.Template.Spec.Containers, containerToAdd)
-						}))
-					return err == nil
-				}, timeout, interval).Should(BeTrue())
-				defer deleteFlowConfigNodeAgentDeployment(namespaceDefault)
-
-				// wait for POD, expected to be created
-				err := WaitForPodCreation(k8sClient, fmt.Sprintf("flowconfig-daemon-%s", nodeName1), namespaceDefault, timeout, interval)
-				Expect(err).ToNot(BeNil())
-			})
-
 			It("Node without defined resources", func() {
 				node := createNode(nodeName1)
 				defer deleteNode(node)
@@ -709,6 +677,61 @@ var _ = Describe("FlowConfigNodeAgentDeployment controller", func() {
 
 			verifyExpectedPODDefintion(namespaceIntel, fmt.Sprintf("flowconfig-daemon-%s", nodeName1), nodeName1,
 				"flowconfig-daemon-sriov-cvl0-admin", vfPoolName, 0, 1)
+		})
+	})
+
+	Context("Explicit function call", func() {
+		It("getPodTemplate() - missing file with POD template", func() {
+			podTemplatePath, err := filepath.Abs(podTemplateFile)
+			Expect(err).Should(BeNil())
+
+			err = os.Rename(podTemplatePath, podTemplatePath+"_new")
+			Expect(err).Should(BeNil())
+			defer func() {
+				podTemplatePath, err := filepath.Abs(podTemplateFile)
+				Expect(err).Should(BeNil())
+				err = os.Rename(podTemplatePath+"_new", podTemplatePath)
+				Expect(err).Should(BeNil())
+			}()
+
+			pod, err := nodeAgentDeploymentRc.getPodTemplate()
+			Expect(err).ShouldNot(BeNil())
+			Expect(fmt.Sprint(err)).Should(ContainSubstring("error reading"))
+			Expect(pod).Should(BeNil())
+		})
+
+		It("getPodTemplate() - POD template that does not define UFT container", func() {
+			By("Missing fileModify file with POD template")
+			podTemplatePath, err := filepath.Abs(podTemplateFile)
+			Expect(err).Should(BeNil())
+
+			input, err := ioutil.ReadFile(podTemplatePath)
+			Expect(err).Should(BeNil())
+
+			fileAsString := bytes.NewBuffer(input).String()
+			fileAsString = strings.Replace(fileAsString, "name: uft", "name: external", 1)
+
+			err = ioutil.WriteFile(podTemplatePath, []byte(fileAsString), 0644)
+			Expect(err).Should(BeNil())
+
+			defer func() {
+				podTemplatePath, err := filepath.Abs(podTemplateFile)
+				Expect(err).Should(BeNil())
+
+				input, err := ioutil.ReadFile(podTemplatePath)
+				Expect(err).Should(BeNil())
+
+				fileAsString := bytes.NewBuffer(input).String()
+				fileAsString = strings.Replace(fileAsString, "name: external", "name: uft", 1)
+
+				err = ioutil.WriteFile(podTemplatePath, []byte(fileAsString), 0644)
+				Expect(err).Should(BeNil())
+			}()
+
+			pod, err := nodeAgentDeploymentRc.getPodTemplate()
+			Expect(err).ShouldNot(BeNil())
+			Expect(fmt.Sprint(err)).Should(ContainSubstring("uft container not found in podSpec"))
+			Expect(pod).Should(BeNil())
 		})
 	})
 })
