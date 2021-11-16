@@ -184,6 +184,7 @@ func (r *EthernetClusterConfigReconciler) synchronizeNodeConfigSpec(ncc NodeConf
 		dnc := ethernetv1.DeviceNodeConfig{PCIAddress: pciAddress}
 		dnc.DeviceConfig = cc.Spec.DeviceConfig
 		newNodeConfig.Spec.Config = append(newNodeConfig.Spec.Config, dnc)
+		newNodeConfig.Spec.DrainSkip = cc.Spec.DrainSkip
 	}
 
 	switch {
