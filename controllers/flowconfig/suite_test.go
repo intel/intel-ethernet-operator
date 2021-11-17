@@ -6,13 +6,14 @@ package flowconfig
 import (
 	"fmt"
 	"math/rand"
+	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
-
+	"github.com/onsi/gomega/types"
+	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -22,10 +23,12 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
+	flowconfigv1 "github.com/otcshare/intel-ethernet-operator/apis/flowconfig/v1"
 	"github.com/otcshare/intel-ethernet-operator/pkg/flowconfig/flowsets"
 	mock "github.com/otcshare/intel-ethernet-operator/pkg/flowconfig/rpc/v1/flow/mocks"
 
-	flowconfigv1 "github.com/otcshare/intel-ethernet-operator/apis/flowconfig/v1"
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -40,7 +43,40 @@ var (
 	nodeFlowConfigRc      *NodeFlowConfigReconciler
 	nodeAgentDeploymentRc *FlowConfigNodeAgentDeploymentReconciler
 	clusterFlowConfigRc   *ClusterFlowConfigReconciler
+	managerMutex          = sync.Mutex{}
 )
+
+func MatchQuantityObject(expected interface{}) types.GomegaMatcher {
+	return &representQuantityMatcher{
+		expected: expected,
+	}
+}
+
+type representQuantityMatcher struct {
+	expected interface{}
+}
+
+func (matcher *representQuantityMatcher) Match(actual interface{}) (success bool, err error) {
+	currentQuantity, ok := actual.(resource.Quantity)
+	if !ok {
+		return false, fmt.Errorf("MatchQuantityObject matcher expects current as resource.Quantity")
+	}
+
+	expectedQuantity, ok := matcher.expected.(resource.Quantity)
+	if !ok {
+		return false, fmt.Errorf("MatchQuantityObject matcher expects expected as resource.Quantity")
+	}
+
+	return currentQuantity.Equal(expectedQuantity), nil
+}
+
+func (matcher *representQuantityMatcher) FailureMessage(actual interface{}) (message string) {
+	return fmt.Sprintf("Expected\n\t%#v\nto contain\n\t%#v", actual, matcher.expected)
+}
+
+func (matcher *representQuantityMatcher) NegatedFailureMessage(actual interface{}) (message string) {
+	return fmt.Sprintf("Expected\n\t%#v\nnot to contain\n\t%#v", actual, matcher.expected)
+}
 
 func TestAPIs(t *testing.T) {
 	RegisterFailHandler(Fail)
@@ -74,6 +110,9 @@ var _ = BeforeSuite(func() {
 
 	r1 := rand.New(rand.NewSource(time.Now().UnixNano()))
 	var metricsAddr = fmt.Sprintf(":%d", (r1.Intn(100) + 38080))
+
+	managerMutex.Lock()
+
 	k8sManager, err := ctrl.NewManager(cfg, ctrl.Options{
 		Scheme:             scheme.Scheme,
 		MetricsBindAddress: metricsAddr,
@@ -112,20 +151,31 @@ var _ = BeforeSuite(func() {
 	err = clusterFlowConfigRc.SetupWithManager(k8sManager)
 	Expect(err).ToNot(HaveOccurred())
 
-	// Start manager
-	go func() {
-		defer GinkgoRecover()
-		err := k8sManager.Start(ctrl.SetupSignalHandler())
-		Expect(err).ToNot(HaveOccurred())
-	}()
-
 	k8sClient, err = client.New(cfg, client.Options{Scheme: k8sManager.GetScheme()})
 	Expect(err).NotTo(HaveOccurred())
 	Expect(k8sClient).NotTo(BeNil())
+
+	managerMutex.Unlock()
+
+	// Start manager
+	go func() {
+		defer GinkgoRecover()
+
+		managerMutex.Lock()
+		defer managerMutex.Unlock()
+
+		err := k8sManager.Start(ctrl.SetupSignalHandler())
+		Expect(err).ToNot(HaveOccurred())
+	}()
 }, 60)
 
 var _ = AfterSuite(func() {
 	By("tearing down the test environment")
 	err := testEnv.Stop()
 	Expect(err).NotTo(HaveOccurred())
+
+	targetDir, err := filepath.Abs(".")
+	Expect(err).Should(BeNil())
+	err = os.RemoveAll(targetDir + "/assets/")
+	Expect(err).Should(BeNil())
 })

@@ -2,38 +2,59 @@
 # Copyright (c) 2021 Intel Corporation
 
 apiVersion: apps/v1
-kind: DaemonSet
+kind: Pod
 metadata:
   name: flowconfig-daemon
   namespace: system
   labels:
     control-plane: flowconfig-daemon
 spec:
-  template:
-    metadata:
-      labels:
-        control-plane: flowconfig-daemon
-    spec:
-      containers:
-      - command:
-        - /flowconfig-daemon
-        image: daemon-image:latest
-        name: flowconfig-daemon
-        env:
-          - name: WATCH_NAMESPACE
-            valueFrom:
-              fieldRef:
-                fieldPath: metadata.namespace
-          - name: NODE_NAME
-            valueFrom:
-              fieldRef:
-                fieldPath: spec.nodeName
-        resources:
-          limits:
-            cpu: 100m
-            memory: 30Mi
-          requests:
-            cpu: 100m
-            memory: 20Mi
-      serviceAccountName: intel-ethernet-operator-controller-manager
-      terminationGracePeriodSeconds: 10
+  containers:
+  - name: uft
+    image: dcf-tool:v21.08
+    imagePullPolicy: Never
+    securityContext:
+      capabilities:
+        add: ["IPC_LOCK", "SYS_NICE"]
+    command: [ "/bin/bash", "-c", "--" ]
+    args: [ "/entrypoint.sh" ]
+    env:
+    # Required for getting python print logs
+    - name: PYTHONUNBUFFERED
+      value: "1"
+    - name: PYTHONIOENCODING
+      value: "UTF-8"
+    resources:
+      requests:
+        hugepages-2Mi: 2Gi
+        memory: 200Mi
+      limits:
+        hugepages-2Mi: 2Gi
+        memory: 200Mi
+    volumeMounts:
+    - name: hugepage
+      mountPath: /dev/hugepages
+    - name: iceddp
+      mountPath: /lib/firmware/updates/intel/ice/ddp
+  - command:
+    - /flowconfig-daemon
+    image: daemon-image:latest
+    name: flowconfig-daemon
+    env:
+      - name: WATCH_NAMESPACE
+        valueFrom:
+          fieldRef:
+            fieldPath: metadata.namespace
+      - name: NODE_NAME
+        valueFrom:
+          fieldRef:
+            fieldPath: spec.nodeName
+    resources:
+      limits:
+        cpu: 100m
+        memory: 30Mi
+      requests:
+        cpu: 100m
+        memory: 20Mi
+  serviceAccountName: intel-ethernet-operator-controller-manager
+  terminationGracePeriodSeconds: 10

@@ -27,6 +27,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+
+	dh "github.com/otcshare/intel-ethernet-operator/pkg/drainhelper"
 )
 
 const (
@@ -143,9 +145,10 @@ func (r *NodeConfigReconciler) updateStatus(nc *ethernetv1.EthernetNodeConfig, c
 
 type NodeConfigReconciler struct {
 	client.Client
-	log       logr.Logger
-	nodeName  string
-	namespace string
+	log         logr.Logger
+	nodeName    string
+	namespace   string
+	drainHelper *dh.DrainHelper
 }
 
 func LoadConfig(log logr.Logger) error {
@@ -168,10 +171,11 @@ func NewNodeConfigReconciler(c client.Client, clientSet *clientset.Clientset, lo
 	}
 
 	return &NodeConfigReconciler{
-		Client:    c,
-		log:       log,
-		nodeName:  nodeName,
-		namespace: ns,
+		Client:      c,
+		log:         log,
+		nodeName:    nodeName,
+		namespace:   ns,
+		drainHelper: dh.NewDrainHelper(log, clientSet, nodeName, ns),
 	}, nil
 }
 
@@ -278,53 +282,30 @@ func (r *NodeConfigReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		return reconcile.Result{}, nil
 	}
 
-	// TODO:Add leader election or multi-leader/parallel operation (including node drain, cordon, etc)
 	rebootRequired := false
-	for pciAddr, artifacts := range updateQueue {
-		if artifacts.fwPath != "" {
-			err := r.updateFirmware(pciAddr, artifacts.fwPath)
-			if err != nil {
-				log.Error(err, "Failed to update firmware", "device", pciAddr)
-				updateErr = multierr.Append(updateErr, err)
-				// Skip DDP update on device
-				continue
-			}
 
-			reboot, err := isRebootRequired(updateResultPath(artifacts.fwPath))
-			if err != nil {
-				log.Error(err, "Failed to extract reboot required flag from file")
-			} else if reboot {
-				log.V(4).Info("Node reboot required to complete firmware update", "device", pciAddr)
+	err = r.drainHelper.Run(func(ctx context.Context) bool {
+		for pciAddr, artifacts := range updateQueue {
+			reboot, continueWithDDPUpdate := r.handleFWUpdate(pciAddr, artifacts.fwPath, &updateErr)
+			if reboot {
 				rebootRequired = true
 			}
-		}
-		if artifacts.ddpPath != "" {
-			err := r.updateDDP(pciAddr, artifacts.ddpPath)
-			if err != nil {
-				log.Error(err, "Failed to update DDP", "device", pciAddr)
-				updateErr = multierr.Append(updateErr, err)
+
+			if continueWithDDPUpdate {
+				r.handleDDPUpdate(pciAddr, artifacts.ddpPath, &updateErr)
 			}
-
-			err = enableIceServiceP()
-			if err != nil {
-				log.Error(err, "Failed to enable on-startup ICE service")
-				updateErr = multierr.Append(updateErr, err)
-			}
-			rebootRequired = true
 		}
-	}
 
-	if rebootRequired {
-		log.V(2).Info("Rebooting the node...")
-		r.updateCondition(&nodeConfig, metav1.ConditionFalse, UpdatePostUpdateReboot, "Post-update node reboot")
-		err := r.rebootNode()
-		if err != nil {
-			log.Error(err, "Failed to reboot the node")
-			updateErr = multierr.Append(updateErr, err)
+		if rebootRequired {
+			r.handleRebootAfterUpdate(&nodeConfig, &updateErr)
 		}
-	}
 
-	//TODO: Add uncordon and release leader lock
+		return true
+	}, !nodeConfig.Spec.DrainSkip)
+
+	if err != nil {
+		log.Error(err, "Error during FW/DDP update")
+	}
 
 	if updateErr != nil {
 		r.updateCondition(&nodeConfig, metav1.ConditionFalse, UpdateFailed, updateErr.Error())
@@ -507,6 +488,63 @@ func (r *NodeConfigReconciler) getDDPVersion(ddpPath string, dev ethernetv1.Devi
 
 func getDriverVersion(dev ethernetv1.Device) string {
 	return dev.Driver + "-" + dev.DriverVersion
+}
+
+func (r *NodeConfigReconciler) handleFWUpdate(pciAddr, fwPath string, updateErr *error) (bool, bool) {
+	log := r.log.WithName("handleFWUpdate")
+	rebootRequired := false
+
+	if fwPath == "" {
+		return rebootRequired, true
+	}
+
+	err := r.updateFirmware(pciAddr, fwPath)
+	if err != nil {
+		log.Error(err, "Failed to update firmware", "device", pciAddr)
+		*updateErr = multierr.Append(*updateErr, err)
+		// Skip DDP update on device
+		return rebootRequired, false
+	}
+
+	reboot, err := isRebootRequired(updateResultPath(fwPath))
+	if err != nil {
+		log.Error(err, "Failed to extract reboot required flag from file")
+		rebootRequired = true // failsafe
+	} else if reboot {
+		log.V(4).Info("Node reboot required to complete firmware update", "device", pciAddr)
+		rebootRequired = true
+	}
+	return rebootRequired, true
+}
+
+func (r *NodeConfigReconciler) handleDDPUpdate(pciAddr, ddpPath string, updateErr *error) {
+	log := r.log.WithName("handleDDPUpdate")
+	if ddpPath == "" {
+		return
+	}
+
+	err := r.updateDDP(pciAddr, ddpPath)
+	if err != nil {
+		log.Error(err, "Failed to update DDP", "device", pciAddr)
+		*updateErr = multierr.Append(*updateErr, err)
+	}
+
+	err = enableIceServiceP()
+	if err != nil {
+		log.Error(err, "Failed to enable on-startup ICE service")
+		*updateErr = multierr.Append(*updateErr, err)
+	}
+}
+
+func (r *NodeConfigReconciler) handleRebootAfterUpdate(nodeConfig *ethernetv1.EthernetNodeConfig, updateErr *error) {
+	log := r.log.WithName("handleRebootAfterUpdate")
+	log.V(2).Info("Rebooting the node...")
+	r.updateCondition(nodeConfig, metav1.ConditionFalse, UpdatePostUpdateReboot, "Post-update node reboot")
+	err := r.rebootNode()
+	if err != nil {
+		log.Error(err, "Failed to reboot the node")
+		*updateErr = multierr.Append(*updateErr, err)
+	}
 }
 
 func (r *NodeConfigReconciler) updateFirmware(pciAddr, fwPath string) error {

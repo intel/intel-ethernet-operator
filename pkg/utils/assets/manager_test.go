@@ -159,7 +159,6 @@ var _ = Describe("Asset Tests", func() {
 
 			Expect(manager).ToNot(Equal(nil))
 
-			// Create a Node
 			node := &corev1.Node{
 				ObjectMeta: v1.ObjectMeta{
 					Name: "dummy",

@@ -4,8 +4,12 @@
 package flowconfig
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"io/ioutil"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -102,6 +106,32 @@ var _ = Describe("FlowConfigNodeAgentDeployment controller", func() {
 		return namespace
 	}
 
+	createPod := func(name, ns string, configurers ...func(pod *corev1.Pod)) *corev1.Pod {
+		var graceTime int64 = 0
+		pod := &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      name,
+				Namespace: ns,
+			},
+			Spec: corev1.PodSpec{
+				TerminationGracePeriodSeconds: &graceTime,
+				Containers: []corev1.Container{
+					{
+						Name:    "uft",
+						Image:   "docker.io/alpine",
+						Command: []string{"/bin/sh", "-c", "sleep INF"},
+					},
+				},
+			},
+		}
+
+		for _, configure := range configurers {
+			configure(pod)
+		}
+
+		return pod
+	}
+
 	deletePod := func(name, ns string) {
 		pod := &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
@@ -115,7 +145,6 @@ var _ = Describe("FlowConfigNodeAgentDeployment controller", func() {
 	}
 
 	getFlowConfigNodeAgentDeployment := func(namespace string, configurers ...func(flow *flowconfigv1.FlowConfigNodeAgentDeployment)) *flowconfigv1.FlowConfigNodeAgentDeployment {
-		var graceTime int64 = 0
 		nodeAgent := &flowconfigv1.FlowConfigNodeAgentDeployment{
 			TypeMeta: metav1.TypeMeta{
 				APIVersion: "flowconfig.intel.com/v1",
@@ -126,23 +155,7 @@ var _ = Describe("FlowConfigNodeAgentDeployment controller", func() {
 				Namespace: namespace,
 				Labels:    map[string]string{"control-plane": "flowconfig-daemon"},
 			},
-			Spec: flowconfigv1.FlowConfigNodeAgentDeploymentSpec{
-				Template: &corev1.PodTemplateSpec{
-					ObjectMeta: metav1.ObjectMeta{
-						Labels: map[string]string{"control-plane": "flowconfig-daemon"},
-					},
-					Spec: corev1.PodSpec{
-						TerminationGracePeriodSeconds: &graceTime,
-						Containers: []corev1.Container{
-							{
-								Name:    "uft",
-								Image:   "docker.io/alpine",
-								Command: []string{"/bin/sh", "-c", "sleep INF"},
-							},
-						},
-					},
-				},
-			},
+			Spec: flowconfigv1.FlowConfigNodeAgentDeploymentSpec{},
 		}
 
 		for _, configure := range configurers {
@@ -336,12 +349,6 @@ var _ = Describe("FlowConfigNodeAgentDeployment controller", func() {
 						getFlowConfigNodeAgentDeployment(namespaceDefault, func(flow *flowconfigv1.FlowConfigNodeAgentDeployment) {
 							flow.Spec.DCFVfPoolName = vfPoolName
 							flow.Spec.NADAnnotation = "flowconfig-daemon-sriov-cvl0-admin"
-							containerToAdd := corev1.Container{
-								Name:    "ble",
-								Image:   "docker.io/alpine",
-								Command: []string{"/bin/sh", "-c", "sleep INF"},
-							}
-							flow.Spec.Template.Spec.Containers = append(flow.Spec.Template.Spec.Containers, containerToAdd)
 						}))
 					return err == nil
 				}, timeout, interval).Should(BeTrue())
@@ -350,8 +357,24 @@ var _ = Describe("FlowConfigNodeAgentDeployment controller", func() {
 
 				verifyExpectedPODDefintion(namespaceDefault, fmt.Sprintf("flowconfig-daemon-%s", nodeName1), nodeName1,
 					"flowconfig-daemon-sriov-cvl0-admin", vfPoolName, 0, 1, func(pod *corev1.Pod) {
-						Expect(pod.Spec.Containers[1].Resources.Limits).To(BeNil())
-						Expect(pod.Spec.Containers[1].Resources.Requests).To(BeNil())
+						limitsList := corev1.ResourceList{}
+						limitsList["memory"] = *resource.NewQuantity(209715200, resource.BinarySI)
+						Expect(pod.Spec.Containers[0].Resources.Limits).ToNot(BeNil())
+						Expect(pod.Spec.Containers[0].Resources.Limits).To(HaveLen(3))
+						Expect(pod.Spec.Containers[0].Resources.Limits).To(HaveKeyWithValue(corev1.ResourceName("memory"),
+							MatchQuantityObject(*resource.NewQuantity(209715200, resource.BinarySI))))
+						Expect(pod.Spec.Containers[0].Resources.Limits).To(HaveKeyWithValue(corev1.ResourceName("hugepages-2Mi"),
+							MatchQuantityObject(*resource.NewQuantity(2147483648, resource.BinarySI))))
+						Expect(pod.Spec.Containers[0].Resources.Limits).To(HaveKeyWithValue(corev1.ResourceName("intel.com/cvl_uft_admin"),
+							MatchQuantityObject(*resource.NewQuantity(1, resource.DecimalSI))))
+						Expect(pod.Spec.Containers[0].Resources.Requests).ToNot(BeNil())
+						Expect(pod.Spec.Containers[0].Resources.Requests).To(HaveLen(3))
+						Expect(pod.Spec.Containers[0].Resources.Requests).To(HaveKeyWithValue(corev1.ResourceName("memory"),
+							MatchQuantityObject(*resource.NewQuantity(209715200, resource.BinarySI))))
+						Expect(pod.Spec.Containers[0].Resources.Requests).To(HaveKeyWithValue(corev1.ResourceName("hugepages-2Mi"),
+							MatchQuantityObject(*resource.NewQuantity(2147483648, resource.BinarySI))))
+						Expect(pod.Spec.Containers[0].Resources.Requests).To(HaveKeyWithValue(corev1.ResourceName("intel.com/cvl_uft_admin"),
+							MatchQuantityObject(*resource.NewQuantity(1, resource.DecimalSI))))
 					})
 			})
 
@@ -467,38 +490,40 @@ var _ = Describe("FlowConfigNodeAgentDeployment controller", func() {
 				verifyExpectedPODDefintion(namespaceDefault, fmt.Sprintf("flowconfig-daemon-%s", nodeName1), nodeName1,
 					"flowconfig-daemon-sriov-temp", vfPoolName, 0, 1)
 			})
-		})
 
-		Context("Expects that controller will drop request, POD will not be created", func() {
-			It("One node, CR with POD template that does not define UFT container", func() {
+			It("Two nodes, one without resources, expected to create only POD on node with resources", func() {
 				node := createNode(nodeName1, func(node *corev1.Node) {
 					node.Status.Capacity = make(map[corev1.ResourceName]resource.Quantity)
 					node.Status.Capacity[vfPoolName] = *resource.NewQuantity(1, resource.DecimalSI)
 				})
 				defer deleteNode(node)
 
+				node2 := createNode(nodeName2, func(node *corev1.Node) {
+					node.Status.Capacity = make(map[corev1.ResourceName]resource.Quantity)
+					node.Status.Capacity["vfPoolName"] = *resource.NewQuantity(2, resource.DecimalSI)
+				})
+				defer deleteNode(node2)
+
 				Eventually(func() bool {
-					err := k8sClient.Create(context.Background(),
-						getFlowConfigNodeAgentDeployment(namespaceDefault, func(flow *flowconfigv1.FlowConfigNodeAgentDeployment) {
-							flow.Spec.DCFVfPoolName = vfPoolName
-							flow.Spec.NADAnnotation = "flowconfig-daemon-sriov-cvl0-admin"
-							containerToAdd := corev1.Container{
-								Name:    "ble",
-								Image:   "docker.io/alpine",
-								Command: []string{"/bin/sh", "-c", "sleep INF"},
-							}
-							flow.Spec.Template.Spec.Containers[0].Name = "another"
-							flow.Spec.Template.Spec.Containers = append(flow.Spec.Template.Spec.Containers, containerToAdd)
-						}))
+					err := k8sClient.Create(context.Background(), getFlowConfigNodeAgentDeployment(namespaceDefault, func(flow *flowconfigv1.FlowConfigNodeAgentDeployment) {
+						flow.Spec.DCFVfPoolName = vfPoolName
+						flow.Spec.NADAnnotation = "flowconfig-daemon-sriov-cvl0-admin"
+					}))
 					return err == nil
 				}, timeout, interval).Should(BeTrue())
+				defer deletePod(fmt.Sprintf("flowconfig-daemon-%s", nodeName1), namespaceDefault)
 				defer deleteFlowConfigNodeAgentDeployment(namespaceDefault)
 
-				// wait for POD, expected to be created
-				err := WaitForPodCreation(k8sClient, fmt.Sprintf("flowconfig-daemon-%s", nodeName1), namespaceDefault, timeout, interval)
+				verifyExpectedPODDefintion(namespaceDefault, fmt.Sprintf("flowconfig-daemon-%s", nodeName1), nodeName1,
+					"flowconfig-daemon-sriov-cvl0-admin", vfPoolName, 0, 1)
+
+				// wait for POD, expected not to be created
+				err := WaitForPodCreation(k8sClient, fmt.Sprintf("flowconfig-daemon-%s", nodeName2), namespaceDefault, timeout, interval)
 				Expect(err).ToNot(BeNil())
 			})
+		})
 
+		Context("Expects that controller will drop request, POD will not be created", func() {
 			It("Node without defined resources", func() {
 				node := createNode(nodeName1)
 				defer deleteNode(node)
@@ -620,9 +645,10 @@ var _ = Describe("FlowConfigNodeAgentDeployment controller", func() {
 			})
 		})
 
-		// Disabling test for now - testing framework does not support garbage collection in case of OwnerReferences
-		// https://book.kubebuilder.io/reference/envtest.html#testing-considerations
-		XContext("Verify if controller correctly cleanups nodes", func() {
+		// Testing framework does not support garbage collection in envtest.
+		// Following https://book.kubebuilder.io/reference/envtest.html#testing-considerations
+		// user should test OwnerReferences to confirm that object belongs to controller
+		Context("Verify if controller correctly cleanups nodes", func() {
 			It("Delete custom resources, expected that controller will delete POD on each node", func() {
 				node := createNode(nodeName1, func(node *corev1.Node) {
 					node.Status.Capacity = make(map[corev1.ResourceName]resource.Quantity)
@@ -647,16 +673,35 @@ var _ = Describe("FlowConfigNodeAgentDeployment controller", func() {
 					Name:      fmt.Sprintf("flowconfig-daemon-%s", nodeName1),
 					Namespace: namespaceDefault}, pod)
 				Expect(err).To(BeNil())
-
 				Expect(pod.Name).Should(Equal(fmt.Sprintf("flowconfig-daemon-%s", nodeName1)))
 
-				By("Delete CR and check if POD still exists")
-				deleteFlowConfigNodeAgentDeployment(namespaceDefault)
+				instance := &flowconfigv1.FlowConfigNodeAgentDeployment{}
+				err = k8sClient.Get(context.Background(), client.ObjectKey{
+					Name:      "flowconfig-daemon-flowconfig-daemon",
+					Namespace: "default"}, instance)
+				Expect(err).To(BeNil())
 
-				Eventually(func() bool {
-					err := WaitForPodCreation(k8sClient, fmt.Sprintf("flowconfig-daemon-%s", nodeName1), namespaceDefault, timeout/2, interval)
-					return err != nil
-				}).Should(BeTrue())
+				By("Create expected OwnerReferences")
+				state := bool(true)
+				expectedOwnerReference := metav1.OwnerReference{
+					Kind:               "FlowConfigNodeAgentDeployment",
+					APIVersion:         "flowconfig.intel.com/v1",
+					Name:               instance.ObjectMeta.Name,
+					UID:                instance.ObjectMeta.UID,
+					Controller:         &state,
+					BlockOwnerDeletion: &state,
+				}
+
+				By("Delete CR and check POD references - POD will be not deleted due to envtest constraints")
+				deleteFlowConfigNodeAgentDeployment(namespaceDefault)
+				defer deletePod(fmt.Sprintf("flowconfig-daemon-%s", nodeName1), namespaceDefault)
+
+				time.Sleep(1 * time.Second)
+				err = k8sClient.Get(context.Background(), client.ObjectKey{
+					Name:      fmt.Sprintf("flowconfig-daemon-%s", nodeName1),
+					Namespace: namespaceDefault}, pod)
+				Expect(err).To(BeNil())
+				Expect(pod.ObjectMeta.OwnerReferences).To(ContainElement(expectedOwnerReference))
 			})
 		})
 	})
@@ -689,6 +734,194 @@ var _ = Describe("FlowConfigNodeAgentDeployment controller", func() {
 
 			verifyExpectedPODDefintion(namespaceIntel, fmt.Sprintf("flowconfig-daemon-%s", nodeName1), nodeName1,
 				"flowconfig-daemon-sriov-cvl0-admin", vfPoolName, 0, 1)
+		})
+	})
+
+	Context("Verify if controller correctly handles changes within cluster", func() {
+		It("Add node to cluster, expect that POD will be created on it", func() {
+			node := createNode(nodeName1, func(node *corev1.Node) {
+				node.Status.Capacity = make(map[corev1.ResourceName]resource.Quantity)
+				node.Status.Capacity[vfPoolName] = *resource.NewQuantity(1, resource.DecimalSI)
+			})
+			defer deleteNode(node)
+
+			By("Create custom resource")
+			Eventually(func() bool {
+				err := k8sClient.Create(context.Background(),
+					getFlowConfigNodeAgentDeployment(namespaceDefault, func(flow *flowconfigv1.FlowConfigNodeAgentDeployment) {
+						flow.Spec.DCFVfPoolName = vfPoolName
+						flow.Spec.NADAnnotation = "flowconfig-daemon-sriov-cvl0-admin"
+					}))
+				return err == nil
+			}, timeout, interval).Should(BeTrue())
+			defer deletePod(fmt.Sprintf("flowconfig-daemon-%s", nodeName1), namespaceDefault)
+			defer deletePod(fmt.Sprintf("flowconfig-daemon-%s", nodeName2), namespaceDefault)
+			defer deleteFlowConfigNodeAgentDeployment(namespaceDefault)
+
+			By("Verify if POD was created")
+			verifyExpectedPODDefintion(namespaceDefault, fmt.Sprintf("flowconfig-daemon-%s", nodeName1), nodeName1,
+				"flowconfig-daemon-sriov-cvl0-admin", vfPoolName, 0, 1)
+
+			By("Verify that there is no second POD")
+			err := WaitForPodCreation(k8sClient, fmt.Sprintf("flowconfig-daemon-%s", nodeName2), namespaceDefault, timeout, interval)
+			Expect(err).ToNot(BeNil())
+
+			By("Create second node in cluster")
+			node2 := createNode(nodeName2, func(node *corev1.Node) {
+				node.Status.Capacity = make(map[corev1.ResourceName]resource.Quantity)
+				node.Status.Capacity[vfPoolName] = *resource.NewQuantity(1, resource.DecimalSI)
+			})
+			defer deleteNode(node2)
+
+			By("Verify that for second node a corresponding POD was created")
+			verifyExpectedPODDefintion(namespaceDefault, fmt.Sprintf("flowconfig-daemon-%s", nodeName2), nodeName2,
+				"flowconfig-daemon-sriov-cvl0-admin", vfPoolName, 0, 1)
+		})
+
+		It("Increase number of resources on node, expect that POD will be recreated with new resources", func() {
+			node := createNode(nodeName1, func(node *corev1.Node) {
+				node.Status.Capacity = make(map[corev1.ResourceName]resource.Quantity)
+				node.Status.Capacity[vfPoolName] = *resource.NewQuantity(1, resource.DecimalSI)
+			})
+			defer deleteNode(node)
+
+			By("Create custom resource")
+			Eventually(func() bool {
+				err := k8sClient.Create(context.Background(),
+					getFlowConfigNodeAgentDeployment(namespaceDefault, func(flow *flowconfigv1.FlowConfigNodeAgentDeployment) {
+						flow.Spec.DCFVfPoolName = vfPoolName
+						flow.Spec.NADAnnotation = "flowconfig-daemon-sriov-cvl0-admin"
+					}))
+				return err == nil
+			}, timeout, interval).Should(BeTrue())
+			defer deletePod(fmt.Sprintf("flowconfig-daemon-%s", nodeName1), namespaceDefault)
+			defer deleteFlowConfigNodeAgentDeployment(namespaceDefault)
+
+			By("Verify if POD was created")
+			verifyExpectedPODDefintion(namespaceDefault, fmt.Sprintf("flowconfig-daemon-%s", nodeName1), nodeName1,
+				"flowconfig-daemon-sriov-cvl0-admin", vfPoolName, 0, 1)
+
+			By("Update node resources")
+			node.Status.Capacity[vfPoolName] = *resource.NewQuantity(2, resource.DecimalSI)
+			err := k8sClient.Status().Update(context.Background(), node)
+			Expect(err).Should(BeNil())
+
+			By("Verify that POD resources has been updated")
+			time.Sleep(2 * time.Second)
+			verifyExpectedPODDefintion(namespaceDefault, fmt.Sprintf("flowconfig-daemon-%s", nodeName1), nodeName1,
+				"flowconfig-daemon-sriov-cvl0-admin, flowconfig-daemon-sriov-cvl0-admin", vfPoolName, 0, 2)
+		})
+
+		It("Decrease number of resources on node, expect that POD will be recreated with new resources", func() {
+			node := createNode(nodeName1, func(node *corev1.Node) {
+				node.Status.Capacity = make(map[corev1.ResourceName]resource.Quantity)
+				node.Status.Capacity[vfPoolName] = *resource.NewQuantity(2, resource.DecimalSI)
+			})
+			defer deleteNode(node)
+
+			By("Create custom resource")
+			Eventually(func() bool {
+				err := k8sClient.Create(context.Background(),
+					getFlowConfigNodeAgentDeployment(namespaceDefault, func(flow *flowconfigv1.FlowConfigNodeAgentDeployment) {
+						flow.Spec.DCFVfPoolName = vfPoolName
+						flow.Spec.NADAnnotation = "flowconfig-daemon-sriov-cvl0-admin"
+					}))
+				return err == nil
+			}, timeout, interval).Should(BeTrue())
+			defer deleteFlowConfigNodeAgentDeployment(namespaceDefault)
+
+			By("Verify if POD was created")
+			verifyExpectedPODDefintion(namespaceDefault, fmt.Sprintf("flowconfig-daemon-%s", nodeName1), nodeName1,
+				"flowconfig-daemon-sriov-cvl0-admin, flowconfig-daemon-sriov-cvl0-admin", vfPoolName, 0, 2)
+
+			By("Update node resources - decrease to 1")
+			node.Status.Capacity[vfPoolName] = *resource.NewQuantity(1, resource.DecimalSI)
+			err := k8sClient.Status().Update(context.Background(), node)
+			Expect(err).Should(BeNil())
+
+			By("Verify that POD resources has been updated")
+			time.Sleep(2 * time.Second)
+			verifyExpectedPODDefintion(namespaceDefault, fmt.Sprintf("flowconfig-daemon-%s", nodeName1), nodeName1,
+				"flowconfig-daemon-sriov-cvl0-admin", vfPoolName, 0, 1)
+
+			By("Update node resources - decrease to 0")
+			node.Status.Capacity[vfPoolName] = *resource.NewQuantity(0, resource.DecimalSI)
+			err = k8sClient.Status().Update(context.Background(), node)
+			Expect(err).Should(BeNil())
+
+			By("Verify that POD was removed from node")
+			time.Sleep(2 * time.Second)
+			err = WaitForPodCreation(k8sClient, fmt.Sprintf("flowconfig-daemon-%s", nodeName1), namespaceDefault, timeout, interval)
+			Expect(err).ToNot(BeNil())
+		})
+	})
+
+	Context("Explicit function call", func() {
+		It("getPodResources - without resources", func() {
+			pod := createPod("some", namespaceDefault)
+			Expect(nodeAgentDeploymentRc.getPodResources(pod, 0, corev1.ResourceName("utf"))).Should(Equal(int64(0)))
+		})
+
+		It("getPodResources - with resources but incorrect unit - milli", func() {
+			pod := createPod("some", namespaceDefault, func(pod *corev1.Pod) {
+				limits := corev1.ResourceList{}
+				pod.Spec.Containers[0].Resources.Limits = limits
+				pod.Spec.Containers[0].Resources.Limits["someRes"] = *resource.NewMilliQuantity(10, resource.BinarySI)
+			})
+			Expect(nodeAgentDeploymentRc.getPodResources(pod, 0, corev1.ResourceName("someRes"))).Should(Equal(int64(0)))
+		})
+
+		It("getPodTemplate() - missing file with POD template", func() {
+			podTemplatePath, err := filepath.Abs(podTemplateFile)
+			Expect(err).Should(BeNil())
+
+			err = os.Rename(podTemplatePath, podTemplatePath+"_new")
+			Expect(err).Should(BeNil())
+			defer func() {
+				podTemplatePath, err := filepath.Abs(podTemplateFile)
+				Expect(err).Should(BeNil())
+				err = os.Rename(podTemplatePath+"_new", podTemplatePath)
+				Expect(err).Should(BeNil())
+			}()
+
+			pod, err := nodeAgentDeploymentRc.getPodTemplate()
+			Expect(err).ShouldNot(BeNil())
+			Expect(fmt.Sprint(err)).Should(ContainSubstring("error reading"))
+			Expect(pod).Should(BeNil())
+		})
+
+		It("getPodTemplate() - POD template that does not define UFT container", func() {
+			By("Missing fileModify file with POD template")
+			podTemplatePath, err := filepath.Abs(podTemplateFile)
+			Expect(err).Should(BeNil())
+
+			input, err := ioutil.ReadFile(podTemplatePath)
+			Expect(err).Should(BeNil())
+
+			fileAsString := bytes.NewBuffer(input).String()
+			fileAsString = strings.Replace(fileAsString, "name: uft", "name: external", 1)
+
+			err = ioutil.WriteFile(podTemplatePath, []byte(fileAsString), 0644)
+			Expect(err).Should(BeNil())
+
+			defer func() {
+				podTemplatePath, err := filepath.Abs(podTemplateFile)
+				Expect(err).Should(BeNil())
+
+				input, err := ioutil.ReadFile(podTemplatePath)
+				Expect(err).Should(BeNil())
+
+				fileAsString := bytes.NewBuffer(input).String()
+				fileAsString = strings.Replace(fileAsString, "name: external", "name: uft", 1)
+
+				err = ioutil.WriteFile(podTemplatePath, []byte(fileAsString), 0644)
+				Expect(err).Should(BeNil())
+			}()
+
+			pod, err := nodeAgentDeploymentRc.getPodTemplate()
+			Expect(err).ShouldNot(BeNil())
+			Expect(fmt.Sprint(err)).Should(ContainSubstring("uft container not found in podSpec"))
+			Expect(pod).Should(BeNil())
 		})
 	})
 })

@@ -120,6 +120,7 @@ var _ = Describe("DaemonTests", func() {
 		}
 
 		fwInstallDest = "./workdir/nvmupdate/"
+		enableIceServiceP = enableIceService
 	})
 
 	var _ = Context("Reconciler", func() {
@@ -336,6 +337,7 @@ var _ = Describe("DaemonTests", func() {
 			}
 
 			wasRebootCalled := false
+			enableIceServiceP = func() error { return nil }
 
 			execCmd = func(args []string, log logr.Logger) (string, error) {
 				for _, part := range args {
@@ -486,8 +488,7 @@ var _ = Describe("DaemonTests", func() {
 			Expect(nodeConfigs.Items[0].Status.Conditions).To(HaveLen(1))
 			Expect(nodeConfigs.Items[0].Status.Conditions[0].Status).To(Equal(metav1.ConditionFalse))
 			Expect(nodeConfigs.Items[0].Status.Conditions[0].Reason).To(Equal(string(UpdateFailed)))
-			Expect(nodeConfigs.Items[0].Status.Conditions[0].Message).To(Equal("Failed to reboot"))
-
+			Expect(nodeConfigs.Items[0].Status.Conditions[0].Message).To(ContainSubstring("Failed to reboot"))
 		})
 
 		var _ = It("will update condition to UpdateFailed if not able to untar firmware", func() {
@@ -594,6 +595,29 @@ var _ = Describe("DaemonTests", func() {
 				Expect(cmd.SysProcAttr).To(Equal(rootAttr))
 				Expect(cmd.Dir).To(Equal(path.Join(fwInstallDest, data.NodeConfig.Spec.Config[0].PCIAddress,
 					nvmupdate64eDirSuffix)))
+				return nil
+			}
+
+			downloadFile = func(localpath, url, checksum string, _ logr.Logger) error {
+
+				updateDir := path.Join(fwInstallDest, data.Inventory[0].PCIAddress)
+				updatePath := updateResultPath(updateDir)
+
+				err := os.MkdirAll(nvmupdate64eDir(updateDir), 0777)
+				Expect(err).ToNot(HaveOccurred())
+
+				tmpfile, err := os.OpenFile(updatePath, os.O_RDWR|os.O_CREATE, 0777)
+				Expect(err).ToNot(HaveOccurred())
+				defer tmpfile.Close()
+
+				nvmupdateOutput := `<?xml version="1.0" encoding="UTF-8"?>
+						   <DeviceUpdate lang="en">
+						           <RebootRequired> 0 </RebootRequired>
+						   </DeviceUpdate>`
+
+				_, err = tmpfile.Write([]byte(nvmupdateOutput))
+				Expect(err).ToNot(HaveOccurred())
+
 				return nil
 			}
 

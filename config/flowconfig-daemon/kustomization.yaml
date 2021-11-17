@@ -5,24 +5,12 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 # Change this namespace to match with namespace in config/default/kustomization.yaml
 namespace: intel-ethernet-operator-system
-namePrefix: flowconfig-daemon-
 resources:
 - flowconfig-manager.yaml
-- sriov_nad.yaml
+
 patchesStrategicMerge:
-- add_uft_container.yaml
 - add_volumes.yaml
-# - add_env.yaml
 images:
 - name: daemon-image
   newName: intel-ethernet-operator-flowconfig-daemon
   newTag: 0.0.1
-
-# Apply patch to convert manager to be a FlowConfigNodeAgentDeployment
-patches:
-- path: convert_to_fcdeployment.yaml
-  target:
-    group: apps
-    kind: DaemonSet
-    name: flowconfig-daemon
-    version: v1
