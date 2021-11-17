@@ -44,7 +44,7 @@ spec:
   - command:
     - /flowconfig-daemon
     env:
-    - name: WATCH_NAMESPACE
+    - name: OPERATOR_NAMESPACE
       valueFrom:
         fieldRef:
           fieldPath: metadata.namespace
