@@ -83,7 +83,7 @@ func (r *FlowConfigNodeAgentDeploymentReconciler) Reconcile(ctx context.Context,
 		return ctrl.Result{}, err
 	}
 
-	var wasDeleted bool
+	var wasPodDeleted bool
 	for _, node := range nodes.Items {
 		// get pod object for selected node
 		pod := &corev1.Pod{}
@@ -103,16 +103,28 @@ func (r *FlowConfigNodeAgentDeploymentReconciler) Reconcile(ctx context.Context,
 				reqLogger.Info("Error getting pod instance on node %s with error %v", node.Name, err)
 			}
 		} else {
+			var deletePod bool
 			// POD exists, verify if has still the same resources or update is needed
 			if r.oldDCFVfPoolName != vfPoolName || r.oldNADAnnotation != instance.Spec.NADAnnotation { // pool name of NAD annotation has been changed
 				if _, exists := pod.Spec.Containers[r.uftContainerIndex].Resources.Limits[r.oldDCFVfPoolName]; exists {
-					// delete POD, and let the next reconciliation iteration do the creation job
-					err = r.Client.Delete(context.TODO(), pod)
-					if err != nil {
-						reqLogger.Info("Failed to delete POD %s with error %v", pod.Name, err)
-					}
-					wasDeleted = true
+					deletePod = true
 				}
+			} else {
+				// number of resource on node for the same VF pool have been changed - recreate POD
+				currentResource := r.getPodResources(pod, r.uftContainerIndex, vfPoolName)
+				if r.getNodeResources(&node, vfPoolName.String()) != currentResource {
+					reqLogger.Info("Resource are different - pod will be recreated")
+					deletePod = true
+				}
+			}
+
+			if deletePod {
+				// delete POD, and let the next reconciliation iteration do the creation job
+				err = r.Client.Delete(context.TODO(), pod)
+				if err != nil {
+					reqLogger.Info("Failed to delete POD %s with error %v", pod.Name, err)
+				}
+				wasPodDeleted = true
 			}
 		}
 	}
@@ -121,7 +133,7 @@ func (r *FlowConfigNodeAgentDeploymentReconciler) Reconcile(ctx context.Context,
 	r.oldDCFVfPoolName = vfPoolName
 	r.oldNADAnnotation = instance.Spec.NADAnnotation
 
-	if wasDeleted {
+	if wasPodDeleted {
 		return ctrl.Result{Requeue: true}, nil
 	}
 
@@ -131,7 +143,7 @@ func (r *FlowConfigNodeAgentDeploymentReconciler) Reconcile(ctx context.Context,
 func (r *FlowConfigNodeAgentDeploymentReconciler) CreatePod(templatePod *corev1.Pod, instance *flowconfigv1.FlowConfigNodeAgentDeployment, node corev1.Node, vfPoolName corev1.ResourceName, uftContainerIndex int) error {
 	podLogger := r.Log.WithName("flowconfignodeagentdeployment")
 
-	numResources := r.getNodeResources(node, vfPoolName.String())
+	numResources := r.getNodeResources(&node, vfPoolName.String())
 	if numResources == 0 {
 		podLogger.Info("No resources present on node")
 		return nil
@@ -212,7 +224,18 @@ func (r *FlowConfigNodeAgentDeploymentReconciler) addResources(container corev1.
 	return container
 }
 
-func (r *FlowConfigNodeAgentDeploymentReconciler) getNodeResources(node corev1.Node, vfPoolName string) int64 {
+func (r *FlowConfigNodeAgentDeploymentReconciler) getPodResources(pod *corev1.Pod, containerIndex int, vfPoolName corev1.ResourceName) int64 {
+	resLogger := r.Log.WithName("flowconfignodeagentdeployment")
+	limits := pod.Spec.Containers[containerIndex].Resources.Limits[vfPoolName]
+	value, ok := limits.AsInt64()
+	if !ok {
+		resLogger.Error(nil, "Error parsing quantity to int64 - pod resources")
+	}
+
+	return value
+}
+
+func (r *FlowConfigNodeAgentDeploymentReconciler) getNodeResources(node *corev1.Node, vfPoolName string) int64 {
 	resLogger := r.Log.WithName("flowconfignodeagentdeployment")
 	quantity, ok := node.Status.Capacity[corev1.ResourceName(vfPoolName)]
 
@@ -271,7 +294,14 @@ func (r *FlowConfigNodeAgentDeploymentReconciler) getNodeFilterPredicates() pred
 
 		// Update returns true if the Update event should be processed
 		UpdateFunc: func(e event.UpdateEvent) bool {
-			if _, ok := e.ObjectNew.(*corev1.Node); ok {
+			if nodeNew, ok := e.ObjectNew.(*corev1.Node); ok {
+				if nodeOld, ok := e.ObjectOld.(*corev1.Node); ok {
+					// process update event only when number of resource has been changed
+					if r.getNodeResources(nodeNew, r.oldDCFVfPoolName.String()) != r.getNodeResources(nodeOld, r.oldDCFVfPoolName.String()) {
+						return true
+					}
+				}
+
 				return false
 			}
 
