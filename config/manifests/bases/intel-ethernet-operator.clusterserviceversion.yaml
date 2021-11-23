@@ -13,7 +13,8 @@ spec:
   apiservicedefinitions: {}
   customresourcedefinitions:
     owned:
-    - description: EthernetClusterConfig is the Schema for the ethernetclusterconfigs API
+    - description: EthernetClusterConfig is the Schema for the ethernetclusterconfigs
+        API
       displayName: Ethernet Cluster Config
       kind: EthernetClusterConfig
       name: ethernetclusterconfigs.ethernet.intel.com
@@ -27,7 +28,8 @@ spec:
       kind: EthernetNodeConfig
       name: ethernetnodeconfigs.ethernet.intel.com
       version: v1
-    - description: FlowConfigNodeAgentDeployment is the Schema for the flowconfignodeagentdeployments API
+    - description: FlowConfigNodeAgentDeployment is the Schema for the flowconfignodeagentdeployments
+        API
       displayName: Flow Config Node Agent Deployment
       kind: FlowConfigNodeAgentDeployment
       name: flowconfignodeagentdeployments.flowconfig.intel.com
