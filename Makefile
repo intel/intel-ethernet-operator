@@ -240,7 +240,7 @@ bundle: manifests kustomize ## Generate bundle manifests and metadata, then vali
 	operator-sdk generate kustomize manifests -q
 	cd config/manager && $(KUSTOMIZE) edit set image controller=$(ETHERNET_MANAGER_IMAGE)
 	$(KUSTOMIZE) build config/manifests | envsubst | operator-sdk generate bundle -q --overwrite --version $(VERSION) $(BUNDLE_METADATA_OPTS)
-	cp config/metadata/dependencies.yaml bundle/metadata/dependencies.yaml
+	cp config/metadata/bases/dependencies.yaml bundle/metadata/dependencies.yaml
 	operator-sdk bundle validate ./bundle
 	FOLDER=. COPYRIGHT_FILE=COPYRIGHT ./copyright.sh
 	cat COPYRIGHT bundle.Dockerfile >bundle.tmp
