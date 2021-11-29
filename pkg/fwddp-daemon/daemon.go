@@ -63,7 +63,7 @@ WantedBy=multi-user.target
 var (
 	compatMapPath    = "./devices.json"
 	compatibilityMap *CompatibilityMap
-	fwInstallDest    = "/host/tmp/fwddp_artifacts/nvmupdate/"
+	artifactsFolder  = "/host/tmp/fwddp_artifacts/nvmupdate/"
 	// /host comes from mounted folder in OCP
 	// /var/lib/firmware comes from modified kernel argument, which allows OS to read DDP profile from that path.
 	// This is done because on RHCOS /lib/firmware/* path is read-only
@@ -286,13 +286,12 @@ func (r *NodeConfigReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 
 	err = r.drainHelper.Run(func(ctx context.Context) bool {
 		for pciAddr, artifacts := range updateQueue {
-			reboot, continueWithDDPUpdate := r.handleFWUpdate(pciAddr, artifacts.fwPath, &updateErr)
-			if reboot {
-				rebootRequired = true
-			}
+			fwReboot, continueWithDDPUpdate := r.handleFWUpdate(pciAddr, artifacts.fwPath, &updateErr)
+			rebootRequired = rebootRequired || fwReboot
 
 			if continueWithDDPUpdate {
-				r.handleDDPUpdate(pciAddr, artifacts.ddpPath, &updateErr)
+				ddpReboot := r.handleDDPUpdate(pciAddr, artifacts.ddpPath, &updateErr)
+				rebootRequired = rebootRequired || ddpReboot
 			}
 		}
 
@@ -334,6 +333,12 @@ func (r *NodeConfigReconciler) prepare(config ethernetv1.DeviceNodeConfig, inv [
 		return deviceUpdateArtifacts{}, fmt.Errorf("Device %v not found", config.PCIAddress)
 	}
 
+	err := os.RemoveAll(artifactsFolder)
+	if err != nil {
+		log.Error(err, "Failed to prepare firmware")
+		return deviceUpdateArtifacts{}, err
+	}
+
 	fwPath, err := r.prepareFirmware(config)
 	if err != nil {
 		log.Error(err, "Failed to prepare firmware")
@@ -363,7 +368,7 @@ func (r *NodeConfigReconciler) prepareFirmware(config ethernetv1.DeviceNodeConfi
 		return "", nil
 	}
 
-	targetPath := path.Join(fwInstallDest, config.PCIAddress)
+	targetPath := path.Join(artifactsFolder, config.PCIAddress)
 
 	err := utils.CreateFolder(targetPath, log)
 	if err != nil {
@@ -394,14 +399,9 @@ func (r *NodeConfigReconciler) prepareDDP(config ethernetv1.DeviceNodeConfig) (s
 		return "", nil
 	}
 
-	targetPath := path.Join(fwInstallDest, config.PCIAddress)
+	targetPath := path.Join(artifactsFolder, config.PCIAddress)
 
-	err := os.RemoveAll(targetPath)
-	if err != nil {
-		return "", err
-	}
-
-	err = utils.CreateFolder(targetPath, log)
+	err := utils.CreateFolder(targetPath, log)
 	if err != nil {
 		return "", err
 	}
@@ -517,23 +517,28 @@ func (r *NodeConfigReconciler) handleFWUpdate(pciAddr, fwPath string, updateErr 
 	return rebootRequired, true
 }
 
-func (r *NodeConfigReconciler) handleDDPUpdate(pciAddr, ddpPath string, updateErr *error) {
+func (r *NodeConfigReconciler) handleDDPUpdate(pciAddr, ddpPath string, updateErr *error) bool {
 	log := r.log.WithName("handleDDPUpdate")
+
 	if ddpPath == "" {
-		return
+		return false
 	}
 
 	err := r.updateDDP(pciAddr, ddpPath)
 	if err != nil {
 		log.Error(err, "Failed to update DDP", "device", pciAddr)
 		*updateErr = multierr.Append(*updateErr, err)
+		return false
 	}
 
 	err = enableIceServiceP()
 	if err != nil {
 		log.Error(err, "Failed to enable on-startup ICE service")
 		*updateErr = multierr.Append(*updateErr, err)
+		return false
 	}
+
+	return true
 }
 
 func (r *NodeConfigReconciler) handleRebootAfterUpdate(nodeConfig *ethernetv1.EthernetNodeConfig, updateErr *error) {

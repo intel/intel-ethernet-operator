@@ -119,7 +119,7 @@ var _ = Describe("DaemonTests", func() {
 			return nil
 		}
 
-		fwInstallDest = "./workdir/nvmupdate/"
+		artifactsFolder = "./workdir/nvmupdate/"
 		enableIceServiceP = enableIceService
 	})
 
@@ -306,7 +306,7 @@ var _ = Describe("DaemonTests", func() {
 		})
 
 		var _ = It("will call for reboot, expects ok and reboot", func() {
-			defer os.RemoveAll(fwInstallDest)
+			defer os.RemoveAll(artifactsFolder)
 
 			Expect(k8sClient.Create(context.TODO(), &data.Node)).To(Succeed())
 			Expect(k8sClient.Create(context.TODO(), &data.NodeConfig)).To(Succeed())
@@ -315,7 +315,7 @@ var _ = Describe("DaemonTests", func() {
 
 			downloadFile = func(localpath, url, checksum string, _ logr.Logger) error {
 
-				updateDir := path.Join(fwInstallDest, data.Inventory[0].PCIAddress)
+				updateDir := path.Join(artifactsFolder, data.Inventory[0].PCIAddress)
 				updatePath := updateResultPath(updateDir)
 
 				err := os.MkdirAll(nvmupdate64eDir(updateDir), 0777)
@@ -368,7 +368,7 @@ var _ = Describe("DaemonTests", func() {
 		})
 
 		var _ = It("will call for reboot, expects ok but no reboot", func() {
-			defer os.RemoveAll(fwInstallDest)
+			defer os.RemoveAll(artifactsFolder)
 
 			Expect(k8sClient.Create(context.TODO(), &data.Node)).To(Succeed())
 			Expect(k8sClient.Create(context.TODO(), &data.NodeConfig)).To(Succeed())
@@ -377,7 +377,7 @@ var _ = Describe("DaemonTests", func() {
 
 			downloadFile = func(localpath, url, checksum string, _ logr.Logger) error {
 
-				updateDir := path.Join(fwInstallDest, data.Inventory[0].PCIAddress)
+				updateDir := path.Join(artifactsFolder, data.Inventory[0].PCIAddress)
 				updatePath := updateResultPath(updateDir)
 
 				err := os.MkdirAll(nvmupdate64eDir(updateDir), 0777)
@@ -429,7 +429,7 @@ var _ = Describe("DaemonTests", func() {
 		})
 
 		var _ = It("will call for reboot, expect failure", func() {
-			defer os.RemoveAll(fwInstallDest)
+			defer os.RemoveAll(artifactsFolder)
 
 			Expect(k8sClient.Create(context.TODO(), &data.Node)).To(Succeed())
 			Expect(k8sClient.Create(context.TODO(), &data.NodeConfig)).To(Succeed())
@@ -438,7 +438,7 @@ var _ = Describe("DaemonTests", func() {
 
 			downloadFile = func(localpath, url, checksum string, _ logr.Logger) error {
 
-				updateDir := path.Join(fwInstallDest, data.Inventory[0].PCIAddress)
+				updateDir := path.Join(artifactsFolder, data.Inventory[0].PCIAddress)
 				updatePath := updateResultPath(updateDir)
 
 				err := os.MkdirAll(nvmupdate64eDir(updateDir), 0777)
@@ -526,7 +526,7 @@ var _ = Describe("DaemonTests", func() {
 			data.Inventory[0].PCIAddress = "0000:00:00.1"
 
 			nvmupdateExec = runExecWithLog
-			updateDir := path.Join(fwInstallDest, data.Inventory[0].PCIAddress, nvmupdate64eDirSuffix)
+			updateDir := path.Join(artifactsFolder, data.Inventory[0].PCIAddress, nvmupdate64eDirSuffix)
 			err := os.MkdirAll(updateDir, 0777)
 			Expect(err).ToNot(HaveOccurred())
 
@@ -593,14 +593,14 @@ var _ = Describe("DaemonTests", func() {
 			}
 			nvmupdateExec = func(cmd *exec.Cmd, log logr.Logger) error {
 				Expect(cmd.SysProcAttr).To(Equal(rootAttr))
-				Expect(cmd.Dir).To(Equal(path.Join(fwInstallDest, data.NodeConfig.Spec.Config[0].PCIAddress,
+				Expect(cmd.Dir).To(Equal(path.Join(artifactsFolder, data.NodeConfig.Spec.Config[0].PCIAddress,
 					nvmupdate64eDirSuffix)))
 				return nil
 			}
 
 			downloadFile = func(localpath, url, checksum string, _ logr.Logger) error {
 
-				updateDir := path.Join(fwInstallDest, data.Inventory[0].PCIAddress)
+				updateDir := path.Join(artifactsFolder, data.Inventory[0].PCIAddress)
 				updatePath := updateResultPath(updateDir)
 
 				err := os.MkdirAll(nvmupdate64eDir(updateDir), 0777)
@@ -650,7 +650,7 @@ var _ = Describe("DaemonTests", func() {
 			}
 			nvmupdateExec = func(cmd *exec.Cmd, log logr.Logger) error {
 				Expect(cmd.SysProcAttr).To(Equal(rootAttr))
-				Expect(cmd.Dir).To(Equal(path.Join(fwInstallDest, data.NodeConfig.Spec.Config[0].PCIAddress,
+				Expect(cmd.Dir).To(Equal(path.Join(artifactsFolder, data.NodeConfig.Spec.Config[0].PCIAddress,
 					nvmupdate64eDirSuffix)))
 				return nil
 			}
@@ -698,7 +698,7 @@ var _ = Describe("DaemonTests", func() {
 			}
 			nvmupdateExec = func(cmd *exec.Cmd, log logr.Logger) error {
 				Expect(cmd.SysProcAttr).To(Equal(rootAttr))
-				Expect(cmd.Dir).To(Equal(path.Join(fwInstallDest, data.NodeConfig.Spec.Config[0].PCIAddress,
+				Expect(cmd.Dir).To(Equal(path.Join(artifactsFolder, data.NodeConfig.Spec.Config[0].PCIAddress,
 					nvmupdate64eDirSuffix)))
 				return nil
 			}
@@ -734,7 +734,7 @@ var _ = Describe("DaemonTests", func() {
 			}
 			nvmupdateExec = func(cmd *exec.Cmd, log logr.Logger) error {
 				Expect(cmd.SysProcAttr).To(Equal(rootAttr))
-				Expect(cmd.Dir).To(Equal(path.Join(fwInstallDest, data.NodeConfig.Spec.Config[0].PCIAddress,
+				Expect(cmd.Dir).To(Equal(path.Join(artifactsFolder, data.NodeConfig.Spec.Config[0].PCIAddress,
 					nvmupdate64eDirSuffix)))
 				return nil
 			}
@@ -758,7 +758,7 @@ var _ = Describe("DaemonTests", func() {
 
 		var _ = It("will update update condition to UpdateFailed because of empty version file", func() {
 
-			defer os.RemoveAll(fwInstallDest)
+			defer os.RemoveAll(artifactsFolder)
 			data.NodeConfig.Spec.Config[0].DeviceConfig.Force = false
 			data.NodeConfig.Spec.Config[0].DeviceConfig.DDPURL = ""
 
@@ -772,14 +772,14 @@ var _ = Describe("DaemonTests", func() {
 			}
 			nvmupdateExec = func(cmd *exec.Cmd, log logr.Logger) error {
 				Expect(cmd.SysProcAttr).To(Equal(rootAttr))
-				Expect(cmd.Dir).To(Equal(path.Join(fwInstallDest, data.NodeConfig.Spec.Config[0].PCIAddress,
+				Expect(cmd.Dir).To(Equal(path.Join(artifactsFolder, data.NodeConfig.Spec.Config[0].PCIAddress,
 					nvmupdate64eDirSuffix)))
 				return nil
 			}
 
 			downloadFile = func(localpath, url, checksum string, _ logr.Logger) error {
 
-				updateDir := path.Join(fwInstallDest, data.Inventory[0].PCIAddress)
+				updateDir := path.Join(artifactsFolder, data.Inventory[0].PCIAddress)
 				updatePath := updateResultPath(updateDir)
 
 				err := os.MkdirAll(nvmupdate64eDir(updateDir), 0777)
