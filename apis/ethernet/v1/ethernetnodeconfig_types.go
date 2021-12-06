@@ -15,8 +15,9 @@ type DeviceNodeConfig struct {
 
 // EthernetNodeConfigSpec defines the desired state of EthernetNodeConfig
 type EthernetNodeConfigSpec struct {
-	Config    []DeviceNodeConfig `json:"config,omitempty"`
-	DrainSkip bool               `json:"drainSkip,omitempty"`
+	Config      []DeviceNodeConfig `json:"config,omitempty"`
+	DrainSkip   bool               `json:"drainSkip,omitempty"`
+	ForceReboot bool               `json:"forceReboot,omitempty"`
 }
 
 type FirmwareInfo struct {

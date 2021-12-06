@@ -79,6 +79,7 @@ var (
 	untarFile         = utils.Untar
 	findDdp           = findDdpProfile
 	enableIceServiceP = enableIceService
+	reloadIceServiceP = reloadIceService
 )
 
 type CompatibilityMap map[string]Compatibility
@@ -290,8 +291,8 @@ func (r *NodeConfigReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 			rebootRequired = rebootRequired || fwReboot
 
 			if continueWithDDPUpdate {
-				ddpReboot := r.handleDDPUpdate(pciAddr, artifacts.ddpPath, &updateErr)
-				rebootRequired = rebootRequired || ddpReboot
+				r.handleDDPUpdate(pciAddr, artifacts.ddpPath, nodeConfig.Spec.ForceReboot, &updateErr)
+				rebootRequired = rebootRequired || nodeConfig.Spec.ForceReboot
 			}
 		}
 
@@ -517,28 +518,37 @@ func (r *NodeConfigReconciler) handleFWUpdate(pciAddr, fwPath string, updateErr 
 	return rebootRequired, true
 }
 
-func (r *NodeConfigReconciler) handleDDPUpdate(pciAddr, ddpPath string, updateErr *error) bool {
+func (r *NodeConfigReconciler) handleDDPUpdate(pciAddr, ddpPath string, forceReboot bool, updateErr *error) {
 	log := r.log.WithName("handleDDPUpdate")
 
 	if ddpPath == "" {
-		return false
+		return
 	}
 
 	err := r.updateDDP(pciAddr, ddpPath)
 	if err != nil {
 		log.Error(err, "Failed to update DDP", "device", pciAddr)
 		*updateErr = multierr.Append(*updateErr, err)
-		return false
+		return
 	}
 
 	err = enableIceServiceP()
 	if err != nil {
 		log.Error(err, "Failed to enable on-startup ICE service")
 		*updateErr = multierr.Append(*updateErr, err)
-		return false
+		return
 	}
 
-	return true
+	// Recommended for clusters, on which ControlPlane is running on E810 cards.
+	if forceReboot {
+		return
+	}
+
+	err = reloadIceServiceP()
+	if err != nil {
+		log.Error(err, "Failed to reload ICE service")
+		*updateErr = multierr.Append(*updateErr, err)
+	}
 }
 
 func (r *NodeConfigReconciler) handleRebootAfterUpdate(nodeConfig *ethernetv1.EthernetNodeConfig, updateErr *error) {
@@ -628,6 +638,11 @@ func enableIceService() error {
 
 	//create symlink to enable service on startUp
 	cmd := exec.Command("chroot", "/host", "systemctl", "enable", "ice.service")
+	return cmd.Run()
+}
+
+func reloadIceService() error {
+	cmd := exec.Command("chroot", "/host", "systemctl", "start", "ice.service")
 	return cmd.Run()
 }
 

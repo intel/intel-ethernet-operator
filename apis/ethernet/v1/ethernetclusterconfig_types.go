@@ -56,6 +56,8 @@ type EthernetClusterConfigSpec struct {
 
 	Priority  int  `json:"priority,omitempty"`
 	DrainSkip bool `json:"drainSkip,omitempty"`
+	// Force reboot after DDP update. Recommended for clusters, on which ControlPlane is running on E810 cards.
+	ForceReboot bool `json:"forceReboot,omitempty"`
 }
 
 // EthernetClusterConfigStatus defines the observed state of EthernetClusterConfig
