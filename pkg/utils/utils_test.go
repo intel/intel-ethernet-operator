@@ -182,10 +182,9 @@ var _ = Describe("Utils", func() {
 	})
 
 	var _ = Describe("DownloadFile", func() {
-		log := ctrl.Log.WithName("EthernetDaemon-test")
 		var _ = It("will return error if url format is invalid", func() {
 			defer os.Remove("/tmp/somefileanme")
-			err := DownloadFile("/tmp/somefolder", "/tmp/fake", "", log)
+			err := DownloadFile("/tmp/somefolder", "/tmp/fake", "")
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("unsupported protocol"))
 		})
@@ -195,7 +194,7 @@ var _ = Describe("Utils", func() {
 			defer os.Remove(tmpfile.Name())
 			Expect(err).ToNot(HaveOccurred())
 
-			err = DownloadFile(tmpfile.Name(), "http://0.0.0.0/tmp/fake", "check", log)
+			err = DownloadFile(tmpfile.Name(), "http://0.0.0.0/tmp/fake", "check")
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("unable to download image"))
 		})
@@ -208,7 +207,7 @@ var _ = Describe("Utils", func() {
 			Expect(err).To(BeNil())
 			defer os.Remove(filePath)
 
-			err = DownloadFile(filePath, url, "63effa2530d088a06f071bc5f016f8d4", log)
+			err = DownloadFile(filePath, url, "63effa2530d088a06f071bc5f016f8d4")
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("unsupported protocol"))
 		})
@@ -226,30 +225,13 @@ var _ = Describe("Utils", func() {
 			Expect(err).To(BeNil())
 			defer os.Remove(fileWithUrl)
 
-			err = DownloadFile(filePath, url, "63effa2530d088a06f071bc5f016f8d4", log)
+			err = DownloadFile(filePath, url, "63effa2530d088a06f071bc5f016f8d4")
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("unsupported protocol"))
 		})
 
-		var _ = It("will return no error if file already exists, checksum matches and url matches", func() {
-			filePath := "/tmp/updatefile_101.tar.gz"
-			fileWithUrl := filePath + ".url"
-			url := "/tmp/fake"
-
-			err := ioutil.WriteFile(filePath, []byte("1010101"), 0666)
-			Expect(err).To(BeNil())
-			defer os.Remove(filePath)
-
-			err = ioutil.WriteFile(fileWithUrl, []byte(url), 0666)
-			Expect(err).To(BeNil())
-			defer os.Remove(fileWithUrl)
-
-			err = DownloadFile(filePath, url, "63effa2530d088a06f071bc5f016f8d4", log)
-			Expect(err).ToNot(HaveOccurred())
-		})
-
 		var _ = It("will return error if filename is invalid", func() {
-			err := DownloadFile("", "/tmp/fake", "bf51ac6aceed5ca4227e640046ad9de4", log)
+			err := DownloadFile("", "/tmp/fake", "bf51ac6aceed5ca4227e640046ad9de4")
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("no such file or directory"))
 		})

@@ -30,12 +30,12 @@ var (
 var getPCIDevices = func() ([]*ghw.PCIDevice, error) {
 	pci, err := ghw.PCI()
 	if err != nil {
-		return nil, fmt.Errorf("Failed to get PCI info: %v", err)
+		return nil, fmt.Errorf("failed to get PCI info: %v", err)
 	}
 
 	devices := pci.ListDevices()
 	if len(devices) == 0 {
-		return nil, fmt.Errorf("Got 0 devices")
+		return nil, fmt.Errorf("got 0 devices")
 	}
 	return devices, nil
 }
@@ -80,7 +80,7 @@ func GetInventory(log logr.Logger) ([]ethernetv1.Device, error) {
 		return nil, err
 	}
 
-	devices := []ethernetv1.Device{}
+	var devices []ethernetv1.Device
 
 	for _, pciDevice := range pciDevices {
 		if isDeviceSupported(pciDevice) {
@@ -172,7 +172,7 @@ func getDeviceMAC(pciAddr string, log logr.InfoLogger) (string, error) {
 			return strings.Replace(strings.ToUpper(i.Firmware.MAC), ":", "", -1), nil
 		}
 	}
-	return "", fmt.Errorf("Failed to get MAC for device %v. Device not found", pciAddr)
+	return "", fmt.Errorf("failed to get MAC for device %v. Device not found", pciAddr)
 }
 
 type DeviceIDs utils.SupportedDevice
@@ -194,5 +194,5 @@ func getDeviceIDs(pciAddr string, log logr.InfoLogger) (DeviceIDs, error) {
 			}, nil
 		}
 	}
-	return DeviceIDs{}, fmt.Errorf("Device %v not found", pciAddr)
+	return DeviceIDs{}, fmt.Errorf("device %v not found", pciAddr)
 }

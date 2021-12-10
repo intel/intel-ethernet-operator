@@ -42,7 +42,7 @@ var _ = Describe("InventoryTest", func() {
 	var _ = Context("GetInventory", func() {
 		var _ = It("will return error when is not able to get PCI devices", func() {
 			getPCIDevices = func() ([]*ghw.PCIDevice, error) {
-				return nil, fmt.Errorf("Failed to get PCI")
+				return nil, fmt.Errorf("failed to get PCI")
 			}
 			d, err := GetInventory(log)
 			Expect(err).To(HaveOccurred())
@@ -156,10 +156,10 @@ var _ = Describe("InventoryTest", func() {
 				}, nil
 			}
 			execEthtool = func(string) ([]byte, error) {
-				return nil, fmt.Errorf("Error when calling ethtool")
+				return nil, fmt.Errorf("error when calling ethtool")
 			}
 			execDevlink = func(string) ([]byte, error) {
-				return nil, fmt.Errorf("Error when calling devlink")
+				return nil, fmt.Errorf("error when calling devlink")
 			}
 
 			compatibilityMap = &CompatibilityMap{

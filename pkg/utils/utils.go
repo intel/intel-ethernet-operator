@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	ethernetv1 "github.com/otcshare/intel-ethernet-operator/apis/ethernet/v1"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -95,7 +96,7 @@ func verifyChecksum(path, expected string) (bool, error) {
 }
 
 // TODO: [ESS-2843] Add cert validation support
-func downloadFile(path, url, checksum string) error {
+func DownloadFile(path, url, checksum string) error {
 	f, err := os.Create(path)
 	if err != nil {
 		return err
@@ -127,59 +128,6 @@ func downloadFile(path, url, checksum string) error {
 			return fmt.Errorf("Checksum mismatch in downloaded file: %s", url)
 		}
 	}
-	return nil
-}
-
-func verifyUrl(fileWithUrl, url string) bool {
-	urlMatches := false
-
-	oldUrl, err := ioutil.ReadFile(fileWithUrl)
-
-	if (err == nil) && (len(oldUrl) > 0) && (string(oldUrl) == url) {
-		urlMatches = true
-	}
-
-	return urlMatches
-}
-
-// DownloadFile downloads file from provided URL to provided path. If checksum value is
-// not empty, it first checks if file already exists in path and skips downloading
-// if calculated MD5 value matches provided one.
-//
-// Note: If there are any issues with the caching of the downloaded file, there
-// should be considered removing of the verification of already stored binary feature.
-func DownloadFile(path, url, checksum string, log logr.Logger) error {
-	fileWithUrl := path + ".url"
-	_, err := os.Stat(path)
-	if err == nil {
-		ret, err := verifyChecksum(path, checksum)
-		if err != nil {
-			return err
-		}
-		if ret && verifyUrl(fileWithUrl, url) {
-			log.V(4).Info("File already downloaded", "path", path)
-			return nil
-		}
-		_ = os.Remove(fileWithUrl)
-		err = os.Remove(path)
-		if err != nil {
-			return fmt.Errorf("Unable to remove old file: %s",
-				path)
-		}
-	} else if !os.IsNotExist(err) {
-		return err
-	}
-
-	if err := downloadFile(path, url, checksum); err != nil {
-		log.Error(err, "Unable to download file")
-		return err
-	}
-
-	err = ioutil.WriteFile(fileWithUrl, []byte(url), 0644)
-	if err == nil {
-		log.V(4).Info("Url stored", "url", url)
-	}
-
 	return nil
 }
 
@@ -281,4 +229,22 @@ func ExecCmd(args []string, log logr.Logger) (string, error) {
 	output := string(out)
 	log.V(4).Info("commands output", "output", output)
 	return output, nil
+}
+
+func CopyFile(src string, dst string) error {
+	data, err := ioutil.ReadFile(src)
+	if err != nil {
+		return err
+	}
+	return ioutil.WriteFile(dst, data, 0644)
+}
+
+func RunExecWithLog(cmd *exec.Cmd, log logr.Logger) error {
+	cmd.Stdout = &LogWriter{Log: log, Stream: "stdout"}
+	cmd.Stderr = &LogWriter{Log: log, Stream: "stderr"}
+	return cmd.Run()
+}
+
+func GetDriverVersion(dev ethernetv1.Device) string {
+	return dev.Driver + "-" + dev.DriverVersion
 }

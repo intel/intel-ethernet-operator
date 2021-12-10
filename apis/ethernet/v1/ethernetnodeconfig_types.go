@@ -52,6 +52,7 @@ type EthernetNodeConfigStatus struct {
 //+kubebuilder:object:root=true
 //+kubebuilder:subresource:status
 //+kubebuilder:resource:shortName=enc
+// +kubebuilder:printcolumn:name="Update",type=string,JSONPath=`.status.conditions[?(@.type=="Updated")].reason`
 
 // EthernetNodeConfig is the Schema for the ethernetnodeconfigs API
 type EthernetNodeConfig struct {

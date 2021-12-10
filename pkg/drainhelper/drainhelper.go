@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/otcshare/intel-ethernet-operator/pkg/utils"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -18,7 +19,6 @@ import (
 	"k8s.io/client-go/tools/leaderelection"
 	"k8s.io/client-go/tools/leaderelection/resourcelock"
 	"k8s.io/kubectl/pkg/drain"
-	"github.com/otcshare/intel-ethernet-operator/pkg/utils"
 )
 
 const (
@@ -42,7 +42,7 @@ func getOsVarOrUseDefault(log logr.Logger, varName string, defVal int64) int64 {
 	retValStr := os.Getenv(varName)
 
 	if retValStr == "" {
-		log.Error(nil, "env variable not found - using default value", "variable", varName, "default", defVal)
+		log.Info("env variable not found - using default value", "variable", varName, "default", defVal)
 		return defVal
 	}
 

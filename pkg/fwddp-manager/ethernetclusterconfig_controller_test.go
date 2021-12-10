@@ -88,6 +88,7 @@ var _ = Describe("EthernetControllerTest", func() {
 			}
 			Expect(k8sClient.Create(context.TODO(), cc)).ToNot(HaveOccurred())
 			return cc
+
 		}
 
 		createDummyReconcileRequest := func() ctrl.Request {
