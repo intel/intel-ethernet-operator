@@ -27,7 +27,7 @@ import (
 )
 
 const (
-	resyncPeriod = 15 * time.Minute
+	requeueAfter = 15 * time.Minute
 )
 
 var (
@@ -102,7 +102,7 @@ func (r ResourceNamePredicate) Create(e event.CreateEvent) bool {
 
 //returns result indicating necessity of re-queuing Reconcile after configured resyncPeriod
 func requeueLater() (reconcile.Result, error) {
-	return reconcile.Result{RequeueAfter: resyncPeriod}, nil
+	return reconcile.Result{RequeueAfter: requeueAfter}, nil
 }
 
 //returns result indicating necessity of re-queuing Reconcile(...) immediately; non-nil err will be logged by controller
@@ -195,8 +195,8 @@ func (r *NodeConfigReconciler) updateStatus(nc *ethernetv1.EthernetNodeConfig, c
 func (r *NodeConfigReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := r.log.WithName("Reconcile").WithValues("namespace", req.Namespace, "name", req.Name)
 
-	nodeConfig := ethernetv1.EthernetNodeConfig{}
-	if err := r.Client.Get(ctx, req.NamespacedName, &nodeConfig); err != nil {
+	nodeConfig := &ethernetv1.EthernetNodeConfig{}
+	if err := r.Client.Get(ctx, req.NamespacedName, nodeConfig); err != nil {
 		if k8serrors.IsNotFound(err) {
 			log.V(4).Info("not found - creating")
 			return requeueNowWithError(r.CreateEmptyNodeConfigIfNeeded(r.Client))
@@ -208,56 +208,62 @@ func (r *NodeConfigReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	condition := meta.FindStatusCondition(nodeConfig.Status.Conditions, UpdateCondition)
 	if condition != nil && condition.Reason == string(UpdatePostUpdateReboot) {
 		log.V(4).Info("Post-update node reboot completed, finishing update...")
-		r.updateCondition(&nodeConfig, metav1.ConditionTrue, UpdateSucceeded, "Updated successfully")
+		r.updateCondition(nodeConfig, metav1.ConditionTrue, UpdateSucceeded, "Updated successfully")
 		log.V(2).Info("Reconciled")
 		return doNotRequeue()
 	}
 
 	if len(nodeConfig.Spec.Config) == 0 {
 		log.V(4).Info("Nothing to do")
-		r.updateCondition(&nodeConfig, metav1.ConditionTrue, UpdateNotRequested, "Inventory up to date")
+		r.updateCondition(nodeConfig, metav1.ConditionTrue, UpdateNotRequested, "Inventory up to date")
 		return doNotRequeue()
 	}
 
-	r.updateCondition(&nodeConfig, metav1.ConditionFalse, UpdateInProgress, "Update started")
+	r.updateCondition(nodeConfig, metav1.ConditionFalse, UpdateInProgress, "Update started")
 
 	updateQueue, err := r.prepareUpdateQueue(nodeConfig)
 	if err != nil {
-		r.updateCondition(&nodeConfig, metav1.ConditionFalse, UpdateFailed, err.Error())
+		r.updateCondition(nodeConfig, metav1.ConditionFalse, UpdateFailed, err.Error())
 		return requeueLater()
 	}
 
-	r.configureNode(updateQueue, &nodeConfig)
+	err = r.configureNode(updateQueue, nodeConfig)
+	if err != nil {
+		r.updateCondition(nodeConfig, metav1.ConditionFalse, UpdateFailed, err.Error())
+		return requeueLater()
+	}
 
+	r.updateCondition(nodeConfig, metav1.ConditionTrue, UpdateSucceeded, "Updated successfully")
 	log.V(2).Info("Reconciled")
 	return doNotRequeue()
 }
 
-func (r *NodeConfigReconciler) configureNode(updateQueue deviceUpdateQueue, nodeConfig *ethernetv1.EthernetNodeConfig) {
+func (r *NodeConfigReconciler) configureNode(updateQueue deviceUpdateQueue, nodeConfig *ethernetv1.EthernetNodeConfig) error {
 	//func start
 
-	var cardActionErr error
+	var nodeActionErr error
 	drainFunc := func(ctx context.Context) bool {
-		rebootRequired := nodeConfig.Spec.ForceReboot
 		fwReboot := false
+		rebootRequired := nodeConfig.Spec.ForceReboot
+
 		for pciAddr, artifacts := range updateQueue {
-			fwReboot, cardActionErr = r.fwUpdater.handleFWUpdate(pciAddr, artifacts.fwPath)
-			if cardActionErr != nil {
+			fwReboot, nodeActionErr = r.fwUpdater.handleFWUpdate(pciAddr, artifacts.fwPath)
+			if nodeActionErr != nil {
 				return true
 			}
 
 			rebootRequired = rebootRequired || fwReboot
 
-			cardActionErr = r.ddpUpdater.handleDDPUpdate(pciAddr, nodeConfig.Spec.ForceReboot, artifacts.ddpPath)
-			if cardActionErr != nil {
+			nodeActionErr = r.ddpUpdater.handleDDPUpdate(pciAddr, nodeConfig.Spec.ForceReboot, artifacts.ddpPath)
+			if nodeActionErr != nil {
 				return true
 			}
-
 		}
 
 		if rebootRequired {
 			r.updateCondition(nodeConfig, metav1.ConditionFalse, UpdatePostUpdateReboot, "Post-update node reboot")
-			cardActionErr = r.rebootNode()
+			nodeActionErr = r.rebootNode()
+			return false
 		}
 
 		return true
@@ -265,21 +271,19 @@ func (r *NodeConfigReconciler) configureNode(updateQueue deviceUpdateQueue, node
 	//func end
 	drainErr := r.drainHelper.Run(drainFunc, !nodeConfig.Spec.DrainSkip)
 
-	if cardActionErr != nil {
-		r.log.Error(drainErr, "Error during node FW/DDP update")
-		r.updateCondition(nodeConfig, metav1.ConditionFalse, UpdateFailed, cardActionErr.Error())
-		return
-	}
 	if drainErr != nil {
 		r.log.Error(drainErr, "Error during node draining")
-		r.updateCondition(nodeConfig, metav1.ConditionFalse, UpdateFailed, drainErr.Error())
-		return
+		return drainErr
+	}
+	if nodeActionErr != nil {
+		r.log.Error(nodeActionErr, "Error during node FW/DDP update")
+		return nodeActionErr
 	}
 
-	r.updateCondition(nodeConfig, metav1.ConditionTrue, UpdateSucceeded, "Updated successfully")
+	return nil
 }
 
-func (r *NodeConfigReconciler) prepareUpdateQueue(nodeConfig ethernetv1.EthernetNodeConfig) (deviceUpdateQueue, error) {
+func (r *NodeConfigReconciler) prepareUpdateQueue(nodeConfig *ethernetv1.EthernetNodeConfig) (deviceUpdateQueue, error) {
 	inv, err := getInventory(r.log)
 	if err != nil {
 		return deviceUpdateQueue{}, err

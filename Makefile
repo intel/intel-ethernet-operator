@@ -84,7 +84,7 @@ GOBIN=$(shell go env GOBIN)
 endif
 
 # To pass proxy for docker build from env invoke make with 'make docker-build HTTP_PROXY=$http_proxy HTTPS_PROXY=$https_proxy'
-DOCKERARGS?=
+DOCKERARGS?=--format=docker
 ifdef HTTP_PROXY
 	DOCKERARGS += --build-arg http_proxy=${HTTP_PROXY}
 endif
@@ -249,7 +249,7 @@ bundle: manifests kustomize ## Generate bundle manifests and metadata, then vali
 
 .PHONY: bundle-build
 bundle-build: bundle ## Build the bundle image.
-	$(IMGTOOL) build -f bundle.Dockerfile -t $(BUNDLE_IMG) .
+	$(IMGTOOL) build -f bundle.Dockerfile -t $(BUNDLE_IMG) ${DOCKERARGS} .
 
 .PHONY: bundle-push
 bundle-push: ## Push the bundle image.

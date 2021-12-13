@@ -51,8 +51,8 @@ func (r *EthernetClusterConfigReconciler) Reconcile(_ context.Context, req ctrl.
 
 	// Get nodes where intel etherenet devices were discovered
 	nodes := &corev1.NodeList{}
-	labels := &client.MatchingLabels{"ethernet.intel.com/intel-ethernet-present": ""}
-	err = r.List(context.TODO(), nodes, labels)
+	clvLabel := &client.MatchingLabels{"ethernet.intel.com/intel-ethernet-present": ""}
+	err = r.List(context.TODO(), nodes, clvLabel)
 	if err != nil {
 		log.Error(err, "Failed to list Nodes")
 		return ctrl.Result{}, err
@@ -188,13 +188,8 @@ func (r *EthernetClusterConfigReconciler) synchronizeNodeConfigSpec(ncc NodeConf
 		newNodeConfig.Spec.ForceReboot = newNodeConfig.Spec.ForceReboot || cc.Spec.ForceReboot
 	}
 
-	switch {
-	case len(newNodeConfig.Spec.Config) == 0 && len(currentNodeConfig.Spec.Config) != 0:
-		return r.Delete(context.TODO(), &currentNodeConfig)
-	default:
-		if !equality.Semantic.DeepDerivative(newNodeConfig.Spec, currentNodeConfig.Spec) {
-			return r.Update(context.TODO(), newNodeConfig)
-		}
+	if !equality.Semantic.DeepDerivative(newNodeConfig.Spec, currentNodeConfig.Spec) {
+		return r.Update(context.TODO(), newNodeConfig)
 	}
 	return nil
 }
