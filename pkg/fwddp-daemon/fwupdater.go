@@ -17,12 +17,12 @@ const (
 	nvmupdate64e             = "./nvmupdate64e"
 	nvmupdateVersionFilesize = 10
 	nvmupdatePackageFilename = "nvmupdate.tar.gz"
-	nvmupdate64eDirSuffix    = "E810/Linux_x64/"
 	updateOutFile            = "update.xml"
 	nvmupdateVersionFilename = "version.txt"
 )
 
 var (
+	findFw        = findFwExec
 	nvmupdateExec = utils.RunExecWithLog
 )
 
@@ -58,7 +58,7 @@ func (f *fwUpdater) prepareFirmware(config ethernetv1.DeviceNodeConfig) (string,
 		return "", err
 	}
 
-	return targetPath, nil
+	return findFw(targetPath)
 }
 
 func (f *fwUpdater) getFWVersion(fwPath string, dev ethernetv1.Device) (string, error) {
@@ -74,7 +74,7 @@ func (f *fwUpdater) getFWVersion(fwPath string, dev ethernetv1.Device) (string, 
 
 	} else {
 		log.V(4).Info("Retrieving version from", "path", fwPath)
-		path := filepath.Join(fwPath, nvmupdate64eDirSuffix, nvmupdateVersionFilename)
+		path := filepath.Join(fwPath, nvmupdateVersionFilename)
 		file, err := os.Open(path)
 		if err != nil {
 			return "", fmt.Errorf("failed to open version file: %v", err)
@@ -126,7 +126,7 @@ func (f *fwUpdater) updateFirmware(pciAddr, fwPath string) error {
 	log.V(2).Info("Refreshing nvmupdate inventory")
 	cmd := exec.Command(nvmupdate64e, "-i")
 	cmd.SysProcAttr = rootAttr
-	cmd.Dir = nvmupdate64eDir(fwPath)
+	cmd.Dir = fwPath
 	err := nvmupdateExec(cmd, log)
 	if err != nil {
 		return err
@@ -142,7 +142,7 @@ func (f *fwUpdater) updateFirmware(pciAddr, fwPath string) error {
 	cmd = exec.Command(nvmupdate64e, "-u", "-m", mac, "-c", nvmupdate64eCfgPath(fwPath), "-o", updateResultPath(fwPath), "-l")
 
 	cmd.SysProcAttr = rootAttr
-	cmd.Dir = nvmupdate64eDir(fwPath)
+	cmd.Dir = fwPath
 	err = nvmupdateExec(cmd, log)
 	if err != nil {
 		return err
@@ -151,6 +151,24 @@ func (f *fwUpdater) updateFirmware(pciAddr, fwPath string) error {
 	return nil
 }
 
-func nvmupdate64eDir(p string) string     { return path.Join(p, nvmupdate64eDirSuffix) }
-func nvmupdate64eCfgPath(p string) string { return path.Join(nvmupdate64eDir(p), "nvmupdate.cfg") }
-func updateResultPath(p string) string    { return path.Join(nvmupdate64eDir(p), updateOutFile) }
+func findFwExec(targetPath string) (string, error) {
+	var fwPaths []string
+	walkFunction := func(path string, info os.FileInfo, err error) error {
+		if strings.HasSuffix(info.Name(), "nvmupdate64e") && isExecutable(info) {
+			fwPaths = append(fwPaths, strings.TrimSuffix(path, "nvmupdate64e"))
+		}
+		return nil
+	}
+	err := filepath.Walk(targetPath, walkFunction)
+	if err != nil {
+		return "", err
+	}
+	if len(fwPaths) != 1 {
+		return "", fmt.Errorf("expected to find exactly 1 file starting with 'nvmupdate64e', but found %v - %v", len(fwPaths), fwPaths)
+	}
+	return fwPaths[0], err
+}
+
+func nvmupdate64eCfgPath(p string) string { return path.Join(p, "nvmupdate.cfg") }
+func updateResultPath(p string) string    { return path.Join(p, updateOutFile) }
+func isExecutable(info os.FileInfo) bool  { return info.Mode()&0100 != 0 }

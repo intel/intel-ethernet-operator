@@ -55,7 +55,7 @@ var execEthtool = func(nicName string) ([]byte, error) {
 var execDevlink = func(pciAddr string) ([]byte, error) {
 	devName := fmt.Sprintf("pci/%s", pciAddr)
 
-	return exec.Command("devlink", "dev", "info", devName).Output()
+	return exec.Command("devlink", "dev", "info", devName).CombinedOutput()
 }
 
 func isDeviceSupported(d *pci.Device) bool {
@@ -87,6 +87,8 @@ func GetInventory(log logr.Logger) ([]ethernetv1.Device, error) {
 			d := ethernetv1.Device{
 				PCIAddress: pciDevice.Address,
 				Name:       pciDevice.Product.Name,
+				VendorID:   pciDevice.Vendor.ID,
+				DeviceID:   pciDevice.Product.ID,
 			}
 			addNetInfo(log, &d)
 			addDDPInfo(log, &d)
@@ -98,6 +100,8 @@ func GetInventory(log logr.Logger) ([]ethernetv1.Device, error) {
 }
 
 func addNetInfo(log logr.Logger, device *ethernetv1.Device) {
+	log.Info("adding netInfo for supported device", "device", device)
+
 	net, err := getNetworkInfo()
 	if err != nil {
 		log.Error(err, "failed to get network interfaces")
@@ -113,6 +117,7 @@ func addNetInfo(log logr.Logger, device *ethernetv1.Device) {
 		}
 	}
 	if nicName == "" {
+		log.Info("failed to find nicName for device", "pciAddress", device.PCIAddress)
 		return // NIC not found
 	}
 
@@ -140,7 +145,7 @@ func addNetInfo(log logr.Logger, device *ethernetv1.Device) {
 func addDDPInfo(log logr.Logger, device *ethernetv1.Device) {
 	out, err := execDevlink(device.PCIAddress)
 	if err != nil {
-		log.Error(err, "failed when executing devlink")
+		log.Error(err, "failed when executing devlink", "out", string(out))
 		return
 	}
 	for _, line := range strings.Split(string(out), "\n") {

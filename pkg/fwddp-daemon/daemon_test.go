@@ -289,7 +289,7 @@ var _ = Describe("DaemonTests", func() {
 				updateDir := path.Join(artifactsFolder, data.Inventory[0].PCIAddress)
 				updatePath := updateResultPath(updateDir)
 
-				err := os.MkdirAll(nvmupdate64eDir(updateDir), 0777)
+				err := os.MkdirAll(updateDir, 0777)
 				Expect(err).ToNot(HaveOccurred())
 
 				tmpfile, err := os.OpenFile(updatePath, os.O_RDWR|os.O_CREATE, 0777)
@@ -309,6 +309,7 @@ var _ = Describe("DaemonTests", func() {
 
 			wasRebootCalled := false
 			enableIceServiceP = func() error { return nil }
+			findFw = func(localpath string) (string, error) { return localpath, nil }
 
 			execCmd = func(args []string, log logr.Logger) (string, error) {
 				for _, part := range args {
@@ -351,7 +352,7 @@ var _ = Describe("DaemonTests", func() {
 				updateDir := path.Join(artifactsFolder, data.Inventory[0].PCIAddress)
 				updatePath := updateResultPath(updateDir)
 
-				err := os.MkdirAll(nvmupdate64eDir(updateDir), 0777)
+				err := os.MkdirAll(updateDir, 0777)
 				Expect(err).ToNot(HaveOccurred())
 
 				tmpfile, err := os.OpenFile(updatePath, os.O_RDWR|os.O_CREATE, 0777)
@@ -412,7 +413,7 @@ var _ = Describe("DaemonTests", func() {
 				updateDir := path.Join(artifactsFolder, data.Inventory[0].PCIAddress)
 				updatePath := updateResultPath(updateDir)
 
-				err := os.MkdirAll(nvmupdate64eDir(updateDir), 0777)
+				err := os.MkdirAll(updateDir, 0777)
 				Expect(err).ToNot(HaveOccurred())
 
 				tmpfile, err := os.OpenFile(updatePath, os.O_RDWR|os.O_CREATE, 0777)
@@ -497,7 +498,7 @@ var _ = Describe("DaemonTests", func() {
 			data.Inventory[0].PCIAddress = "0000:00:00.1"
 
 			nvmupdateExec = utils.RunExecWithLog
-			updateDir := path.Join(artifactsFolder, data.Inventory[0].PCIAddress, nvmupdate64eDirSuffix)
+			updateDir := path.Join(artifactsFolder, data.Inventory[0].PCIAddress)
 			err := os.MkdirAll(updateDir, 0777)
 			Expect(err).ToNot(HaveOccurred())
 
@@ -564,8 +565,7 @@ var _ = Describe("DaemonTests", func() {
 			}
 			nvmupdateExec = func(cmd *exec.Cmd, log logr.Logger) error {
 				Expect(cmd.SysProcAttr).To(Equal(rootAttr))
-				Expect(cmd.Dir).To(Equal(path.Join(artifactsFolder, data.NodeConfig.Spec.Config[0].PCIAddress,
-					nvmupdate64eDirSuffix)))
+				Expect(cmd.Dir).To(Equal(path.Join(artifactsFolder, data.NodeConfig.Spec.Config[0].PCIAddress)))
 				return nil
 			}
 
@@ -574,7 +574,7 @@ var _ = Describe("DaemonTests", func() {
 				updateDir := path.Join(artifactsFolder, data.Inventory[0].PCIAddress)
 				updatePath := updateResultPath(updateDir)
 
-				err := os.MkdirAll(nvmupdate64eDir(updateDir), 0777)
+				err := os.MkdirAll(updateDir, 0777)
 				Expect(err).ToNot(HaveOccurred())
 
 				tmpfile, err := os.OpenFile(updatePath, os.O_RDWR|os.O_CREATE, 0777)
@@ -621,8 +621,7 @@ var _ = Describe("DaemonTests", func() {
 			}
 			nvmupdateExec = func(cmd *exec.Cmd, log logr.Logger) error {
 				Expect(cmd.SysProcAttr).To(Equal(rootAttr))
-				Expect(cmd.Dir).To(Equal(path.Join(artifactsFolder, data.NodeConfig.Spec.Config[0].PCIAddress,
-					nvmupdate64eDirSuffix)))
+				Expect(cmd.Dir).To(Equal(path.Join(artifactsFolder, data.NodeConfig.Spec.Config[0].PCIAddress)))
 				return nil
 			}
 
@@ -669,8 +668,7 @@ var _ = Describe("DaemonTests", func() {
 			}
 			nvmupdateExec = func(cmd *exec.Cmd, log logr.Logger) error {
 				Expect(cmd.SysProcAttr).To(Equal(rootAttr))
-				Expect(cmd.Dir).To(Equal(path.Join(artifactsFolder, data.NodeConfig.Spec.Config[0].PCIAddress,
-					nvmupdate64eDirSuffix)))
+				Expect(cmd.Dir).To(Equal(path.Join(artifactsFolder, data.NodeConfig.Spec.Config[0].PCIAddress)))
 				return nil
 			}
 
@@ -705,8 +703,7 @@ var _ = Describe("DaemonTests", func() {
 			}
 			nvmupdateExec = func(cmd *exec.Cmd, log logr.Logger) error {
 				Expect(cmd.SysProcAttr).To(Equal(rootAttr))
-				Expect(cmd.Dir).To(Equal(path.Join(artifactsFolder, data.NodeConfig.Spec.Config[0].PCIAddress,
-					nvmupdate64eDirSuffix)))
+				Expect(cmd.Dir).To(Equal(path.Join(artifactsFolder, data.NodeConfig.Spec.Config[0].PCIAddress)))
 				return nil
 			}
 
@@ -743,8 +740,7 @@ var _ = Describe("DaemonTests", func() {
 			}
 			nvmupdateExec = func(cmd *exec.Cmd, log logr.Logger) error {
 				Expect(cmd.SysProcAttr).To(Equal(rootAttr))
-				Expect(cmd.Dir).To(Equal(path.Join(artifactsFolder, data.NodeConfig.Spec.Config[0].PCIAddress,
-					nvmupdate64eDirSuffix)))
+				Expect(cmd.Dir).To(Equal(path.Join(artifactsFolder, data.NodeConfig.Spec.Config[0].PCIAddress)))
 				return nil
 			}
 
@@ -753,14 +749,14 @@ var _ = Describe("DaemonTests", func() {
 				updateDir := path.Join(artifactsFolder, data.Inventory[0].PCIAddress)
 				updatePath := updateResultPath(updateDir)
 
-				err := os.MkdirAll(nvmupdate64eDir(updateDir), 0777)
+				err := os.MkdirAll(updateDir, 0777)
 				Expect(err).ToNot(HaveOccurred())
 
 				tmpfile, err := os.OpenFile(updatePath, os.O_RDWR|os.O_CREATE, 0777)
 				Expect(err).ToNot(HaveOccurred())
 				defer tmpfile.Close()
 
-				updatePath2 := path.Join(updateDir, nvmupdate64eDirSuffix, nvmupdateVersionFilename)
+				updatePath2 := path.Join(updateDir, nvmupdateVersionFilename)
 
 				tmpfile2, err := os.OpenFile(updatePath2, os.O_RDWR|os.O_CREATE, 0777)
 				Expect(err).ToNot(HaveOccurred())
@@ -783,7 +779,7 @@ var _ = Describe("DaemonTests", func() {
 			Expect(nodeConfigs.Items[0].Status.Conditions).To(HaveLen(1))
 			Expect(nodeConfigs.Items[0].Status.Conditions[0].Status).To(Equal(metav1.ConditionFalse))
 			Expect(nodeConfigs.Items[0].Status.Conditions[0].Reason).To(Equal(string(UpdateFailed)))
-			Expect(nodeConfigs.Items[0].Status.Conditions[0].Message).To(ContainSubstring("unable to read: workdir/nvmupdate/0000:00:00.1/E810/Linux_x64/version.txt"))
+			Expect(nodeConfigs.Items[0].Status.Conditions[0].Message).To(ContainSubstring("unable to read: workdir/nvmupdate/0000:00:00.1/version.txt"))
 		})
 
 		var _ = It("will fail because of PCIAddress not matching pattern", func() {
@@ -1120,11 +1116,10 @@ var _ = Describe("DaemonTests", func() {
 			Expect(err).ToNot(HaveOccurred())
 			defer os.RemoveAll(tmpdir)
 
-			dir := filepath.Join(tmpdir, nvmupdate64eDirSuffix)
-			err = os.MkdirAll(dir, 0777)
+			err = os.MkdirAll(tmpdir, 0777)
 			Expect(err).ToNot(HaveOccurred())
 
-			err = ioutil.WriteFile(filepath.Join(dir, nvmupdateVersionFilename), []byte("v2.00"), 0666)
+			err = ioutil.WriteFile(filepath.Join(tmpdir, nvmupdateVersionFilename), []byte("v2.00"), 0666)
 			Expect(err).ToNot(HaveOccurred())
 
 			err = reconciler.verifyCompatibility(tmpdir, "", dev, false)
@@ -1153,11 +1148,10 @@ var _ = Describe("DaemonTests", func() {
 			Expect(err).ToNot(HaveOccurred())
 			defer os.RemoveAll(tmpdir)
 
-			dir := filepath.Join(tmpdir, nvmupdate64eDirSuffix)
-			err = os.MkdirAll(dir, 0777)
+			err = os.MkdirAll(tmpdir, 0777)
 			Expect(err).ToNot(HaveOccurred())
 
-			err = ioutil.WriteFile(filepath.Join(dir, nvmupdateVersionFilename), []byte("v1.23"), 0666)
+			err = ioutil.WriteFile(filepath.Join(tmpdir, nvmupdateVersionFilename), []byte("v1.23"), 0666)
 			Expect(err).ToNot(HaveOccurred())
 
 			err = reconciler.verifyCompatibility(tmpdir, "", dev, false)
@@ -1219,11 +1213,10 @@ var _ = Describe("DaemonTests", func() {
 			Expect(err).ToNot(HaveOccurred())
 			defer os.RemoveAll(tmpdir)
 
-			dir := filepath.Join(tmpdir, nvmupdate64eDirSuffix)
-			err = os.MkdirAll(dir, 0777)
+			err = os.MkdirAll(tmpdir, 0777)
 			Expect(err).ToNot(HaveOccurred())
 
-			err = ioutil.WriteFile(filepath.Join(dir, nvmupdateVersionFilename), []byte("v2.00"), 0666)
+			err = ioutil.WriteFile(filepath.Join(tmpdir, nvmupdateVersionFilename), []byte("v2.00"), 0666)
 			Expect(err).ToNot(HaveOccurred())
 
 			err = reconciler.verifyCompatibility(tmpdir, "", dev, false)
@@ -1258,11 +1251,10 @@ var _ = Describe("DaemonTests", func() {
 			Expect(err).ToNot(HaveOccurred())
 			defer os.RemoveAll(tmpdir)
 
-			dir := filepath.Join(tmpdir, nvmupdate64eDirSuffix)
-			err = os.MkdirAll(dir, 0777)
+			err = os.MkdirAll(tmpdir, 0777)
 			Expect(err).ToNot(HaveOccurred())
 
-			err = ioutil.WriteFile(filepath.Join(dir, nvmupdateVersionFilename), []byte("v2.00"), 0666)
+			err = ioutil.WriteFile(filepath.Join(tmpdir, nvmupdateVersionFilename), []byte("v2.00"), 0666)
 			Expect(err).ToNot(HaveOccurred())
 
 			err = reconciler.verifyCompatibility(tmpdir, "", dev, false)
@@ -1299,11 +1291,10 @@ var _ = Describe("DaemonTests", func() {
 			Expect(err).ToNot(HaveOccurred())
 			defer os.RemoveAll(tmpdir)
 
-			dir := filepath.Join(tmpdir, nvmupdate64eDirSuffix)
-			err = os.MkdirAll(dir, 0777)
+			err = os.MkdirAll(tmpdir, 0777)
 			Expect(err).ToNot(HaveOccurred())
 
-			err = ioutil.WriteFile(filepath.Join(dir, nvmupdateVersionFilename), []byte("v2.00"), 0666)
+			err = ioutil.WriteFile(filepath.Join(tmpdir, nvmupdateVersionFilename), []byte("v2.00"), 0666)
 			Expect(err).ToNot(HaveOccurred())
 
 			err = reconciler.verifyCompatibility(tmpdir, "", dev, false)
@@ -1338,11 +1329,10 @@ var _ = Describe("DaemonTests", func() {
 			Expect(err).ToNot(HaveOccurred())
 			defer os.RemoveAll(tmpdir)
 
-			dir := filepath.Join(tmpdir, nvmupdate64eDirSuffix)
-			err = os.MkdirAll(dir, 0777)
+			err = os.MkdirAll(tmpdir, 0777)
 			Expect(err).ToNot(HaveOccurred())
 
-			err = ioutil.WriteFile(filepath.Join(dir, nvmupdateVersionFilename), []byte("v2.00"), 0666)
+			err = ioutil.WriteFile(filepath.Join(tmpdir, nvmupdateVersionFilename), []byte("v2.00"), 0666)
 			Expect(err).ToNot(HaveOccurred())
 
 			err = reconciler.verifyCompatibility(tmpdir, "", dev, false)
