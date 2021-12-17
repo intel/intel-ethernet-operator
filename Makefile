@@ -124,7 +124,7 @@ manifests: controller-gen ## Generate WebhookConfiguration, ClusterRole and Cust
 
 # Generate flowconfig-daemon deployment assets
 .PHONY: flowconfig-manifests
-flowconfig-manifests: manifests kustomize
+flowconfig-manifests: kustomize
 	cd config/flowconfig-daemon && $(KUSTOMIZE) edit set image daemon-image=${FCDAEMON_IMG}
 	$(KUSTOMIZE) build config/flowconfig-daemon -o assets/flowconfig-daemon/daemon.yaml
 	FOLDER=. COPYRIGHT_FILE=COPYRIGHT ./copyright.sh
@@ -236,7 +236,7 @@ rm -rf $$TMP_DIR ;\
 endef
 
 .PHONY: bundle
-bundle: manifests kustomize ## Generate bundle manifests and metadata, then validate generated files.
+bundle: manifests kustomize flowconfig-manifests ## Generate bundle manifests and metadata, then validate generated files.
 	operator-sdk generate kustomize manifests -q
 	cd config/manager && $(KUSTOMIZE) edit set image controller=$(ETHERNET_MANAGER_IMAGE)
 	$(KUSTOMIZE) build config/manifests | envsubst | operator-sdk generate bundle -q --overwrite --version $(VERSION) $(BUNDLE_METADATA_OPTS)
