@@ -45,14 +45,15 @@ func (f *fwUpdater) prepareFirmware(config ethernetv1.DeviceNodeConfig) (string,
 		return "", err
 	}
 
-	log.V(4).Info("Downloading", "url", config.DeviceConfig.FWURL)
-	err = downloadFile(path.Join(targetPath, nvmupdatePackageFilename), config.DeviceConfig.FWURL, config.DeviceConfig.FWChecksum)
+	fullPath := path.Join(targetPath, nvmupdatePackageFilename)
+	log.V(4).Info("Downloading", "url", config.DeviceConfig.FWURL, "dstPath", fullPath)
+	err = downloadFile(fullPath, config.DeviceConfig.FWURL, config.DeviceConfig.FWChecksum)
 	if err != nil {
 		return "", err
 	}
 
 	log.V(4).Info("FW file downloaded - extracting")
-	err = untarFile(path.Join(targetPath, nvmupdatePackageFilename), targetPath, log)
+	err = untarFile(fullPath, targetPath, log)
 	if err != nil {
 		return "", err
 	}

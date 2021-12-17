@@ -133,8 +133,8 @@ func (d *ddpUpdater) prepareDDP(config ethernetv1.DeviceNodeConfig) (string, err
 		return "", err
 	}
 
-	log.V(4).Info("Downloading", "url", config.DeviceConfig.DDPURL)
 	fullPath := path.Join(targetPath, ddpPackageFilename)
+	log.V(4).Info("Downloading", "url", config.DeviceConfig.DDPURL, "dstPath", fullPath)
 	err = downloadFile(fullPath, config.DeviceConfig.DDPURL, config.DeviceConfig.DDPChecksum)
 	if err != nil {
 		return "", err
