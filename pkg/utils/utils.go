@@ -11,7 +11,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	ethernetv1 "github.com/otcshare/intel-ethernet-operator/apis/ethernet/v1"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -19,6 +18,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	ethernetv1 "github.com/otcshare/intel-ethernet-operator/apis/ethernet/v1"
 
 	"github.com/go-logr/logr"
 )
@@ -181,6 +182,11 @@ func Untar(srcPath string, dstPath string, log logr.Logger) error {
 			log.Error(err, "Error when reading tar")
 			return err
 		}
+		if fh == nil {
+			err = fmt.Errorf("invalid header in file %s", fh.Name)
+			log.Error(err, "Invalid tar header")
+			return err
+		}
 
 		nfDst := filepath.Join(dstPath, fh.Name)
 
@@ -201,6 +207,10 @@ func Untar(srcPath string, dstPath string, log logr.Logger) error {
 			if err != nil {
 				return err
 			}
+		default:
+			err = fmt.Errorf("unable to untar type: %c in file %s", fh.Typeflag, fh.Name)
+			log.Error(err, "Invalid untar type")
+			return err
 		}
 	}
 
