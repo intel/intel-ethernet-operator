@@ -9,6 +9,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"os"
 	"sigs.k8s.io/controller-runtime/pkg/event"
+	"syscall"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -194,8 +195,9 @@ func (r *NodeConfigReconciler) updateStatus(nc *ethernetv1.EthernetNodeConfig, c
 
 func (r *NodeConfigReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := r.log.WithName("Reconcile").WithValues("namespace", req.Namespace, "name", req.Name)
-
 	nodeConfig := &ethernetv1.EthernetNodeConfig{}
+
+	syscall.Umask(0077)
 	if err := r.Client.Get(ctx, req.NamespacedName, nodeConfig); err != nil {
 		if k8serrors.IsNotFound(err) {
 			log.V(4).Info("not found - creating")
@@ -240,8 +242,8 @@ func (r *NodeConfigReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 
 func (r *NodeConfigReconciler) configureNode(updateQueue deviceUpdateQueue, nodeConfig *ethernetv1.EthernetNodeConfig) error {
 	//func start
-
 	var nodeActionErr error
+
 	drainFunc := func(ctx context.Context) bool {
 		fwReboot := false
 		rebootRequired := nodeConfig.Spec.ForceReboot
