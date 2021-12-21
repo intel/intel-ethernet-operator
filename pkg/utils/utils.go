@@ -207,6 +207,8 @@ func Untar(srcPath string, dstPath string, log logr.Logger) error {
 			if err != nil {
 				return err
 			}
+		case tar.TypeSymlink, tar.TypeLink:
+			log.Info("Skipping (sym)link %v", fh.FileInfo().Name())
 		default:
 			err = fmt.Errorf("unable to untar type: %c in file %s", fh.Typeflag, fh.Name)
 			log.Error(err, "Invalid untar type")
