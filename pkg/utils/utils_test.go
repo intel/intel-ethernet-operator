@@ -287,6 +287,62 @@ var _ = Describe("Utils", func() {
 			// TODO: walk over extracted files and compare their content to the original ones
 		})
 	})
+
+	var _ = Describe("OpenNoLinks", func() {
+		var _ = It("will succeed if a path is neither symlink nor hard link", func() {
+			tmpFile, err := ioutil.TempFile("", "regularFile")
+			defer os.Remove(tmpFile.Name())
+			Expect(err).ToNot(HaveOccurred())
+
+			err = tmpFile.Close()
+			Expect(err).ToNot(HaveOccurred())
+
+			f, err := OpenNoLinks(tmpFile.Name())
+			Expect(err).ToNot(HaveOccurred())
+			Expect(f).ToNot(BeNil())
+
+			err = f.Close()
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		var _ = It("will return error if a path is a symlink", func() {
+			tmpFile, err := ioutil.TempFile("", "regularFile")
+			defer os.Remove(tmpFile.Name())
+			Expect(err).ToNot(HaveOccurred())
+
+			err = tmpFile.Close()
+			Expect(err).ToNot(HaveOccurred())
+
+			symlinkPath := tmpFile.Name() + "-symlink"
+			err = os.Symlink(tmpFile.Name(), symlinkPath)
+			defer os.Remove(symlinkPath)
+			Expect(err).ToNot(HaveOccurred())
+
+			f, err := OpenNoLinks(symlinkPath)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("too many levels of symbolic links"))
+			Expect(f).To(BeNil())
+		})
+
+		var _ = It("will return error if a path is a hard link", func() {
+			tmpFile, err := ioutil.TempFile("", "regularFile")
+			defer os.Remove(tmpFile.Name())
+			Expect(err).ToNot(HaveOccurred())
+
+			err = tmpFile.Close()
+			Expect(err).ToNot(HaveOccurred())
+
+			hardlinkPath := tmpFile.Name() + "-hardlink"
+			err = os.Link(tmpFile.Name(), hardlinkPath)
+			defer os.Remove(hardlinkPath)
+			Expect(err).ToNot(HaveOccurred())
+
+			f, err := OpenNoLinks(hardlinkPath)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(Equal(hardlinkPath + " is a hardlink"))
+			Expect(f).To(BeNil())
+		})
+	})
 })
 
 func testTar() (string, []string, error) {

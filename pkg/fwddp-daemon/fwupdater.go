@@ -78,7 +78,7 @@ func (f *fwUpdater) getFWVersion(fwPath string, dev ethernetv1.Device) (string, 
 	} else {
 		log.V(4).Info("Retrieving version from", "path", fwPath)
 		path := filepath.Join(fwPath, nvmupdateVersionFilename)
-		file, err := os.Open(path)
+		file, err := utils.OpenNoLinks(path)
 		if err != nil {
 			return "", fmt.Errorf("failed to open version file: %v", err)
 		}

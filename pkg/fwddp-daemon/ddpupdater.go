@@ -161,7 +161,7 @@ func reloadIceService() error {
 
 func enableIceService() error {
 	iceServicePath := "/etc/systemd/system/ice.service"
-	serviceInfo, err := os.Create(path.Join("/host", iceServicePath))
+	serviceInfo, err := utils.CreateNoLinks(path.Join("/host", iceServicePath))
 	if err != nil {
 		return err
 	}

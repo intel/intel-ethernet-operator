@@ -18,6 +18,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 
 	ethernetv1 "github.com/otcshare/intel-ethernet-operator/apis/ethernet/v1"
 
@@ -37,7 +38,7 @@ const (
 )
 
 func LoadSupportedDevices(cfgPath string, inStruct interface{}) error {
-	file, err := os.Open(filepath.Clean(cfgPath))
+	file, err := OpenNoLinks(filepath.Clean(cfgPath))
 	if err != nil {
 		return fmt.Errorf("Failed to open config: %v", err)
 	}
@@ -80,7 +81,7 @@ func verifyChecksum(path, expected string) (bool, error) {
 	if expected == "" {
 		return false, nil
 	}
-	f, err := os.Open(path)
+	f, err := OpenNoLinks(path)
 	if err != nil {
 		return false, errors.New("Failed to open file to calculate md5")
 	}
@@ -98,7 +99,7 @@ func verifyChecksum(path, expected string) (bool, error) {
 
 // TODO: [ESS-2843] Add cert validation support
 func DownloadFile(path, url, checksum string) error {
-	f, err := os.Create(path)
+	f, err := CreateNoLinks(path)
 	if err != nil {
 		return err
 	}
@@ -158,7 +159,7 @@ type LogWriter struct {
 func Untar(srcPath string, dstPath string, log logr.Logger) error {
 	log.V(4).Info("Extracting file", "srcPath", srcPath, "dstPath", dstPath)
 
-	f, err := os.Open(srcPath)
+	f, err := OpenNoLinks(srcPath)
 	if err != nil {
 		log.Error(err, "Unable to open file")
 		return err
@@ -192,7 +193,7 @@ func Untar(srcPath string, dstPath string, log logr.Logger) error {
 
 		switch fh.Typeflag {
 		case tar.TypeReg:
-			nf, err := os.OpenFile(nfDst, os.O_CREATE|os.O_RDWR, os.FileMode(fh.Mode))
+			nf, err := OpenFileNoLinks(nfDst, os.O_CREATE|os.O_RDWR, os.FileMode(fh.Mode))
 			if err != nil {
 				return err
 			}
@@ -259,4 +260,49 @@ func RunExecWithLog(cmd *exec.Cmd, log logr.Logger) error {
 
 func GetDriverVersion(dev ethernetv1.Device) string {
 	return dev.Driver + "-" + dev.DriverVersion
+}
+
+func isHardLink(path string) (bool, error) {
+	var stat syscall.Stat_t
+
+	err := syscall.Stat(path, &stat)
+	if err != nil {
+		return false, err
+	}
+
+	if stat.Nlink > 1 {
+		return true, nil
+	}
+
+	return false, nil
+}
+
+func OpenNoLinks(path string) (*os.File, error) {
+	return OpenFileNoLinks(path, os.O_RDONLY, 0)
+}
+
+func CreateNoLinks(path string) (*os.File, error) {
+	return OpenFileNoLinks(path, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
+}
+
+func OpenFileNoLinks(path string, flag int, perm os.FileMode) (*os.File, error) {
+	// O_NOFOLLOW - If the trailing component (i.e., basename) of pathname is a symbolic link,
+	// then the open fails, with the error ELOOP.
+	file, err := os.OpenFile(path, flag|syscall.O_NOFOLLOW, perm)
+	if err != nil {
+		return nil, err
+	}
+
+	hardLink, err := isHardLink(path)
+	if err != nil {
+		file.Close()
+		return nil, err
+	}
+
+	if hardLink {
+		file.Close()
+		return nil, fmt.Errorf("%v is a hardlink", path)
+	}
+
+	return file, nil
 }
