@@ -124,6 +124,8 @@ spec:
           volumeMounts:
             - name: host
               mountPath: /host
+            - name: run-volume
+              mountPath: /run
             - name: config-volume
               mountPath: "/devices.json"
               subPath: devices.json
@@ -151,6 +153,8 @@ spec:
         - name: host
           hostPath:
             path: /
+        - name: run-volume
+          emptyDir: {}
         - name: config-volume
           configMap:
             name: supported-clv-devices
