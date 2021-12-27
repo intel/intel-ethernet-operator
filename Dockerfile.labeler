@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # Copyright (c) 2021 Intel Corporation
 
-FROM golang:1.15 as builder
+FROM golang:alpine3.13 as builder
 
 WORKDIR /workspace
 COPY go.mod go.sum ./
