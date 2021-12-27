@@ -165,7 +165,7 @@ func addDDPInfo(log logr.Logger, device *ethernetv1.Device) {
 	}
 }
 
-func getDeviceMAC(pciAddr string, log logr.InfoLogger) (string, error) {
+func getDeviceMAC(pciAddr string, log logr.Logger) (string, error) {
 	inv, err := getInventory(log)
 	if err != nil {
 		log.Error(err, "Failed to retrieve inventory")
@@ -182,7 +182,7 @@ func getDeviceMAC(pciAddr string, log logr.InfoLogger) (string, error) {
 
 type DeviceIDs utils.SupportedDevice
 
-func getDeviceIDs(pciAddr string, log logr.InfoLogger) (DeviceIDs, error) {
+func getDeviceIDs(pciAddr string, log logr.Logger) (DeviceIDs, error) {
 	pciDevices, err := getPCIDevices()
 	if err != nil {
 		log.Error(err, "Failed to get PCI Devices")

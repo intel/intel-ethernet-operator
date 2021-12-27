@@ -5,7 +5,7 @@ package daemon
 
 import (
 	"context"
-	"github.com/otcshare/intel-ethernet-operator/pkg/utils"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -497,19 +497,13 @@ var _ = Describe("DaemonTests", func() {
 
 			data.Inventory[0].PCIAddress = "0000:00:00.1"
 
-			nvmupdateExec = utils.RunExecWithLog
-			updateDir := path.Join(artifactsFolder, data.Inventory[0].PCIAddress)
-			err := os.MkdirAll(updateDir, 0777)
-			Expect(err).ToNot(HaveOccurred())
-
-			fakeUpdater, err := os.OpenFile(path.Join(updateDir, nvmupdate64e), os.O_RDWR|os.O_CREATE, 0777)
-			Expect(err).ToNot(HaveOccurred())
-			defer os.Remove(fakeUpdater.Name())
-			fakeUpdater.Close()
+			nvmupdateExec = func(cmd *exec.Cmd, log logr.Logger) error {
+				return fmt.Errorf("FAILING NVME UPDATE BY PURPOSE")
+			}
 
 			Expect(initReconciler(reconciler, data.NodeConfig.Name, data.NodeConfig.Namespace)).To(Succeed())
 
-			_, err = reconciler.Reconcile(context.TODO(), ctrl.Request{NamespacedName: types.NamespacedName{
+			_, err := reconciler.Reconcile(context.TODO(), ctrl.Request{NamespacedName: types.NamespacedName{
 				Namespace: data.NodeConfig.Namespace,
 				Name:      data.NodeConfig.Name,
 			}})
@@ -522,8 +516,7 @@ var _ = Describe("DaemonTests", func() {
 			Expect(nodeConfigs.Items[0].Status.Conditions[0].Status).To(Equal(metav1.ConditionFalse))
 			Expect(nodeConfigs.Items[0].Status.Conditions[0].Reason).To(Equal(string(UpdateFailed)))
 			Expect(nodeConfigs.Items[0].Status.Conditions[0].Message).To(SatisfyAny(
-				ContainSubstring("./nvmupdate64e: operation not permitted"),
-				ContainSubstring("./nvmupdate64e: exec format error")))
+				ContainSubstring("FAILING NVME UPDATE BY PURPOSE")))
 		})
 
 		var _ = It("will update condition to UpdateFailed if firmware update fails", func() {
@@ -1024,7 +1017,7 @@ var _ = Describe("DaemonTests", func() {
 
 	var _ = Context("verifyCompatibility", func() {
 		BeforeEach(func() {
-			getIDs = func(string, logr.InfoLogger) (DeviceIDs, error) {
+			getIDs = func(string, logr.Logger) (DeviceIDs, error) {
 				return DeviceIDs{
 					VendorID: "0001",
 					Class:    "00",

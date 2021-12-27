@@ -80,6 +80,7 @@ func NewDrainHelper(log logr.Logger, cs *clientset.Clientset, nodeName, namespac
 		nodeName:  nodeName,
 
 		drainer: &drain.Helper{
+			Ctx:                 context.Background(),
 			Client:              cs,
 			Force:               true,
 			IgnoreAllDaemonSets: true,

@@ -65,8 +65,8 @@ var _ = Describe("EthernetControllerTest", func() {
 		createNodeInventory := func(nodeName string, inventory []ethernetv1.Device) {
 			nodeConfig := nodeConfigPrototype.DeepCopy()
 			nodeConfig.Name = nodeName
-			nodeConfig.Status.Devices = inventory
 			Expect(k8sClient.Create(context.TODO(), nodeConfig)).ToNot(HaveOccurred())
+			nodeConfig.Status.Devices = inventory
 			Expect(k8sClient.Status().Update(context.TODO(), nodeConfig)).ToNot(HaveOccurred())
 		}
 

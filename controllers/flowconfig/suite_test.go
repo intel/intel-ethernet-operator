@@ -160,8 +160,7 @@ var _ = BeforeSuite(func() {
 
 var _ = AfterSuite(func() {
 	By("tearing down the test environment")
-	err := testEnv.Stop()
-	Expect(err).NotTo(HaveOccurred())
+	_ = testEnv.Stop()
 
 	targetDir, err := filepath.Abs(".")
 	Expect(err).Should(BeNil())

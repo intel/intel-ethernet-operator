@@ -8,6 +8,7 @@ import (
 	"compress/gzip"
 	"crypto/md5"
 	"encoding/hex"
+	"github.com/go-logr/logr"
 	"io"
 	"io/ioutil"
 	"os"
@@ -18,7 +19,6 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"k8s.io/klog/klogr"
 
 	ctrl "sigs.k8s.io/controller-runtime"
 )
@@ -116,7 +116,7 @@ var _ = Describe("Utils", func() {
 	})
 
 	var _ = Describe("CreateFolder", func() {
-		log := klogr.New()
+		log := logr.Discard()
 		somefolderName := "/tmp/somefolder"
 		var _ = It("will return no error if folder does not exist", func() {
 			defer os.Remove(somefolderName)
@@ -147,7 +147,7 @@ var _ = Describe("Utils", func() {
 	})
 
 	var _ = Describe("Write", func() {
-		log := klogr.New()
+		log := logr.Discard()
 		var _ = It("will return no error and a count of writtendata", func() {
 			var l LogWriter
 			l.Log = log
