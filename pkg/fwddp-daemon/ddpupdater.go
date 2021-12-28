@@ -17,21 +17,6 @@ import (
 
 const (
 	ddpPackageFilename = "ddp.tar.gz"
-	serviceTemplate    = `
-[Unit]
-Description=ddp-ice configuration on boot
-AssertPathExists=/sbin/modprobe
-Requires=var.mount
-After=var.mount
-
-[Service]
-Type=oneshot
-ExecStart=/sbin/modprobe -r ice
-ExecStart=/sbin/modprobe ice
-
-[Install]
-WantedBy=multi-user.target
-`
 	// /host comes from mounted folder in OCP
 	// /var/lib/firmware comes from modified kernel argument, which allows OS to read DDP profile from that path.
 	// This is done because on RHCOS /lib/firmware/* path is read-only
@@ -40,7 +25,6 @@ WantedBy=multi-user.target
 
 var (
 	findDdp           = findDdpProfile
-	enableIceServiceP = enableIceService
 	reloadIceServiceP = reloadIceService
 
 	ddpUpdateFolder = "/host/var/lib/firmware/intel/ice/ddp/"
@@ -59,12 +43,6 @@ func (d *ddpUpdater) handleDDPUpdate(pciAddr string, forceReboot bool, ddpPath s
 	err := d.updateDDP(pciAddr, ddpPath)
 	if err != nil {
 		log.Error(err, "Failed to update DDP", "device", pciAddr)
-		return err
-	}
-
-	err = enableIceServiceP()
-	if err != nil {
-		log.Error(err, "Failed to enable on-startup ICE service")
 		return err
 	}
 
@@ -155,24 +133,7 @@ func (d *ddpUpdater) prepareDDP(config ethernetv1.DeviceNodeConfig) (string, err
 }
 
 func reloadIceService() error {
-	cmd := exec.Command("chroot", "/host", "systemctl", "start", "ice.service")
-	return cmd.Run()
-}
-
-func enableIceService() error {
-	iceServicePath := "/etc/systemd/system/ice.service"
-	serviceInfo, err := utils.CreateNoLinks(path.Join("/host", iceServicePath))
-	if err != nil {
-		return err
-	}
-
-	_, err = serviceInfo.WriteString(serviceTemplate)
-	if err != nil {
-		return err
-	}
-
-	//create symlink to enable service on startUp
-	cmd := exec.Command("chroot", "/host", "systemctl", "enable", "ice.service")
+	cmd := exec.Command("chroot", "/host", "systemctl", "restart", "oot-ice-driver-load")
 	return cmd.Run()
 }
 

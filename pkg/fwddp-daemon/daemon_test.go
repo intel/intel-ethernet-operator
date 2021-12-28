@@ -122,7 +122,6 @@ var _ = Describe("DaemonTests", func() {
 		}
 
 		artifactsFolder = "./workdir/nvmupdate/"
-		enableIceServiceP = enableIceService
 		reloadIceServiceP = reloadIceService
 	})
 
@@ -308,7 +307,6 @@ var _ = Describe("DaemonTests", func() {
 			}
 
 			wasRebootCalled := false
-			enableIceServiceP = func() error { return nil }
 			findFw = func(localpath string) (string, error) { return localpath, nil }
 
 			execCmd = func(args []string, log logr.Logger) (string, error) {
@@ -929,7 +927,6 @@ var _ = Describe("DaemonTests", func() {
 				return tempFile.Name(), nil
 			}
 			ddpUpdateFolder = "/tmp"
-			enableIceServiceP = func() error { return nil }
 			reloadIceServiceP = func() error { return nil }
 
 			wasRebootCalled := false
@@ -982,7 +979,6 @@ var _ = Describe("DaemonTests", func() {
 				return tempFile.Name(), nil
 			}
 			ddpUpdateFolder = "/tmp"
-			enableIceServiceP = func() error { return nil }
 
 			wasRebootCalled := false
 
