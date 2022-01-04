@@ -57,8 +57,8 @@ const (
 //+kubebuilder:rbac:groups="",resources=pods,verbs=get;watch;list;create;delete
 
 func (r *FlowConfigNodeAgentDeploymentReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	reqLogger := r.Log.WithValues("flowconfignodeagentdeployment", req.NamespacedName)
-	reqLogger.Info("Reconciling flowconfignodeagentdeployment")
+	reqLogger := r.Log.WithValues("Reconcile", req.NamespacedName)
+	reqLogger.Info("Reconciling FlowConfigNodeAgentDeployment")
 
 	instance := &flowconfigv1.FlowConfigNodeAgentDeployment{}
 	err := r.Client.Get(context.Background(), req.NamespacedName, instance)
@@ -141,7 +141,7 @@ func (r *FlowConfigNodeAgentDeploymentReconciler) Reconcile(ctx context.Context,
 }
 
 func (r *FlowConfigNodeAgentDeploymentReconciler) CreatePod(templatePod *corev1.Pod, instance *flowconfigv1.FlowConfigNodeAgentDeployment, node corev1.Node, vfPoolName corev1.ResourceName, uftContainerIndex int) error {
-	podLogger := r.Log.WithName("flowconfignodeagentdeployment")
+	podLogger := r.Log.WithName("CreatePod")
 
 	numResources := r.getNodeResources(&node, vfPoolName.String())
 	if numResources == 0 {
@@ -225,7 +225,7 @@ func (r *FlowConfigNodeAgentDeploymentReconciler) addResources(container corev1.
 }
 
 func (r *FlowConfigNodeAgentDeploymentReconciler) getPodResources(pod *corev1.Pod, containerIndex int, vfPoolName corev1.ResourceName) int64 {
-	resLogger := r.Log.WithName("flowconfignodeagentdeployment")
+	resLogger := r.Log.WithName("getPodResources")
 	limits := pod.Spec.Containers[containerIndex].Resources.Limits[vfPoolName]
 	value, ok := limits.AsInt64()
 	if !ok {
@@ -236,7 +236,7 @@ func (r *FlowConfigNodeAgentDeploymentReconciler) getPodResources(pod *corev1.Po
 }
 
 func (r *FlowConfigNodeAgentDeploymentReconciler) getNodeResources(node *corev1.Node, vfPoolName string) int64 {
-	resLogger := r.Log.WithName("flowconfignodeagentdeployment")
+	resLogger := r.Log.WithName("getNodeResources")
 	quantity, ok := node.Status.Capacity[corev1.ResourceName(vfPoolName)]
 
 	if !ok {
@@ -253,7 +253,7 @@ func (r *FlowConfigNodeAgentDeploymentReconciler) getNodeResources(node *corev1.
 }
 
 func (r *FlowConfigNodeAgentDeploymentReconciler) mapNodesToRequests(object client.Object) []reconcile.Request {
-	resLogger := r.Log.WithName("flowconfignodeagentdeployment")
+	resLogger := r.Log.WithName("mapNodesToRequests")
 
 	// get all instances of CRs and create for each an event
 	crList := &flowconfigv1.FlowConfigNodeAgentDeploymentList{}
