@@ -332,9 +332,9 @@ var _ = Describe("DaemonTests", func() {
 			Expect(k8sClient.List(context.TODO(), nodeConfigs)).To(Succeed())
 			Expect(nodeConfigs.Items).To(HaveLen(1))
 			Expect(nodeConfigs.Items[0].Status.Conditions).To(HaveLen(1))
-			Expect(nodeConfigs.Items[0].Status.Conditions[0].Status).To(Equal(metav1.ConditionTrue))
-			Expect(nodeConfigs.Items[0].Status.Conditions[0].Reason).To(Equal(string(UpdateSucceeded)))
-			Expect(nodeConfigs.Items[0].Status.Conditions[0].Message).To(Equal("Updated successfully"))
+			Expect(nodeConfigs.Items[0].Status.Conditions[0].Status).To(Equal(metav1.ConditionFalse))
+			Expect(nodeConfigs.Items[0].Status.Conditions[0].Reason).To(Equal(string(UpdatePostUpdateReboot)))
+			Expect(nodeConfigs.Items[0].Status.Conditions[0].Message).To(Equal("Post-update node reboot"))
 		})
 
 		var _ = It("will call for reboot, expects ok but no reboot", func() {
@@ -1006,8 +1006,8 @@ var _ = Describe("DaemonTests", func() {
 			Expect(k8sClient.List(context.TODO(), nodeConfigs)).To(Succeed())
 			Expect(nodeConfigs.Items).To(HaveLen(1))
 			Expect(nodeConfigs.Items[0].Status.Conditions).To(HaveLen(1))
-			Expect(nodeConfigs.Items[0].Status.Conditions[0].Reason).To(Equal(string(UpdateSucceeded)))
-			Expect(nodeConfigs.Items[0].Status.Conditions[0].Message).To(Equal("Updated successfully"))
+			Expect(nodeConfigs.Items[0].Status.Conditions[0].Reason).To(Equal(string(UpdatePostUpdateReboot)))
+			Expect(nodeConfigs.Items[0].Status.Conditions[0].Message).To(Equal("Post-update node reboot"))
 		})
 	})
 

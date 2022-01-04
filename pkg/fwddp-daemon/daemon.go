@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/util/retry"
 	"os"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"syscall"
@@ -173,24 +174,30 @@ func (r *NodeConfigReconciler) updateCondition(nc *ethernetv1.EthernetNodeConfig
 func (r *NodeConfigReconciler) updateStatus(nc *ethernetv1.EthernetNodeConfig, c []metav1.Condition) error {
 	log := r.log.WithName("updateStatus")
 
-	inv, err := getInventory(log)
-	if err != nil {
-		log.Error(err, "failed to obtain inventory for the node")
-		return err
-	}
-	nodeStatus := ethernetv1.EthernetNodeConfigStatus{Devices: inv}
+	return retry.RetryOnConflict(retry.DefaultBackoff, func() error {
+		if err := r.Get(context.TODO(), types.NamespacedName{Namespace: nc.GetNamespace(), Name: nc.GetName()}, nc); err != nil {
+			return err
+		}
 
-	for _, condition := range c {
-		meta.SetStatusCondition(&nodeStatus.Conditions, condition)
-	}
+		inv, err := getInventory(log)
+		if err != nil {
+			log.Error(err, "failed to obtain inventory for the node")
+			return err
+		}
+		nodeStatus := ethernetv1.EthernetNodeConfigStatus{Devices: inv}
 
-	nc.Status = nodeStatus
-	if err := r.Status().Update(context.Background(), nc); err != nil {
-		log.Error(err, "failed to update EthernetNodeConfig status")
-		return err
-	}
+		for _, condition := range c {
+			meta.SetStatusCondition(&nodeStatus.Conditions, condition)
+		}
 
-	return nil
+		nc.Status = nodeStatus
+		if err := r.Status().Update(context.Background(), nc); err != nil {
+			log.Error(err, "failed to update EthernetNodeConfig status")
+			return err
+		}
+
+		return nil
+	})
 }
 
 func (r *NodeConfigReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
@@ -229,24 +236,28 @@ func (r *NodeConfigReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		return requeueLater()
 	}
 
-	err = r.configureNode(updateQueue, nodeConfig)
+	rebootRequired, err := r.configureNode(updateQueue, nodeConfig)
 	if err != nil {
 		r.updateCondition(nodeConfig, metav1.ConditionFalse, UpdateFailed, err.Error())
 		return requeueLater()
 	}
 
-	r.updateCondition(nodeConfig, metav1.ConditionTrue, UpdateSucceeded, "Updated successfully")
-	log.V(2).Info("Reconciled")
+	if !rebootRequired {
+		r.updateCondition(nodeConfig, metav1.ConditionTrue, UpdateSucceeded, "Updated successfully")
+		log.V(2).Info("Reconciled")
+	}
+
 	return doNotRequeue()
 }
 
-func (r *NodeConfigReconciler) configureNode(updateQueue deviceUpdateQueue, nodeConfig *ethernetv1.EthernetNodeConfig) error {
+func (r *NodeConfigReconciler) configureNode(updateQueue deviceUpdateQueue, nodeConfig *ethernetv1.EthernetNodeConfig) (bool, error) {
 	//func start
 	var nodeActionErr error
+	var rebootRequired bool
 
 	drainFunc := func(ctx context.Context) bool {
 		fwReboot := false
-		rebootRequired := nodeConfig.Spec.ForceReboot
+		rebootRequired = nodeConfig.Spec.ForceReboot
 
 		for pciAddr, artifacts := range updateQueue {
 			fwReboot, nodeActionErr = r.fwUpdater.handleFWUpdate(pciAddr, artifacts.fwPath)
@@ -275,14 +286,14 @@ func (r *NodeConfigReconciler) configureNode(updateQueue deviceUpdateQueue, node
 
 	if drainErr != nil {
 		r.log.Error(drainErr, "Error during node draining")
-		return drainErr
+		return false, drainErr
 	}
 	if nodeActionErr != nil {
 		r.log.Error(nodeActionErr, "Error during node FW/DDP update")
-		return nodeActionErr
+		return false, nodeActionErr
 	}
 
-	return nil
+	return rebootRequired, nil
 }
 
 func (r *NodeConfigReconciler) prepareUpdateQueue(nodeConfig *ethernetv1.EthernetNodeConfig) (deviceUpdateQueue, error) {
