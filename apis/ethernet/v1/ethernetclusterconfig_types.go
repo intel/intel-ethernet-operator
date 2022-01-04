@@ -32,19 +32,6 @@ type DeviceConfig struct {
 	Force bool `json:"force,omitempty"`
 }
 
-type SyncStatus string
-
-var (
-	// InProgressSync indicates that the synchronization of the CR is in progress
-	InProgressSync SyncStatus = "InProgress"
-	// SucceededSync indicates that the synchronization of the CR succeeded
-	SucceededSync SyncStatus = "Succeeded"
-	// FailedSync indicates that the synchronization of the CR failed
-	FailedSync SyncStatus = "Failed"
-	// IgnoredSync indicates that the CR is ignored
-	IgnoredSync SyncStatus = "Ignored"
-)
-
 // EthernetClusterConfigSpec defines the desired state of EthernetClusterConfig
 type EthernetClusterConfigSpec struct {
 	// Select the nodes
@@ -56,14 +43,12 @@ type EthernetClusterConfigSpec struct {
 
 	Priority  int  `json:"priority,omitempty"`
 	DrainSkip bool `json:"drainSkip,omitempty"`
+	// Force reboot after DDP update. Recommended for clusters, on which ControlPlane is running on E810 cards.
+	ForceReboot bool `json:"forceReboot,omitempty"`
 }
 
 // EthernetClusterConfigStatus defines the observed state of EthernetClusterConfig
 type EthernetClusterConfigStatus struct {
-	// Indicates the synchronization status of the CR
-	// +operator-sdk:csv:customresourcedefinitions:type=status
-	SyncStatus    SyncStatus `json:"syncStatus,omitempty"`
-	LastSyncError string     `json:"lastSyncError,omitempty"`
 }
 
 //+kubebuilder:object:root=true

@@ -42,7 +42,7 @@ func getOsVarOrUseDefault(log logr.Logger, varName string, defVal int64) int64 {
 	retValStr := os.Getenv(varName)
 
 	if retValStr == "" {
-		log.Error(nil, "env variable not found - using default value", "variable", varName, "default", defVal)
+		log.Info("env variable not found - using default value", "variable", varName, "default", defVal)
 		return defVal
 	}
 
@@ -80,6 +80,7 @@ func NewDrainHelper(log logr.Logger, cs *clientset.Clientset, nodeName, namespac
 		nodeName:  nodeName,
 
 		drainer: &drain.Helper{
+			Ctx:                 context.Background(),
 			Client:              cs,
 			Force:               true,
 			IgnoreAllDaemonSets: true,

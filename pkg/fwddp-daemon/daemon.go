@@ -6,25 +6,22 @@ package daemon
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
+	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/util/retry"
 	"os"
-	"os/exec"
-	"path"
-	"path/filepath"
-	"strings"
+	"sigs.k8s.io/controller-runtime/pkg/event"
 	"syscall"
+	"time"
 
 	"github.com/go-logr/logr"
 	ethernetv1 "github.com/otcshare/intel-ethernet-operator/apis/ethernet/v1"
 	"github.com/otcshare/intel-ethernet-operator/pkg/utils"
-	"go.uber.org/multierr"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clientset "k8s.io/client-go/kubernetes"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
@@ -32,72 +29,25 @@ import (
 )
 
 const (
-	nvmupdate64e             = "./nvmupdate64e"
-	nvmupdateVersionFilesize = 10
-
-	compatibilityWildard = "*"
-
-	nvmupdatePackageFilename = "nvmupdate.tar.gz"
-	ddpPackageFilename       = "ddp.tar.gz"
-	nvmupdate64eDirSuffix    = "E810/Linux_x64/"
-	updateOutFile            = "update.xml"
-	nvmupdateVersionFilename = "version.txt"
-
-	serviceTemplate = `
-[Unit]
-Description=ddp-ice configuration on boot
-AssertPathExists=/sbin/modprobe
-Requires=var.mount
-After=var.mount
-
-[Service]
-Type=oneshot
-ExecStart=/sbin/modprobe -r ice
-ExecStart=/sbin/modprobe ice
-
-[Install]
-WantedBy=multi-user.target
-`
+	requeueAfter = 15 * time.Minute
 )
 
 var (
-	compatMapPath    = "./devices.json"
-	compatibilityMap *CompatibilityMap
-	fwInstallDest    = "/host/tmp/fwddp_artifacts/nvmupdate/"
-	// /host comes from mounted folder in OCP
-	// /var/lib/firmware comes from modified kernel argument, which allows OS to read DDP profile from that path.
-	// This is done because on RHCOS /lib/firmware/* path is read-only
-	// intel/ice/ddp is default path for ICE *.pkg files
-	ddpUpdateFolder = "/host/var/lib/firmware/intel/ice/ddp/"
+	getInventory = GetInventory
+	getIDs       = getDeviceIDs
+	execCmd      = utils.ExecCmd
 
-	getInventory  = GetInventory
-	getIDs        = getDeviceIDs
-	nvmupdateExec = runExecWithLog
-	execCmd       = utils.ExecCmd
+	downloadFile     = utils.DownloadFile
+	untarFile        = utils.Untar
+	unpackDDPArchive = utils.UnpackDDPArchive
 
-	downloadFile      = utils.DownloadFile
-	untarFile         = utils.Untar
-	findDdp           = findDdpProfile
-	enableIceServiceP = enableIceService
+	artifactsFolder = "/host/tmp/fwddp_artifacts/nvmupdate/"
 )
-
-type CompatibilityMap map[string]Compatibility
-type Compatibility struct {
-	utils.SupportedDevice
-	Driver   string
-	Firmware string
-	DDP      []string
-}
-
-func nvmupdate64eDir(p string) string     { return path.Join(p, nvmupdate64eDirSuffix) }
-func nvmupdate64eCfgPath(p string) string { return path.Join(nvmupdate64eDir(p), "nvmupdate.cfg") }
-func updateResultPath(p string) string    { return path.Join(nvmupdate64eDir(p), updateOutFile) }
 
 type UpdateConditionReason string
 
 const (
 	UpdateCondition        string                = "Updated"
-	UpdateUnknown          UpdateConditionReason = "Unknown"
 	UpdateInProgress       UpdateConditionReason = "InProgress"
 	UpdatePostUpdateReboot UpdateConditionReason = "PostUpdateReboot"
 	UpdateFailed           UpdateConditionReason = "Failed"
@@ -105,6 +55,108 @@ const (
 	UpdateSucceeded        UpdateConditionReason = "Succeeded"
 )
 
+type deviceUpdateArtifacts struct {
+	fwPath  string
+	ddpPath string
+}
+type deviceUpdateQueue map[string]deviceUpdateArtifacts
+
+type NodeConfigReconciler struct {
+	client.Client
+	log         logr.Logger
+	drainHelper *dh.DrainHelper
+	nodeNameRef types.NamespacedName
+	ddpUpdater  *ddpUpdater
+	fwUpdater   *fwUpdater
+}
+
+func LoadConfig() error {
+	cmpMap := make(CompatibilityMap)
+	err := utils.LoadSupportedDevices(compatMapPath, &cmpMap)
+	if err != nil {
+		return err
+	}
+	compatibilityMap = &cmpMap
+
+	return nil
+}
+
+type ResourceNamePredicate struct {
+	predicate.Funcs
+	requiredName string
+	log          logr.Logger
+}
+
+func (r ResourceNamePredicate) Update(e event.UpdateEvent) bool {
+	if e.ObjectNew.GetName() != r.requiredName {
+		r.log.Info("CR intended for another node - ignoring", "expected name", r.requiredName)
+		return false
+	}
+	return true
+}
+
+func (r ResourceNamePredicate) Create(e event.CreateEvent) bool {
+	if e.Object.GetName() != r.requiredName {
+		r.log.Info("CR intended for another node - ignoring", "expected name", r.requiredName)
+		return false
+	}
+	return true
+}
+
+//returns result indicating necessity of re-queuing Reconcile after configured resyncPeriod
+func requeueLater() (reconcile.Result, error) {
+	return reconcile.Result{RequeueAfter: requeueAfter}, nil
+}
+
+//returns result indicating necessity of re-queuing Reconcile(...) immediately; non-nil err will be logged by controller
+func requeueNowWithError(e error) (reconcile.Result, error) {
+	return reconcile.Result{Requeue: true}, e
+}
+
+//returns result indicating that there is no need to Reconcile because everything is configured as expected
+func doNotRequeue() (reconcile.Result, error) {
+	return reconcile.Result{}, nil
+}
+
+func NewNodeConfigReconciler(c client.Client, clientSet *clientset.Clientset, log logr.Logger,
+	nodeName, ns string) (*NodeConfigReconciler, error) {
+
+	err := LoadConfig()
+	if err != nil {
+		return nil, err
+	}
+
+	return &NodeConfigReconciler{
+		Client:      c,
+		log:         log,
+		drainHelper: dh.NewDrainHelper(log, clientSet, nodeName, ns),
+		nodeNameRef: types.NamespacedName{
+			Namespace: ns,
+			Name:      nodeName,
+		},
+		ddpUpdater: &ddpUpdater{
+			log: log,
+		},
+		fwUpdater: &fwUpdater{
+			log: log,
+		},
+	}, nil
+}
+
+func (r *NodeConfigReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	return ctrl.NewControllerManagedBy(mgr).
+		For(&ethernetv1.EthernetNodeConfig{}).
+		WithEventFilter(
+			predicate.And(
+				ResourceNamePredicate{
+					requiredName: r.nodeNameRef.Name,
+					log:          r.log,
+				},
+				predicate.GenerationChangedPredicate{},
+			),
+		).
+		Complete(r)
+}
 func (r *NodeConfigReconciler) updateCondition(nc *ethernetv1.EthernetNodeConfig, status metav1.ConditionStatus,
 	reason UpdateConditionReason, msg string) {
 	log := r.log.WithName("updateCondition")
@@ -123,224 +175,167 @@ func (r *NodeConfigReconciler) updateCondition(nc *ethernetv1.EthernetNodeConfig
 func (r *NodeConfigReconciler) updateStatus(nc *ethernetv1.EthernetNodeConfig, c []metav1.Condition) error {
 	log := r.log.WithName("updateStatus")
 
-	inv, err := getInventory(log)
-	if err != nil {
-		log.Error(err, "failed to obtain inventory for the node")
-		return err
-	}
-	nodeStatus := ethernetv1.EthernetNodeConfigStatus{Devices: inv}
+	return retry.RetryOnConflict(retry.DefaultBackoff, func() error {
+		if err := r.Get(context.TODO(), types.NamespacedName{Namespace: nc.GetNamespace(), Name: nc.GetName()}, nc); err != nil {
+			return err
+		}
 
-	for _, condition := range c {
-		meta.SetStatusCondition(&nodeStatus.Conditions, condition)
-	}
+		inv, err := getInventory(log)
+		if err != nil {
+			log.Error(err, "failed to obtain inventory for the node")
+			return err
+		}
+		nodeStatus := ethernetv1.EthernetNodeConfigStatus{Devices: inv}
 
-	nc.Status = nodeStatus
-	if err := r.Status().Update(context.Background(), nc); err != nil {
-		log.Error(err, "failed to update EthernetNodeConfig status")
-		return err
-	}
+		for _, condition := range c {
+			meta.SetStatusCondition(&nodeStatus.Conditions, condition)
+		}
 
-	return nil
+		nc.Status = nodeStatus
+		if err := r.Status().Update(context.Background(), nc); err != nil {
+			log.Error(err, "failed to update EthernetNodeConfig status")
+			return err
+		}
+
+		return nil
+	})
 }
-
-type NodeConfigReconciler struct {
-	client.Client
-	log         logr.Logger
-	nodeName    string
-	namespace   string
-	drainHelper *dh.DrainHelper
-}
-
-func LoadConfig(log logr.Logger) error {
-	cmpMap := make(CompatibilityMap)
-	err := utils.LoadSupportedDevices(compatMapPath, &cmpMap)
-	if err != nil {
-		return err
-	}
-	compatibilityMap = &cmpMap
-
-	return nil
-}
-
-func NewNodeConfigReconciler(c client.Client, clientSet *clientset.Clientset, log logr.Logger,
-	nodeName, ns string) (*NodeConfigReconciler, error) {
-
-	err := LoadConfig(log)
-	if err != nil {
-		return nil, err
-	}
-
-	return &NodeConfigReconciler{
-		Client:      c,
-		log:         log,
-		nodeName:    nodeName,
-		namespace:   ns,
-		drainHelper: dh.NewDrainHelper(log, clientSet, nodeName, ns),
-	}, nil
-}
-
-func (r *NodeConfigReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewControllerManagedBy(mgr).
-		For(&ethernetv1.EthernetNodeConfig{}).
-		WithEventFilter(predicate.Funcs{
-			CreateFunc: func(e event.CreateEvent) bool {
-				_, ok := e.Object.(*ethernetv1.EthernetNodeConfig)
-				if !ok {
-					r.log.V(2).Info("Failed to convert e.Object to ethernetv1.EthernetNodeConfig", "e.Object", e.Object)
-					return false
-				}
-				return true
-
-			},
-			UpdateFunc: func(e event.UpdateEvent) bool {
-				if e.ObjectOld.GetGeneration() == e.ObjectNew.GetGeneration() {
-					r.log.V(4).Info("Update ignored, generation unchanged")
-					return false
-				}
-				return true
-			},
-		}).
-		Complete(r)
-}
-
-type deviceUpdateArtifacts struct {
-	fwPath  string
-	ddpPath string
-}
-type deviceUpdateQueue map[string](deviceUpdateArtifacts)
 
 func (r *NodeConfigReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := r.log.WithName("Reconcile").WithValues("namespace", req.Namespace, "name", req.Name)
-	if req.Namespace != r.namespace {
-		log.V(4).Info("unexpected namespace - ignoring", "expected namespace", r.namespace)
-		return reconcile.Result{}, nil
-	}
+	nodeConfig := &ethernetv1.EthernetNodeConfig{}
 
-	if req.Name != r.nodeName {
-		log.V(4).Info("CR intended for another node - ignoring", "expected name", r.nodeName)
-		return reconcile.Result{}, nil
-	}
-
-	nodeConfig := ethernetv1.EthernetNodeConfig{}
-	if err := r.Client.Get(ctx, req.NamespacedName, &nodeConfig); err != nil {
+	syscall.Umask(0077)
+	if err := r.Client.Get(ctx, req.NamespacedName, nodeConfig); err != nil {
 		if k8serrors.IsNotFound(err) {
 			log.V(4).Info("not found - creating")
-			return reconcile.Result{}, r.CreateEmptyNodeConfigIfNeeded(r.Client)
+			return requeueNowWithError(r.CreateEmptyNodeConfigIfNeeded(r.Client))
 		}
 		log.Error(err, "Get() failed")
-		return reconcile.Result{}, err
+		return requeueNowWithError(err)
 	}
 
-	postUpdateReboot := false
 	condition := meta.FindStatusCondition(nodeConfig.Status.Conditions, UpdateCondition)
-	if condition != nil {
-		if condition.Reason == string(UpdatePostUpdateReboot) {
-			// State where daemon is up again after post-firmware-update node reboot.
-			log.V(4).Info("Post-update node reboot completed, finishing update...")
-			postUpdateReboot = true
-		} else if condition.ObservedGeneration == nodeConfig.GetGeneration() {
-			log.V(4).Info("Created object was handled previously, ignoring")
-			return reconcile.Result{}, nil
-		}
+	if condition != nil && condition.Reason == string(UpdatePostUpdateReboot) {
+		log.V(4).Info("Post-update node reboot completed, finishing update...")
+		r.updateCondition(nodeConfig, metav1.ConditionTrue, UpdateSucceeded, "Updated successfully")
+		log.V(2).Info("Reconciled")
+		return doNotRequeue()
 	}
 
 	if len(nodeConfig.Spec.Config) == 0 {
 		log.V(4).Info("Nothing to do")
-		r.updateCondition(&nodeConfig, metav1.ConditionFalse, UpdateNotRequested, "Inventory up to date")
-		return reconcile.Result{}, nil
+		r.updateCondition(nodeConfig, metav1.ConditionTrue, UpdateNotRequested, "Inventory up to date")
+		return doNotRequeue()
 	}
 
-	if postUpdateReboot {
-		r.updateCondition(&nodeConfig, metav1.ConditionTrue, UpdateSucceeded, "Updated successfully")
-		log.V(2).Info("Reconciled")
-		return reconcile.Result{}, nil
-	}
+	r.updateCondition(nodeConfig, metav1.ConditionFalse, UpdateInProgress, "Update started")
 
-	r.updateCondition(&nodeConfig, metav1.ConditionFalse, UpdateInProgress, "Update started")
-
-	inv, err := getInventory(log)
+	updateQueue, err := r.prepareUpdateQueue(nodeConfig)
 	if err != nil {
-		log.Error(err, "Failed to retrieve inventory")
-		r.updateCondition(&nodeConfig, metav1.ConditionFalse, UpdateFailed, err.Error())
-		return reconcile.Result{}, nil
+		r.updateCondition(nodeConfig, metav1.ConditionFalse, UpdateFailed, err.Error())
+		return requeueLater()
 	}
 
-	var updateErr error
-	updateQueue := make(deviceUpdateQueue)
-	for _, deviceConfig := range nodeConfig.Spec.Config {
-		artifacts, err := r.prepare(deviceConfig, inv)
-		if err != nil {
-			log.Error(err, "Failed to prepare artifacts for", "device", deviceConfig.PCIAddress)
-			updateErr = multierr.Append(updateErr, err)
-			continue
-		}
-		updateQueue[deviceConfig.PCIAddress] = artifacts
+	rebootRequired, err := r.configureNode(updateQueue, nodeConfig)
+	if err != nil {
+		r.updateCondition(nodeConfig, metav1.ConditionFalse, UpdateFailed, err.Error())
+		return requeueLater()
 	}
 
-	if len(updateQueue) == 0 {
-		r.updateCondition(&nodeConfig, metav1.ConditionFalse, UpdateFailed, updateErr.Error())
-		return reconcile.Result{}, nil
+	if !rebootRequired {
+		r.updateCondition(nodeConfig, metav1.ConditionTrue, UpdateSucceeded, "Updated successfully")
+		log.V(2).Info("Reconciled")
 	}
 
-	rebootRequired := false
+	return doNotRequeue()
+}
 
-	err = r.drainHelper.Run(func(ctx context.Context) bool {
+func (r *NodeConfigReconciler) configureNode(updateQueue deviceUpdateQueue, nodeConfig *ethernetv1.EthernetNodeConfig) (bool, error) {
+	//func start
+	var nodeActionErr error
+	var rebootRequired bool
+
+	drainFunc := func(ctx context.Context) bool {
+		fwReboot := false
+		rebootRequired = nodeConfig.Spec.ForceReboot
+
 		for pciAddr, artifacts := range updateQueue {
-			reboot, continueWithDDPUpdate := r.handleFWUpdate(pciAddr, artifacts.fwPath, &updateErr)
-			if reboot {
-				rebootRequired = true
+			fwReboot, nodeActionErr = r.fwUpdater.handleFWUpdate(pciAddr, artifacts.fwPath)
+			if nodeActionErr != nil {
+				return true
 			}
 
-			if continueWithDDPUpdate {
-				r.handleDDPUpdate(pciAddr, artifacts.ddpPath, &updateErr)
+			rebootRequired = rebootRequired || fwReboot
+
+			nodeActionErr = r.ddpUpdater.handleDDPUpdate(pciAddr, nodeConfig.Spec.ForceReboot, artifacts.ddpPath)
+			if nodeActionErr != nil {
+				return true
 			}
 		}
 
 		if rebootRequired {
-			r.handleRebootAfterUpdate(&nodeConfig, &updateErr)
+			r.updateCondition(nodeConfig, metav1.ConditionFalse, UpdatePostUpdateReboot, "Post-update node reboot")
+			nodeActionErr = r.rebootNode()
+			return false
 		}
 
 		return true
-	}, !nodeConfig.Spec.DrainSkip)
+	}
+	//func end
+	drainErr := r.drainHelper.Run(drainFunc, !nodeConfig.Spec.DrainSkip)
 
-	if err != nil {
-		log.Error(err, "Error during FW/DDP update")
+	if drainErr != nil {
+		r.log.Error(drainErr, "Error during node draining")
+		return false, drainErr
+	}
+	if nodeActionErr != nil {
+		r.log.Error(nodeActionErr, "Error during node FW/DDP update")
+		return false, nodeActionErr
 	}
 
-	if updateErr != nil {
-		r.updateCondition(&nodeConfig, metav1.ConditionFalse, UpdateFailed, updateErr.Error())
-	} else {
-		r.updateCondition(&nodeConfig, metav1.ConditionTrue, UpdateSucceeded, "Updated successfully")
-	}
-
-	log.V(2).Info("Reconciled")
-	return reconcile.Result{}, nil
+	return rebootRequired, nil
 }
 
-func (r *NodeConfigReconciler) prepare(config ethernetv1.DeviceNodeConfig, inv []ethernetv1.Device) (deviceUpdateArtifacts, error) {
+func (r *NodeConfigReconciler) prepareUpdateQueue(nodeConfig *ethernetv1.EthernetNodeConfig) (deviceUpdateQueue, error) {
+	inv, err := getInventory(r.log)
+	if err != nil {
+		return deviceUpdateQueue{}, err
+	}
+
+	err = os.RemoveAll(artifactsFolder)
+	if err != nil {
+		r.log.Error(err, "Failed to prepare firmware")
+		return deviceUpdateQueue{}, err
+	}
+
+	updateQueue := make(deviceUpdateQueue)
+	for _, deviceConfig := range nodeConfig.Spec.Config {
+		artifacts, err := r.prepareArtifacts(deviceConfig, inv)
+		if err != nil {
+			r.log.Error(err, "Failed to prepare artifacts for", "device", deviceConfig.PCIAddress)
+			return deviceUpdateQueue{}, err
+		}
+		updateQueue[deviceConfig.PCIAddress] = artifacts
+	}
+	return updateQueue, nil
+}
+
+func (r *NodeConfigReconciler) prepareArtifacts(config ethernetv1.DeviceNodeConfig, inv []ethernetv1.Device) (deviceUpdateArtifacts, error) {
 	log := r.log.WithName("prepare")
 
-	found := false
-	dev := ethernetv1.Device{}
-	for _, i := range inv {
-		if i.PCIAddress == config.PCIAddress {
-			found = true
-			dev = i
-			break
-		}
+	dev, err := r.findCard(config, inv)
+	if err != nil {
+		return deviceUpdateArtifacts{}, err
 	}
 
-	if !found {
-		return deviceUpdateArtifacts{}, fmt.Errorf("Device %v not found", config.PCIAddress)
-	}
-
-	fwPath, err := r.prepareFirmware(config)
+	fwPath, err := r.fwUpdater.prepareFirmware(config)
 	if err != nil {
 		log.Error(err, "Failed to prepare firmware")
 		return deviceUpdateArtifacts{}, err
 	}
 
-	ddpPath, err := r.prepareDDP(config)
+	ddpPath, err := r.ddpUpdater.prepareDDP(config)
 	if err != nil {
 		log.Error(err, "Failed to prepare DDP")
 		return deviceUpdateArtifacts{}, err
@@ -355,368 +350,21 @@ func (r *NodeConfigReconciler) prepare(config ethernetv1.DeviceNodeConfig, inv [
 	return deviceUpdateArtifacts{fwPath, ddpPath}, nil
 }
 
-func (r *NodeConfigReconciler) prepareFirmware(config ethernetv1.DeviceNodeConfig) (string, error) {
-	log := r.log.WithName("prepareFirmware")
-
-	if config.DeviceConfig.FWURL == "" {
-		log.V(4).Info("Empty FWURL")
-		return "", nil
-	}
-
-	targetPath := path.Join(fwInstallDest, config.PCIAddress)
-
-	err := utils.CreateFolder(targetPath, log)
-	if err != nil {
-		return "", err
-	}
-
-	log.V(4).Info("Downloading", "url", config.DeviceConfig.FWURL)
-	err = downloadFile(path.Join(targetPath, nvmupdatePackageFilename), config.DeviceConfig.FWURL,
-		config.DeviceConfig.FWChecksum, log)
-	if err != nil {
-		return "", err
-	}
-
-	log.V(4).Info("FW file downloaded - extracting")
-	err = untarFile(path.Join(targetPath, nvmupdatePackageFilename), targetPath, log)
-	if err != nil {
-		return "", err
-	}
-
-	return targetPath, nil
-}
-
-func (r *NodeConfigReconciler) prepareDDP(config ethernetv1.DeviceNodeConfig) (string, error) {
-	log := r.log.WithName("prepareDDP")
-
-	if config.DeviceConfig.DDPURL == "" {
-		log.V(4).Info("Empty DDPURL")
-		return "", nil
-	}
-
-	targetPath := path.Join(fwInstallDest, config.PCIAddress)
-
-	err := os.RemoveAll(targetPath)
-	if err != nil {
-		return "", err
-	}
-
-	err = utils.CreateFolder(targetPath, log)
-	if err != nil {
-		return "", err
-	}
-
-	log.V(4).Info("Downloading", "url", config.DeviceConfig.DDPURL)
-	fullPath := path.Join(targetPath, ddpPackageFilename)
-	err = downloadFile(fullPath, config.DeviceConfig.DDPURL,
-		config.DeviceConfig.DDPChecksum, log)
-	if err != nil {
-		return "", err
-	}
-
-	log.V(4).Info("DDP file downloaded - extracting")
-	// XXX so this untars into the same directory as the source file
-	// We might add more comments here explaining the mechanics and reasoning
-	err = untarFile(fullPath, targetPath, log)
-	if err != nil {
-		return "", err
-	}
-
-	return findDdp(targetPath)
-}
-
-func findDdpProfile(targetPath string) (string, error) {
-	var ddpProfilesPaths []string
-	walkFunction := func(path string, info os.FileInfo, err error) error {
-		if strings.HasSuffix(info.Name(), ".pkg") && info.Mode()&os.ModeSymlink == 0 {
-			ddpProfilesPaths = append(ddpProfilesPaths, path)
-		}
-		return nil
-	}
-	err := filepath.Walk(targetPath, walkFunction)
-	if err != nil {
-		return "", err
-	}
-	if len(ddpProfilesPaths) != 1 {
-		return "", fmt.Errorf("expected to find exactly 1 file ending with '.pkg', but found %v - %v", len(ddpProfilesPaths), ddpProfilesPaths)
-	}
-	return ddpProfilesPaths[0], err
-}
-
-func (r *NodeConfigReconciler) getFWVersion(fwPath string, dev ethernetv1.Device) (string, error) {
-	log := r.log.WithName("getFWVersion")
-	if fwPath == "" {
-		log.V(4).Info("Firmware package not provided - retrieving version from device")
-		v := strings.Split(dev.Firmware.Version, " ")
-		if len(v) != 3 {
-			return "", fmt.Errorf("Invalid firmware package version: %v", dev.Firmware.Version)
-		}
-		// Pick first element from eg: 2.40 0x80007064 1.2898.0 which is the NVM Version
-		return v[0], nil
-
-	} else {
-		log.V(4).Info("Retrieving version from", "path", fwPath)
-		path := filepath.Join(fwPath, nvmupdate64eDirSuffix, nvmupdateVersionFilename)
-		file, err := os.Open(path)
-		if err != nil {
-			return "", fmt.Errorf("Failed to open version file: %v", err)
-		}
-		defer file.Close()
-
-		ver := make([]byte, nvmupdateVersionFilesize)
-		n, err := file.Read(ver)
-		if err != nil {
-			return "", fmt.Errorf("Unable to read: %v", path)
-		}
-		// Example version.txt content: v2.40
-		return strings.ReplaceAll(strings.TrimSpace(string(ver[:n])), "v", ""), nil
-	}
-}
-
-func (r *NodeConfigReconciler) getDDPVersion(ddpPath string, dev ethernetv1.Device) (string, error) {
-	log := r.log.WithName("getDDPVersion")
-	if ddpPath == "" {
-		log.V(4).Info("DDP package not provided - retrieving version from device")
-		return dev.DDP.PackageName + "-" + dev.DDP.Version, nil
-	} else {
-		// TODO: DDP Tool currently does not allow to get package version from file
-		// return ddpPath instead
-		log.V(4).Info("Retrieving version from", "path", ddpPath)
-		return ddpPath, nil
-	}
-}
-
-func getDriverVersion(dev ethernetv1.Device) string {
-	return dev.Driver + "-" + dev.DriverVersion
-}
-
-func (r *NodeConfigReconciler) handleFWUpdate(pciAddr, fwPath string, updateErr *error) (bool, bool) {
-	log := r.log.WithName("handleFWUpdate")
-	rebootRequired := false
-
-	if fwPath == "" {
-		return rebootRequired, true
-	}
-
-	err := r.updateFirmware(pciAddr, fwPath)
-	if err != nil {
-		log.Error(err, "Failed to update firmware", "device", pciAddr)
-		*updateErr = multierr.Append(*updateErr, err)
-		// Skip DDP update on device
-		return rebootRequired, false
-	}
-
-	reboot, err := isRebootRequired(updateResultPath(fwPath))
-	if err != nil {
-		log.Error(err, "Failed to extract reboot required flag from file")
-		rebootRequired = true // failsafe
-	} else if reboot {
-		log.V(4).Info("Node reboot required to complete firmware update", "device", pciAddr)
-		rebootRequired = true
-	}
-	return rebootRequired, true
-}
-
-func (r *NodeConfigReconciler) handleDDPUpdate(pciAddr, ddpPath string, updateErr *error) {
-	log := r.log.WithName("handleDDPUpdate")
-	if ddpPath == "" {
-		return
-	}
-
-	err := r.updateDDP(pciAddr, ddpPath)
-	if err != nil {
-		log.Error(err, "Failed to update DDP", "device", pciAddr)
-		*updateErr = multierr.Append(*updateErr, err)
-	}
-
-	err = enableIceServiceP()
-	if err != nil {
-		log.Error(err, "Failed to enable on-startup ICE service")
-		*updateErr = multierr.Append(*updateErr, err)
-	}
-}
-
-func (r *NodeConfigReconciler) handleRebootAfterUpdate(nodeConfig *ethernetv1.EthernetNodeConfig, updateErr *error) {
-	log := r.log.WithName("handleRebootAfterUpdate")
-	log.V(2).Info("Rebooting the node...")
-	r.updateCondition(nodeConfig, metav1.ConditionFalse, UpdatePostUpdateReboot, "Post-update node reboot")
-	err := r.rebootNode()
-	if err != nil {
-		log.Error(err, "Failed to reboot the node")
-		*updateErr = multierr.Append(*updateErr, err)
-	}
-}
-
-func (r *NodeConfigReconciler) updateFirmware(pciAddr, fwPath string) error {
-	log := r.log.WithName("updateFirmware")
-
-	rootAttr := &syscall.SysProcAttr{
-		Credential: &syscall.Credential{Uid: 0, Gid: 0},
-	}
-	// Call nvmupdate64 -i first to refresh devices
-	log.V(2).Info("Refreshing nvmupdate inventory")
-	cmd := exec.Command(nvmupdate64e, "-i")
-	cmd.SysProcAttr = rootAttr
-	cmd.Dir = nvmupdate64eDir(fwPath)
-	err := nvmupdateExec(cmd, log)
-	if err != nil {
-		return err
-	}
-
-	mac, err := getDeviceMAC(pciAddr, log)
-	if err != nil {
-		log.Error(err, "Failed to get MAC for", "device", pciAddr)
-		return err
-	}
-
-	log.V(2).Info("Updating", "MAC", mac)
-	cmd = exec.Command(nvmupdate64e, "-u", "-m", mac, "-c", nvmupdate64eCfgPath(fwPath), "-o", updateResultPath(fwPath), "-l")
-
-	cmd.SysProcAttr = rootAttr
-	cmd.Dir = nvmupdate64eDir(fwPath)
-	err = nvmupdateExec(cmd, log)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-// ddpProfilePath is the path to our extracted DDP profile
-// we copy it to ddpUpdateFolder
-//TODO: add logic to avoid reboot if same configuration is applied
-func (r *NodeConfigReconciler) updateDDP(pciAddr, ddpProfilePath string) error {
-	log := r.log.WithName("updateDDP")
-
-	err := os.MkdirAll(ddpUpdateFolder, 0600)
-	if err != nil {
-		return err
-	}
-
-	devId, err := execCmd([]string{"sh", "-c", "lspci -vs " + pciAddr +
-		" | awk '/Device Serial/ {print $NF}' | sed s/-//g"}, log)
-	if err != nil {
-		return err
-	}
-	devId = strings.TrimSuffix(devId, "\n")
-	if devId == "" {
-		return fmt.Errorf("failed to extract devId")
-	}
-
-	target := path.Join(ddpUpdateFolder, "ice-"+devId+".pkg")
-	log.V(4).Info("Copying", "source", ddpProfilePath, "target", target)
-
-	return copyFile(ddpProfilePath, target)
-}
-
-func enableIceService() error {
-	iceServicePath := "/etc/systemd/system/ice.service"
-	serviceInfo, err := os.Create(path.Join("/host", iceServicePath))
-	if err != nil {
-		return err
-	}
-
-	_, err = serviceInfo.WriteString(serviceTemplate)
-	if err != nil {
-		return err
-	}
-
-	//create symlink to enable service on startUp
-	cmd := exec.Command("chroot", "/host", "systemctl", "enable", "ice.service")
-	return cmd.Run()
-}
-
-func copyFile(src string, dst string) error {
-	data, err := ioutil.ReadFile(src)
-	if err != nil {
-		return err
-	}
-	return ioutil.WriteFile(dst, data, 0644)
-}
-
-func runExecWithLog(cmd *exec.Cmd, log logr.Logger) error {
-	cmd.Stdout = &utils.LogWriter{Log: log, Stream: "stdout"}
-	cmd.Stderr = &utils.LogWriter{Log: log, Stream: "stderr"}
-	return cmd.Run()
-}
-
-func (r *NodeConfigReconciler) verifyCompatibility(fwPath, ddpPath string, dev ethernetv1.Device, force bool) error {
-	log := r.log.WithName("verifyCompatibility")
-
-	if force {
-		log.V(2).Info("Force flag provided - skipping compatibility check for", "device", dev.PCIAddress)
-		return nil
-	}
-
-	fwVer, err := r.getFWVersion(fwPath, dev)
-	if err != nil {
-		log.Error(err, "Failed to retrieve firmware version")
-		return err
-	}
-
-	ddpVer, err := r.getDDPVersion(ddpPath, dev)
-	if err != nil {
-		log.Error(err, "Failed to retrieve DDP version")
-		return err
-	}
-
-	driverVer := getDriverVersion(dev)
-	deviceIDs, err := getIDs(dev.PCIAddress, log)
-	if err != nil {
-		log.Error(err, "Failed to retrieve device IDs")
-		return err
-	}
-
-	for _, c := range *compatibilityMap {
-		if deviceMatcher(deviceIDs,
-			fwVer,
-			ddpVer,
-			driverVer,
-			c) {
-			log.V(2).Info("Matching compatibility entry found", "entry", c)
-			return nil
+func (r *NodeConfigReconciler) findCard(config ethernetv1.DeviceNodeConfig, inv []ethernetv1.Device) (ethernetv1.Device, error) {
+	for _, i := range inv {
+		if i.PCIAddress == config.PCIAddress {
+			return i, nil
 		}
 	}
 
-	return fmt.Errorf("No matching compatibility entry for %v (Ven:%v Cl:%v SubCl:%v DevID:%v Drv:%v FW:%v DDP:%v)",
-		dev.PCIAddress, deviceIDs.VendorID, deviceIDs.Class, deviceIDs.SubClass, deviceIDs.DeviceID, driverVer,
-		fwVer, ddpVer)
-}
-
-var deviceMatcher = func(ids DeviceIDs, fwVer, ddpVer, driverVer string, entry Compatibility) bool {
-	if ids.VendorID == entry.VendorID &&
-		ids.Class == entry.Class &&
-		ids.SubClass == entry.SubClass &&
-		ids.DeviceID == entry.DeviceID &&
-		(entry.Firmware == compatibilityWildard || fwVer == entry.Firmware) &&
-		(entry.Driver == compatibilityWildard || driverVer == entry.Driver) &&
-		ddpVersionMatcher(ddpVer, entry.DDP) {
-		return true
-	}
-	return false
-}
-
-var ddpVersionMatcher = func(ddpVer string, ddp []string) bool {
-	if len(ddp) == 1 && ddp[0] == compatibilityWildard {
-		return true
-	}
-
-	for _, d := range ddp {
-		if ddpVer == d {
-			return true
-		}
-	}
-	return false
+	return ethernetv1.Device{}, fmt.Errorf("device %v not found", config.PCIAddress)
 }
 
 func (r *NodeConfigReconciler) CreateEmptyNodeConfigIfNeeded(c client.Client) error {
-	log := r.log.WithName("CreateEmptyNodeConfigIfNeeded").WithValues("name", r.nodeName, "namespace", r.namespace)
+	log := r.log.WithName("CreateEmptyNodeConfigIfNeeded").WithValues("name", r.nodeNameRef.Name, "namespace", r.nodeNameRef.Namespace)
 	nodeConfig := &ethernetv1.EthernetNodeConfig{}
 	err := c.Get(context.Background(),
-		client.ObjectKey{
-			Name:      r.nodeName,
-			Namespace: r.namespace,
-		},
+		r.nodeNameRef,
 		nodeConfig)
 
 	if err == nil {
@@ -732,8 +380,8 @@ func (r *NodeConfigReconciler) CreateEmptyNodeConfigIfNeeded(c client.Client) er
 
 	nodeConfig = &ethernetv1.EthernetNodeConfig{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      r.nodeName,
-			Namespace: r.namespace,
+			Name:      r.nodeNameRef.Name,
+			Namespace: r.nodeNameRef.Namespace,
 		},
 		Spec: ethernetv1.EthernetNodeConfigSpec{
 			Config: []ethernetv1.DeviceNodeConfig{},

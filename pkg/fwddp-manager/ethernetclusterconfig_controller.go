@@ -36,8 +36,9 @@ var NAMESPACE = os.Getenv("ETHERNET_NAMESPACE")
 //+kubebuilder:rbac:groups=apps,resources=daemonsets;deployments;deployments/finalizers,verbs=*
 //+kubebuilder:rbac:groups="",resources=namespaces;serviceaccounts;configmaps,verbs=*
 //+kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=roles;rolebindings;clusterroles;clusterrolebindings,verbs=*
+//+kubebuilder:rbac:groups=security.openshift.io,resources=securitycontextconstraints,resourceNames=privileged,verbs=use
 
-func (r *EthernetClusterConfigReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+func (r *EthernetClusterConfigReconciler) Reconcile(_ context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := r.Log.WithValues("ethernetclusterconfig", req.NamespacedName)
 	log.V(2).Info("Reconciling EthernetClusterConfig")
 
@@ -51,8 +52,8 @@ func (r *EthernetClusterConfigReconciler) Reconcile(ctx context.Context, req ctr
 
 	// Get nodes where intel etherenet devices were discovered
 	nodes := &corev1.NodeList{}
-	labels := &client.MatchingLabels{"ethernet.intel.com/intel-ethernet-present": ""}
-	err = r.List(context.TODO(), nodes, labels)
+	clvLabel := &client.MatchingLabels{"ethernet.intel.com/intel-ethernet-present": ""}
+	err = r.List(context.TODO(), nodes, clvLabel)
 	if err != nil {
 		log.Error(err, "Failed to list Nodes")
 		return ctrl.Result{}, err
@@ -184,16 +185,12 @@ func (r *EthernetClusterConfigReconciler) synchronizeNodeConfigSpec(ncc NodeConf
 		dnc := ethernetv1.DeviceNodeConfig{PCIAddress: pciAddress}
 		dnc.DeviceConfig = cc.Spec.DeviceConfig
 		newNodeConfig.Spec.Config = append(newNodeConfig.Spec.Config, dnc)
-		newNodeConfig.Spec.DrainSkip = cc.Spec.DrainSkip
+		newNodeConfig.Spec.DrainSkip = newNodeConfig.Spec.DrainSkip || cc.Spec.DrainSkip
+		newNodeConfig.Spec.ForceReboot = newNodeConfig.Spec.ForceReboot || cc.Spec.ForceReboot
 	}
 
-	switch {
-	case len(newNodeConfig.Spec.Config) == 0 && len(currentNodeConfig.Spec.Config) != 0:
-		return r.Delete(context.TODO(), &currentNodeConfig)
-	default:
-		if !equality.Semantic.DeepDerivative(newNodeConfig.Spec, currentNodeConfig.Spec) {
-			return r.Update(context.TODO(), newNodeConfig)
-		}
+	if !equality.Semantic.DeepDerivative(newNodeConfig.Spec, currentNodeConfig.Spec) {
+		return r.Update(context.TODO(), newNodeConfig)
 	}
 	return nil
 }

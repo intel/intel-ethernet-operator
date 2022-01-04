@@ -124,12 +124,6 @@ spec:
           volumeMounts:
             - name: host
               mountPath: /host
-            - name: sysbuspci
-              mountPath: /sys/bus/pci
-            - name: workdir-volume
-              mountPath: /fwddp_artifacts
-            - name: tmp-volume
-              mountPath: /tmp
             - name: run-volume
               mountPath: /run
             - name: config-volume
@@ -159,13 +153,6 @@ spec:
         - name: host
           hostPath:
             path: /
-        - name: sysbuspci
-          hostPath:
-            path: /sys/bus/pci
-        - name: workdir-volume
-          emptyDir: {}
-        - name: tmp-volume
-          emptyDir: {}
         - name: run-volume
           emptyDir: {}
         - name: config-volume

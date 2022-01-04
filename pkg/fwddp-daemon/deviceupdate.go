@@ -7,8 +7,8 @@ import (
 	"context"
 	"encoding/xml"
 	"errors"
+	"github.com/otcshare/intel-ethernet-operator/pkg/utils"
 	"io"
-	"os"
 	"strconv"
 	"time"
 )
@@ -19,7 +19,7 @@ var (
 )
 
 func isRebootRequired(path string) (bool, error) {
-	invf, err := os.Open(path)
+	invf, err := utils.OpenNoLinks(path)
 	if err != nil {
 		return true, err
 	}
