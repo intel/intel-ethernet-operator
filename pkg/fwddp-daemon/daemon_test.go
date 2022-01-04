@@ -117,6 +117,9 @@ var _ = Describe("DaemonTests", func() {
 		untarFile = func(srcPath string, dstPath string, log logr.Logger) error {
 			return nil
 		}
+		unpackDDPArchive = func(srcPath string, dstPath string, log logr.Logger) error {
+			return nil
+		}
 		nvmupdateExec = func(cmd *exec.Cmd, log logr.Logger) error {
 			return nil
 		}
@@ -851,7 +854,7 @@ var _ = Describe("DaemonTests", func() {
 			Expect(nodeConfigs.Items[0].Status.Conditions[0].Message).To(Equal(downloadErr.Error()))
 		})
 
-		var _ = It("will update condition to UpdateFailed if not able to untar DDP", func() {
+		var _ = It("will update condition to UpdateFailed if not able to unpack DDP", func() {
 			Expect(k8sClient.Create(context.TODO(), &data.Node)).To(Succeed())
 
 			data.NodeConfig.Spec.Config[0].DeviceConfig.FWURL = ""
@@ -860,9 +863,9 @@ var _ = Describe("DaemonTests", func() {
 
 			data.Inventory[0].PCIAddress = "0000:00:00.1"
 
-			untarErr := gerrors.New("unable to untar")
-			untarFile = func(srcPath string, dstPath string, log logr.Logger) error {
-				return untarErr
+			unzipErr := gerrors.New("unable to unzip")
+			unpackDDPArchive = func(srcPath string, dstPath string, log logr.Logger) error {
+				return unzipErr
 			}
 
 			Expect(initReconciler(reconciler, data.NodeConfig.Name, data.NodeConfig.Namespace)).To(Succeed())
@@ -879,7 +882,7 @@ var _ = Describe("DaemonTests", func() {
 			Expect(nodeConfigs.Items[0].Status.Conditions).To(HaveLen(1))
 			Expect(nodeConfigs.Items[0].Status.Conditions[0].Status).To(Equal(metav1.ConditionFalse))
 			Expect(nodeConfigs.Items[0].Status.Conditions[0].Reason).To(Equal(string(UpdateFailed)))
-			Expect(nodeConfigs.Items[0].Status.Conditions[0].Message).To(Equal(untarErr.Error()))
+			Expect(nodeConfigs.Items[0].Status.Conditions[0].Message).To(Equal(unzipErr.Error()))
 		})
 
 		var _ = It("will update condition to UpdateFailed if DDP update fails", func() {

@@ -37,8 +37,9 @@ var (
 	getIDs       = getDeviceIDs
 	execCmd      = utils.ExecCmd
 
-	downloadFile = utils.DownloadFile
-	untarFile    = utils.Untar
+	downloadFile     = utils.DownloadFile
+	untarFile        = utils.Untar
+	unpackDDPArchive = utils.UnpackDDPArchive
 
 	artifactsFolder = "/host/tmp/fwddp_artifacts/nvmupdate/"
 )

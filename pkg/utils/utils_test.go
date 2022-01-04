@@ -5,10 +5,11 @@ package utils
 
 import (
 	"archive/tar"
+	"archive/zip"
 	"compress/gzip"
 	"crypto/md5"
 	"encoding/hex"
-	"github.com/go-logr/logr"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
@@ -16,6 +17,8 @@ import (
 	"sort"
 	"strings"
 	"testing"
+
+	"github.com/go-logr/logr"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -343,6 +346,132 @@ var _ = Describe("Utils", func() {
 			Expect(f).To(BeNil())
 		})
 	})
+
+	var _ = Describe("Unzip", func() {
+		log := logr.Discard()
+
+		var _ = It("will unpack zip archive", func() {
+			filesCreate := []string{
+				"readme.txt",
+				"testDir/",
+				"testDir/test.txt",
+				"testDir/nestedDir/",
+				"testDir/nestedDir/test.txt"}
+			zipPath := makeZip("zip-*.zip", filesCreate, nil)
+			defer os.Remove(zipPath)
+
+			dir, err := ioutil.TempDir("", "zip-")
+			Expect(err).ToNot(HaveOccurred())
+			defer os.RemoveAll(dir)
+
+			err = Unzip(zipPath, dir, log)
+			Expect(err).ToNot(HaveOccurred())
+
+			var extractedFiles []string
+			err = filepath.WalkDir(
+				dir,
+				func(path string, d os.DirEntry, err error) error {
+					if err != nil {
+						return err
+					}
+
+					relPath, errRel := filepath.Rel(dir, path)
+					if errRel != nil {
+						return errRel
+					}
+
+					if relPath == "." {
+						return nil
+					}
+
+					if d.IsDir() {
+						relPath = relPath + "/"
+					}
+
+					extractedFiles = append(extractedFiles, relPath)
+
+					return nil
+				})
+			Expect(err).ToNot(HaveOccurred())
+
+			sort.Strings(filesCreate)
+			Expect(extractedFiles).To(Equal(filesCreate))
+		})
+
+		var _ = It("will return error if input file is not a zip archive", func() {
+			tarPath, filenames, err := testTar()
+			Expect(err).ToNot(HaveOccurred())
+			defer os.RemoveAll(filenames[0])
+			defer os.Remove(tarPath)
+
+			err = Unzip(tarPath, os.TempDir(), log)
+			Expect(err).To(HaveOccurred())
+			Expect(err).To(Equal(zip.ErrFormat))
+		})
+	})
+
+	var _ = Describe("UnpackDDPArchive", func() {
+		log := logr.Discard()
+
+		var _ = It("will unzip DDP archive", func() {
+			innerFilesCreate := []string{
+				"ice_comms-1.3.30.0.pkg",
+				"readme.txt",
+				"Intel_800_series_market_segment_DDP_license.txt"}
+			innerZipPath := makeZip("ice_*.zip", innerFilesCreate, nil)
+			defer os.Remove(innerZipPath)
+
+			outerFilesCreate := []string{"E810 DDP for Comms TechGuide_Rev2.5.pdf"}
+			ddpArchive := makeZip("test-*.zip", outerFilesCreate, []string{innerZipPath})
+			defer os.Remove(ddpArchive)
+
+			archivedFiles := append(innerFilesCreate, filepath.Base(innerZipPath))
+			archivedFiles = append(archivedFiles, outerFilesCreate...)
+			sort.Strings(archivedFiles)
+
+			dir, err := ioutil.TempDir("", "ddp-")
+			Expect(err).ToNot(HaveOccurred())
+			defer os.RemoveAll(dir)
+
+			err = UnpackDDPArchive(ddpArchive, dir, log)
+			Expect(err).ToNot(HaveOccurred())
+
+			files, err := os.ReadDir(dir)
+			Expect(err).ToNot(HaveOccurred())
+
+			var extractedFiles []string
+			for _, file := range files {
+				extractedFiles = append(extractedFiles, file.Name())
+			}
+
+			Expect(extractedFiles).To(Equal(archivedFiles))
+		})
+
+		var _ = It("will return error if there are 2 inner zips", func() {
+			innerFilesCreate := []string{
+				"ice_comms-1.3.30.0.pkg",
+				"readme.txt",
+				"Intel_800_series_market_segment_DDP_license.txt"}
+
+			var innerZipPaths []string
+			for i := 0; i < 2; i++ {
+				innerZipPaths = append(innerZipPaths, makeZip("ice_*.zip", innerFilesCreate, nil))
+				defer os.Remove(innerZipPaths[i])
+			}
+
+			outerFilesCreate := []string{"E810 DDP for Comms TechGuide_Rev2.5.pdf"}
+			ddpArchive := makeZip("test-*.zip", outerFilesCreate, innerZipPaths)
+			defer os.Remove(ddpArchive)
+
+			dir, err := ioutil.TempDir("", "ddp-")
+			Expect(err).ToNot(HaveOccurred())
+			defer os.RemoveAll(dir)
+
+			err = UnpackDDPArchive(ddpArchive, dir, log)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(Equal("unexpected number of DDP archives"))
+		})
+	})
 })
 
 func testTar() (string, []string, error) {
@@ -425,4 +554,49 @@ func testTar() (string, []string, error) {
 		})
 
 	return tarpath, filenames, err
+}
+
+func makeZip(name string, filesCreate, filesCopy []string) string {
+	zipFile, err := ioutil.TempFile("", name)
+	Expect(err).ToNot(HaveOccurred())
+	defer zipFile.Close()
+
+	w := zip.NewWriter(zipFile)
+	defer w.Close()
+
+	for i, name := range filesCreate {
+		fh := zip.FileHeader{
+			Name:   name,
+			Method: zip.Deflate}
+
+		mode := os.FileMode(0600)
+		if name[len(name)-1:] == "/" {
+			mode |= os.ModeDir
+			mode |= 0100
+		}
+		fh.SetMode(mode)
+
+		writer, err := w.CreateHeader(&fh)
+		Expect(err).ToNot(HaveOccurred())
+
+		if mode.IsRegular() {
+			content := []byte(fmt.Sprintf("%v: %v", i, name))
+			_, err = writer.Write(content)
+			Expect(err).ToNot(HaveOccurred())
+		}
+	}
+
+	for _, path := range filesCopy {
+		file, err := os.Open(path)
+		Expect(err).ToNot(HaveOccurred())
+		defer file.Close()
+
+		writer, err := w.Create(filepath.Base(path))
+		Expect(err).ToNot(HaveOccurred())
+
+		_, err = io.Copy(writer, file)
+		Expect(err).ToNot(HaveOccurred())
+	}
+
+	return zipFile.Name()
 }

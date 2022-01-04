@@ -122,9 +122,9 @@ func (d *ddpUpdater) prepareDDP(config ethernetv1.DeviceNodeConfig) (string, err
 	}
 
 	log.V(4).Info("DDP file downloaded - extracting")
-	// XXX so this untars into the same directory as the source file
+	// XXX so this unpacks into the same directory as the source file
 	// We might add more comments here explaining the mechanics and reasoning
-	err = untarFile(fullPath, targetPath, log)
+	err = unpackDDPArchive(fullPath, targetPath, log)
 	if err != nil {
 		return "", err
 	}

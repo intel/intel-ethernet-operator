@@ -5,6 +5,7 @@ package utils
 
 import (
 	"archive/tar"
+	"archive/zip"
 	"compress/gzip"
 	"crypto/md5"
 	"encoding/hex"
@@ -215,6 +216,116 @@ func Untar(srcPath string, dstPath string, log logr.Logger) error {
 			log.Error(err, "Invalid untar type")
 			return err
 		}
+	}
+
+	return nil
+}
+
+func unzipFile(zipFile *zip.File, path string, mode os.FileMode) error {
+	file, err := OpenFileNoLinks(path, os.O_CREATE|os.O_RDWR, mode)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	reader, err := zipFile.Open()
+	if err != nil {
+		return err
+	}
+	defer reader.Close()
+
+	_, err = io.Copy(file, reader)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func Unzip(srcPath, dstPath string, log logr.Logger) error {
+	log.V(4).Info("Extracting file", "srcPath", srcPath, "dstPath", dstPath)
+
+	f, err := OpenNoLinks(srcPath)
+	if err != nil {
+		log.Error(err, "Unable to open file %v", srcPath)
+		return err
+	}
+	defer f.Close()
+
+	stat, err := f.Stat()
+	if err != nil {
+		log.Error(err, "Can't stat file %v", f.Name())
+		return err
+	}
+
+	r, err := zip.NewReader(f, stat.Size())
+	if err != nil {
+		return err
+	}
+
+	for _, zipFile := range r.File {
+		fi := zipFile.FileInfo()
+		mode := fi.Mode()
+		nfDst := filepath.Join(dstPath, zipFile.Name)
+
+		switch {
+		case mode.IsRegular():
+			err = unzipFile(zipFile, nfDst, mode)
+			if err != nil {
+				return err
+			}
+
+		case mode.IsDir():
+			err = os.MkdirAll(nfDst, mode)
+			if err != nil {
+				return err
+			}
+
+		case mode&os.ModeSymlink == os.ModeSymlink:
+			log.Info("Skipping symlink %v", zipFile.Name)
+
+		default:
+			err = fmt.Errorf("unable to unzip file %v", zipFile.Name)
+			log.Error(err, "invalid unzip type")
+			return err
+		}
+	}
+
+	return nil
+}
+
+func UnpackDDPArchive(srcPath, dstPath string, log logr.Logger) error {
+	err := Unzip(srcPath, dstPath, log)
+
+	switch {
+	case err == nil:
+		namePattern := "ice_*.zip"
+		ddpArchive := filepath.Join(dstPath, namePattern)
+		matches, err := filepath.Glob(ddpArchive)
+		if err != nil {
+			return err
+		}
+
+		if len(matches) != 1 {
+			err = fmt.Errorf("unexpected number of DDP archives")
+			log.Error(
+				err, "expected 1 match", "name pattern", namePattern, "matches found", len(matches))
+			return err
+		}
+
+		err = Unzip(matches[0], dstPath, log)
+		if err != nil {
+			return err
+		}
+
+	case errors.Is(err, zip.ErrFormat):
+		err = Untar(srcPath, dstPath, log)
+		if err != nil {
+			return err
+		}
+
+	default:
+		return err
 	}
 
 	return nil
