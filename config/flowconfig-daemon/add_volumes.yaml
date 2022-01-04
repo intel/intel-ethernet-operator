@@ -15,4 +15,4 @@ spec:
   # ddp package directory is needed by the dpdk ice driver
   - name: iceddp
     hostPath:
-      path: /lib/firmware/updates/intel/ice/ddp/
+      path: /var/lib/firmware/intel/ice/ddp

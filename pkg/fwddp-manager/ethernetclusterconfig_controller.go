@@ -36,6 +36,7 @@ var NAMESPACE = os.Getenv("ETHERNET_NAMESPACE")
 //+kubebuilder:rbac:groups=apps,resources=daemonsets;deployments;deployments/finalizers,verbs=*
 //+kubebuilder:rbac:groups="",resources=namespaces;serviceaccounts;configmaps,verbs=*
 //+kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=roles;rolebindings;clusterroles;clusterrolebindings,verbs=*
+//+kubebuilder:rbac:groups=security.openshift.io,resources=securitycontextconstraints,resourceNames=privileged,verbs=use
 
 func (r *EthernetClusterConfigReconciler) Reconcile(_ context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := r.Log.WithValues("ethernetclusterconfig", req.NamespacedName)

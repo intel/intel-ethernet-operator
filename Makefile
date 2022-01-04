@@ -84,7 +84,14 @@ GOBIN=$(shell go env GOBIN)
 endif
 
 # To pass proxy for docker build from env invoke make with 'make docker-build HTTP_PROXY=$http_proxy HTTPS_PROXY=$https_proxy'
-DOCKERARGS?=--format=docker
+DOCKERARGS?=
+
+# Podman specific args
+ifeq ($(IMGTOOL),podman)
+	DOCKERARGS += --format=docker
+endif
+
+# Add proxy args for Image builder if provided
 ifdef HTTP_PROXY
 	DOCKERARGS += --build-arg http_proxy=${HTTP_PROXY}
 endif
@@ -181,7 +188,7 @@ docker-build: test ## Build docker image with the manager.
 	$(IMGTOOL) build -t ${IMAGE_TAG_VERSION} ${DOCKERARGS} .
 	$(IMGTOOL) image tag ${IMAGE_TAG_VERSION} ${IMAGE_TAG_LATEST}
 
-docker-build-manager:
+docker-build-manager: flowconfig-manifests
 	$(IMGTOOL) build --file Dockerfile --build-arg=VERSION=$(VERSION) --tag ${ETHERNET_MANAGER_IMAGE} ${DOCKERARGS} .
 	$(IMGTOOL) image tag ${ETHERNET_MANAGER_IMAGE} ${IMAGE_TAG_LATEST}
 
