@@ -123,7 +123,6 @@ func (pm *clusterConfigMatcher) prepareDeviceConfigContext(nodeConfig *ethernetv
 				case current.Spec.Priority > previous.Spec.Priority: //override with higher prioritized config
 					deviceConfigContext[device.PCIAddress] = current
 				case current.Spec.Priority == previous.Spec.Priority: //multiple configs with same priority; drop older one
-					//TODO: Update Timestamp would be better than CreationTime
 					if current.CreationTimestamp.After(previous.CreationTimestamp.Time) {
 						pm.log.V(2).
 							Info("Dropping older ClusterConfig",

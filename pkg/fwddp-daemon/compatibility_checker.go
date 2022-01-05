@@ -32,7 +32,7 @@ func (r *NodeConfigReconciler) verifyCompatibility(fwPath, ddpPath string, dev e
 		return err
 	}
 
-	ddpVer, err := r.ddpUpdater.getDDPVersion(ddpPath, dev)
+	ddpVer, err := r.ddpUpdater.determineDDPPath(ddpPath, dev)
 	if err != nil {
 		log.Error(err, "Failed to retrieve DDP version")
 		return err

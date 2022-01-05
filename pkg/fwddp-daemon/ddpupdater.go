@@ -60,14 +60,12 @@ func (d *ddpUpdater) handleDDPUpdate(pciAddr string, forceReboot bool, ddpPath s
 	return nil
 }
 
-func (d *ddpUpdater) getDDPVersion(ddpPath string, dev ethernetv1.Device) (string, error) {
-	log := d.log.WithName("getDDPVersion")
+func (d *ddpUpdater) determineDDPPath(ddpPath string, dev ethernetv1.Device) (string, error) {
+	log := d.log.WithName("determineDDPPath")
 	if ddpPath == "" {
 		log.V(4).Info("DDP package not provided - retrieving version from device")
 		return dev.DDP.PackageName + "-" + dev.DDP.Version, nil
 	} else {
-		// TODO: DDP Tool currently does not allow to get package version from file
-		// return ddpPath instead
 		log.V(4).Info("Retrieving version from", "path", ddpPath)
 		return ddpPath, nil
 	}

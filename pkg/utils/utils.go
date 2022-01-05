@@ -98,7 +98,6 @@ func verifyChecksum(path, expected string) (bool, error) {
 	return true, nil
 }
 
-// TODO: [ESS-2843] Add cert validation support
 func DownloadFile(path, url, checksum string) error {
 	f, err := CreateNoLinks(path)
 	if err != nil {
