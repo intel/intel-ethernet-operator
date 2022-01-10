@@ -5,23 +5,22 @@ package daemon
 
 import (
 	"fmt"
-	"github.com/go-logr/logr"
-	ethernetv1 "github.com/otcshare/intel-ethernet-operator/apis/ethernet/v1"
-	"github.com/otcshare/intel-ethernet-operator/pkg/utils"
 	"os"
 	"os/exec"
 	"path"
 	"path/filepath"
 	"strings"
 	"syscall"
+
+	"github.com/go-logr/logr"
+	ethernetv1 "github.com/otcshare/intel-ethernet-operator/apis/ethernet/v1"
+	"github.com/otcshare/intel-ethernet-operator/pkg/utils"
 )
 
 const (
 	nvmupdate64e             = "./nvmupdate64e"
-	nvmupdateVersionFilesize = 10
 	nvmupdatePackageFilename = "nvmupdate.tar.gz"
 	updateOutFile            = "update.xml"
-	nvmupdateVersionFilename = "version.txt"
 )
 
 var (
@@ -62,36 +61,6 @@ func (f *fwUpdater) prepareFirmware(config ethernetv1.DeviceNodeConfig) (string,
 	}
 
 	return findFw(targetPath)
-}
-
-func (f *fwUpdater) getFWVersion(fwPath string, dev ethernetv1.Device) (string, error) {
-	log := f.log.WithName("getFWVersion")
-	if fwPath == "" {
-		log.V(4).Info("Firmware package not provided - retrieving version from device")
-		v := strings.Split(dev.Firmware.Version, " ")
-		if len(v) != 3 {
-			return "", fmt.Errorf("Invalid firmware package version: %v", dev.Firmware.Version)
-		}
-		// Pick first element from eg: 2.40 0x80007064 1.2898.0 which is the NVM Version
-		return v[0], nil
-
-	} else {
-		log.V(4).Info("Retrieving version from", "path", fwPath)
-		path := filepath.Join(fwPath, nvmupdateVersionFilename)
-		file, err := utils.OpenNoLinks(path)
-		if err != nil {
-			return "", fmt.Errorf("failed to open version file: %v", err)
-		}
-		defer file.Close()
-
-		ver := make([]byte, nvmupdateVersionFilesize)
-		n, err := file.Read(ver)
-		if err != nil {
-			return "", fmt.Errorf("unable to read: %v", path)
-		}
-		// Example version.txt content: v2.40
-		return strings.ReplaceAll(strings.TrimSpace(string(ver[:n])), "v", ""), nil
-	}
 }
 
 func (f *fwUpdater) handleFWUpdate(pciAddr, fwPath string) (bool, error) {

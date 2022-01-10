@@ -82,7 +82,6 @@ func NewDrainHelper(log logr.Logger, cs *clientset.Clientset, nodeName, namespac
 		drainer: &drain.Helper{
 			Ctx:                 context.Background(),
 			Client:              cs,
-			Force:               true,
 			IgnoreAllDaemonSets: true,
 			DeleteEmptyDirData:  true,
 			GracePeriodSeconds:  -1,

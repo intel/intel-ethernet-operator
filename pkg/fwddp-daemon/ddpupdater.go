@@ -5,14 +5,15 @@ package daemon
 
 import (
 	"fmt"
-	"github.com/go-logr/logr"
-	ethernetv1 "github.com/otcshare/intel-ethernet-operator/apis/ethernet/v1"
-	"github.com/otcshare/intel-ethernet-operator/pkg/utils"
 	"os"
 	"os/exec"
 	"path"
 	"path/filepath"
 	"strings"
+
+	"github.com/go-logr/logr"
+	ethernetv1 "github.com/otcshare/intel-ethernet-operator/apis/ethernet/v1"
+	"github.com/otcshare/intel-ethernet-operator/pkg/utils"
 )
 
 const (
@@ -58,17 +59,6 @@ func (d *ddpUpdater) handleDDPUpdate(pciAddr string, forceReboot bool, ddpPath s
 	}
 
 	return nil
-}
-
-func (d *ddpUpdater) determineDDPPath(ddpPath string, dev ethernetv1.Device) (string, error) {
-	log := d.log.WithName("determineDDPPath")
-	if ddpPath == "" {
-		log.V(4).Info("DDP package not provided - retrieving version from device")
-		return dev.DDP.PackageName + "-" + dev.DDP.Version, nil
-	} else {
-		log.V(4).Info("Retrieving version from", "path", ddpPath)
-		return ddpPath, nil
-	}
 }
 
 // ddpProfilePath is the path to our extracted DDP profile
