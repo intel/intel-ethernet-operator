@@ -255,12 +255,16 @@ func (r *NodeFlowConfigReconciler) getToAddAndDelete(flowReqs []*flowapi.Request
 	toDelete map[string]*flowsets.FlowCreateRecord) {
 	toAdd = make(map[string]*flowapi.RequestFlowCreate)
 
+	logger := r.Log.WithName("getToAddAndDelete")
 	// newKeys is a placeholder for hash values from all flowRequest objects.
 	// These keys will be used for look-up which older flowRequests needs to be deleted.
 	newKeys := []string{}
 	for _, req := range flowReqs {
-		key := getFlowCreateHash(req)
+		key, err := getFlowCreateHash(req)
 		newKeys = append(newKeys, key)
+		if err != nil {
+			logger.Info("error getting flowCreateHash", "error", err)
+		}
 		if key != "" {
 			if r.flowSets.Has(key) {
 				continue
@@ -401,16 +405,15 @@ func NewDCFError(msg string) error {
 }
 
 // getFlowCreateHash returns a hash value from a RequestFlowCreate object
-func getFlowCreateHash(req *flowapi.RequestFlowCreate) string {
+func getFlowCreateHash(req *flowapi.RequestFlowCreate) (string, error) {
 
 	reqBytes, err := json.Marshal(req)
 	if err != nil {
-		// TODO: log error
-		return ""
+		return "", err
 	}
 
 	h := sha256.New()
 	h.Write(reqBytes)
 
-	return fmt.Sprintf("%x", h.Sum(nil))
+	return fmt.Sprintf("%x", h.Sum(nil)), nil
 }

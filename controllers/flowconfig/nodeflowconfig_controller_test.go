@@ -242,9 +242,9 @@ var _ = Describe("NodeFlowConfig controller", func() {
 			},
 		}
 
-		hash1 := getFlowCreateHash(req1)
-		hash2 := getFlowCreateHash(req2)
-		hash3 := getFlowCreateHash(req3)
+		hash1, _ := getFlowCreateHash(req1)
+		hash2, _ := getFlowCreateHash(req2)
+		hash3, _ := getFlowCreateHash(req3)
 
 		It("should create create the same hash for requests with the same properties", func() {
 			Expect(hash1).Should(Equal(hash2))
@@ -534,7 +534,8 @@ spec:
 					flowClient: mockFlowServiceClient,
 				}
 
-				toAdd[getFlowCreateHash(reqFlowCreate)] = reqFlowCreate
+				key, _ := getFlowCreateHash(reqFlowCreate)
+				toAdd[key] = reqFlowCreate
 
 				expectedErr := fmt.Sprintf("error validating flow create request: %v", mockError)
 				err := reconciler.createRules(toAdd)
@@ -558,7 +559,8 @@ spec:
 					flowClient: mockFlowServiceClient,
 				}
 
-				toAdd[getFlowCreateHash(reqFlowCreate)] = reqFlowCreate
+				key, _ := getFlowCreateHash(reqFlowCreate)
+				toAdd[key] = reqFlowCreate
 
 				expectedErr := "received validation error: mock error"
 				err := reconciler.createRules(toAdd)
@@ -577,7 +579,8 @@ spec:
 					flowClient: mockFlowServiceClient,
 				}
 
-				toAdd[getFlowCreateHash(reqFlowCreate)] = reqFlowCreate
+				key, _ := getFlowCreateHash(reqFlowCreate)
+				toAdd[key] = reqFlowCreate
 
 				expectedErr := "error creating flow rules: this error is forced"
 				err := reconciler.createRules(toAdd)
@@ -602,7 +605,8 @@ spec:
 					flowClient: mockFlowServiceClient,
 				}
 
-				toAdd[getFlowCreateHash(reqFlowCreate)] = reqFlowCreate
+				key, _ := getFlowCreateHash(reqFlowCreate)
+				toAdd[key] = reqFlowCreate
 
 				expectedErr := "received flow create error: mock error"
 				err := reconciler.createRules(toAdd)
