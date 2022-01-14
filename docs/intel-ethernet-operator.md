@@ -592,9 +592,12 @@ EOF
 
 ```shell
 # export IMAGE_REGISTRY=<OCP Image registry>
-# git clone https://github.com/intel-sandbox/networking.dataplane.dpdk.tools.uft.git
+# export IEO_SRC_DIR=<This repo source directory location>
 
-# git checkout fix_entrypoint
+# git clone https://github.com/intel/UFT.git
+
+## Apply UFT patch
+# git apply $IEO_SRC_DIR/patches/uft-dockerfile-and-entrypoint.patch
 
 # make dcf-image
 

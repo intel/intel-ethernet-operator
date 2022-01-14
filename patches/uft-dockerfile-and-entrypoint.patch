@@ -1,0 +1,81 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2020-2021 Intel Corporation
+
+diff --git a/images/Dockerfile.uft b/images/Dockerfile.uft
+index b58a098..e2ace53 100644
+--- a/images/Dockerfile.uft
++++ b/images/Dockerfile.uft
+@@ -2,24 +2,27 @@
+ # Copyright(c) 2021 Intel Corporation
+ 
+ 
+-FROM registry.access.redhat.com/ubi8/ubi
++FROM registry.access.redhat.com/ubi8/ubi:8.4
+ 
+ ARG DPDK_TAG=main
+ ENV DPDK_TAG=${DPDK_TAG}
+ 
+-RUN yum -y install gcc-c++-8.4.1 \
+-    git-2.27.0 \
+-    libtool-2.4.6 \
+-    make-1:4.2.1 \
+-    python36-devel-3.6.8 \
+-        && pip3 install  --no-cache-dir meson==0.57.1 cython==0.29.22 \
+-	grpcio-tools==1.36.1 grpcio-reflection==1.36.1 pyyaml==5.4.1 pyelftools==0.27 \
++RUN yum -y install gcc-c++ \
++    git \
++    libtool \
++    make \
++    python36-devel \
++        && pip3 install  --no-cache-dir meson==0.57.1 cython \
++	grpcio-tools grpcio-reflection pyyaml pyelftools \
+         && yum clean all
+ 
+ WORKDIR /tmp/
+ RUN git clone --progress http://dpdk.org/git/dpdk /tmp/dpdk
++#COPY ./dpdk /tmp/dpdk
+ RUN git clone --progress https://github.com/ninja-build/ninja /opt/ninja
++RUN git -C /opt/ninja checkout v1.10.2
+ RUN git clone --progress https://github.com/numactl/numactl.git /opt/numactl
++RUN git -C /opt/numactl checkout v2.0.14
+ 
+ WORKDIR /opt/ninja
+ RUN python3 configure.py --bootstrap && cp ninja /usr/bin/
+@@ -52,7 +55,7 @@ WORKDIR /opt/dcf/lib
+ RUN python3 setup.py build_ext --inplace --dpdkinc=/tmp/dpdk/install/usr/local/include --dpdklib=/tmp/dpdk/install/usr/local/lib64
+ 
+ 
+-FROM registry.access.redhat.com/ubi8/ubi-minimal:latest
++FROM registry.access.redhat.com/ubi8/ubi-minimal:8.4
+ 
+ ARG UFT_INSTALL_PATH=/usr/local/lib64
+ ENV LD_LIBRARY_PATH=${UFT_INSTALL_PATH}:
+@@ -61,11 +64,11 @@ COPY --from=0 /tmp/dpdk/install/usr/local/lib64 ${UFT_INSTALL_PATH}
+ COPY --from=0 /opt/dcf /opt/dcf
+ COPY --from=0 /usr/local/lib/libnuma.so.1 ${UFT_INSTALL_PATH}
+ 
+-RUN microdnf install python36-3.6.8 gcc-c++-8.4.1 \
++RUN microdnf install python36-3.6.8 gcc-c++ \
+ 	&& python3 -m pip install --upgrade --force pip \
+-	&& pip3 install --no-cache-dir grpcio-tools==1.36.1 grpcio-reflection==1.36.1 pyyaml==5.4.1 \
+-	&& microdnf update libxml2-2.9.7-9.el8_4.2 lz4-libs-1.8.3-3.el8_4 rpm-4.14.3-14.el8_4 systemd-libs-239-45.el8_4.3 \
+-	glib2-2.56.4-10.el8_4.1
++	&& pip3 install --no-cache-dir grpcio-tools grpcio-reflection pyyaml \
++	&& microdnf update libxml2 lz4-libs rpm systemd-libs \
++	glib2
+ 
+ WORKDIR /opt/dcf/rpc
+ RUN python3 -m grpc_tools.protoc -I./ --python_out=. --grpc_python_out=. flow.proto
+diff --git a/images/entrypoint.sh b/images/entrypoint.sh
+index 2b7b606..8ee612f 100755
+--- a/images/entrypoint.sh
++++ b/images/entrypoint.sh
+@@ -17,7 +17,7 @@
+ # given in Environment varible exported by device plugin in following
+ # format: PCIDEVICE_INTEL_COM_INTEL_ENP24S0F0=0000:18:02.2
+ ####
+-rawpci=$(env | grep PCIDEVICE_INTEL_COM | awk -F'=' '{ print $2 }')
++rawpci=$(env | grep PCIDEVICE_ | awk -F'=' '{ print $2 }')
+ pciids=(${rawpci//,/ })
+ 
+ SERVER_CONF_FILE=/opt/dcf/server_conf.yaml
