@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path"
 	"path/filepath"
 	"strings"
 
@@ -16,18 +15,13 @@ import (
 	"github.com/otcshare/intel-ethernet-operator/pkg/utils"
 )
 
-const (
-	ddpPackageFilename = "ddp.tar.gz"
+var (
+	findDdp           = findDdpProfile
+	reloadIceServiceP = reloadIceService
 	// /host comes from mounted folder in OCP
 	// /var/lib/firmware comes from modified kernel argument, which allows OS to read DDP profile from that path.
 	// This is done because on RHCOS /lib/firmware/* path is read-only
 	// intel/ice/ddp is default path for ICE *.pkg files
-)
-
-var (
-	findDdp           = findDdpProfile
-	reloadIceServiceP = reloadIceService
-
 	ddpUpdateFolder = "/host/var/lib/firmware/intel/ice/ddp/"
 )
 
@@ -81,7 +75,7 @@ func (d *ddpUpdater) updateDDP(pciAddr, ddpProfilePath string) error {
 		return fmt.Errorf("failed to extract devId")
 	}
 
-	target := path.Join(ddpUpdateFolder, "ice-"+devId+".pkg")
+	target := filepath.Join(ddpUpdateFolder, "ice-"+devId+".pkg")
 	log.V(4).Info("Copying", "source", ddpProfilePath, "target", target)
 
 	return utils.CopyFile(ddpProfilePath, target)
@@ -95,14 +89,14 @@ func (d *ddpUpdater) prepareDDP(config ethernetv1.DeviceNodeConfig) (string, err
 		return "", nil
 	}
 
-	targetPath := path.Join(artifactsFolder, config.PCIAddress)
+	targetPath := filepath.Join(artifactsFolder, config.PCIAddress)
 
 	err := utils.CreateFolder(targetPath, log)
 	if err != nil {
 		return "", err
 	}
 
-	fullPath := path.Join(targetPath, ddpPackageFilename)
+	fullPath := filepath.Join(targetPath, filepath.Base(config.DeviceConfig.DDPURL))
 	log.V(4).Info("Downloading", "url", config.DeviceConfig.DDPURL, "dstPath", fullPath)
 	err = downloadFile(fullPath, config.DeviceConfig.DDPURL, config.DeviceConfig.DDPChecksum)
 	if err != nil {

@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path"
 	"path/filepath"
 	"strings"
 	"syscall"
@@ -18,9 +17,8 @@ import (
 )
 
 const (
-	nvmupdate64e             = "./nvmupdate64e"
-	nvmupdatePackageFilename = "nvmupdate.tar.gz"
-	updateOutFile            = "update.xml"
+	nvmupdate64e  = "./nvmupdate64e"
+	updateOutFile = "update.xml"
 )
 
 var (
@@ -40,14 +38,14 @@ func (f *fwUpdater) prepareFirmware(config ethernetv1.DeviceNodeConfig) (string,
 		return "", nil
 	}
 
-	targetPath := path.Join(artifactsFolder, config.PCIAddress)
+	targetPath := filepath.Join(artifactsFolder, config.PCIAddress)
 
 	err := utils.CreateFolder(targetPath, log)
 	if err != nil {
 		return "", err
 	}
 
-	fullPath := path.Join(targetPath, nvmupdatePackageFilename)
+	fullPath := filepath.Join(targetPath, filepath.Base(config.DeviceConfig.FWURL))
 	log.V(4).Info("Downloading", "url", config.DeviceConfig.FWURL, "dstPath", fullPath)
 	err = downloadFile(fullPath, config.DeviceConfig.FWURL, config.DeviceConfig.FWChecksum)
 	if err != nil {
@@ -141,6 +139,6 @@ func findFwExec(targetPath string) (string, error) {
 	return fwPaths[0], err
 }
 
-func nvmupdate64eCfgPath(p string) string { return path.Join(p, "nvmupdate.cfg") }
-func updateResultPath(p string) string    { return path.Join(p, updateOutFile) }
+func nvmupdate64eCfgPath(p string) string { return filepath.Join(p, "nvmupdate.cfg") }
+func updateResultPath(p string) string    { return filepath.Join(p, updateOutFile) }
 func isExecutable(info os.FileInfo) bool  { return info.Mode()&0100 != 0 }
