@@ -6,7 +6,6 @@ package v1
 import (
 	"fmt"
 
-	"github.com/golang/protobuf/ptypes/any"
 	"github.com/otcshare/intel-ethernet-operator/pkg/flowconfig/rpc/v1/flow"
 	"github.com/otcshare/intel-ethernet-operator/pkg/flowconfig/utils"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -23,27 +22,13 @@ func (r *NodeFlowConfig) SetupWebhookWithManager(mgr ctrl.Manager) error {
 		Complete()
 }
 
-// EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
-
 //+kubebuilder:webhook:path=/validate-flowconfig-intel-com-v1-nodeflowconfig,mutating=false,failurePolicy=fail,sideEffects=None,groups=flowconfig.intel.com,resources=nodeflowconfigs,verbs=create;update,versions=v1,name=vnodeflowconfig.kb.io,admissionReviewVersions={v1,v1beta1}
 
 var _ webhook.Validator = &NodeFlowConfig{}
 
-func validate(rules *FlowRules) error {
-	// validate flow patterns
-	for i, item := range rules.Pattern {
-
-		// validate single RteFlowItem spec
-		if err := validateRteFlowItem(item); err != nil {
-			return fmt.Errorf("pattern[%d] invalid: %v", i, err)
-		}
-
-		// ensure that last action is RTE_FLOW_ITEM_TYPE_END
-		if i == len(rules.Pattern)-1 {
-			if item.Type != "RTE_FLOW_ITEM_TYPE_END" {
-				return fmt.Errorf("invalid: last pattern must be RTE_FLOW_ITEM_TYPE_END")
-			}
-		}
+func (rules *FlowRules) validate() error {
+	if err := validateFlowPatterns(rules.Pattern); err != nil {
+		return err
 	}
 
 	// validate flow actions
@@ -80,17 +65,8 @@ func validate(rules *FlowRules) error {
 		}
 	}
 
-	// validate flow attribute
-	attr := &flow.RteFlowAttr{
-		Group:    rules.Attr.Group,
-		Priority: rules.Attr.Priority,
-		Ingress:  rules.Attr.Ingress,
-		Egress:   rules.Attr.Egress,
-		Transfer: rules.Attr.Transfer,
-		Reserved: rules.Attr.Reserved,
-	}
-
-	if err := validateRteFlowAttr(attr); err != nil {
+	// validate flow attributes
+	if err := validateFlowAttr(rules.Attr); err != nil {
 		return err
 	}
 
@@ -102,93 +78,9 @@ func validate(rules *FlowRules) error {
 	return nil
 }
 
-func validateRteFlowAttr(attr *flow.RteFlowAttr) error {
-	if attr.Ingress > 0x1 {
-		return fmt.Errorf("invalid attr.ingress (%x), must be of value {0,1}", attr.Ingress)
-	}
-	if attr.Egress > 0x1 {
-		return fmt.Errorf("invalid attr.egress (%x), must be of value {0,1}", attr.Egress)
-	}
-	if attr.Transfer > 0x1 {
-		return fmt.Errorf("invalid attr.transfer (%x), must be of value {0,1}", attr.Transfer)
-	}
-
-	return nil
-}
-
 func validatePortId(id uint32) error {
 	// TODO: Port ID validation
 	return nil
-}
-
-func validateRteFlowItem(item *FlowItem) error {
-	rteFlowItem := new(flow.RteFlowItem)
-
-	val, ok := flow.RteFlowItemType_value[item.Type]
-	if !ok {
-		return fmt.Errorf("invalid flow item type: %s", item.Type)
-	}
-	flowType := flow.RteFlowItemType(val)
-	rteFlowItem.Type = flowType
-
-	if item.Spec != nil {
-		specAny, err := utils.GetFlowItemAny(item.Type, item.Spec.Raw)
-		if err != nil {
-			return fmt.Errorf("invalid 'spec' in pattern(type %s): %v", flowType, err)
-		}
-		rteFlowItem.Spec = specAny
-		if err := validateItem(rteFlowItem.Type, "spec", nil, rteFlowItem.Spec); err != nil {
-			return fmt.Errorf("validateItem(): error validating %s spec: %v", rteFlowItem.Type, err)
-		}
-	}
-
-	if item.Last != nil {
-		lastAny, err := utils.GetFlowItemAny(item.Type, item.Last.Raw)
-		if err != nil {
-			return fmt.Errorf("invalid 'last' in pattern(type %s): %v", flowType, err)
-		}
-		rteFlowItem.Last = lastAny
-		if err := validateItem(rteFlowItem.Type, "last", rteFlowItem.Spec, rteFlowItem.Last); err != nil {
-			return fmt.Errorf("validateItem(): error validating %s last: %v", rteFlowItem.Type, err)
-		}
-	}
-
-	if item.Mask != nil {
-		maskAny, err := utils.GetFlowItemAny(item.Type, item.Mask.Raw)
-		if err != nil {
-			return fmt.Errorf("invalid 'mask' in pattern(type %s): %v", flowType, err)
-		}
-		rteFlowItem.Mask = maskAny
-		if err := validateItem(rteFlowItem.Type, "mask", rteFlowItem.Spec, rteFlowItem.Mask); err != nil {
-			return fmt.Errorf("validateItem(): error validating %s mask: %v", rteFlowItem.Type, err)
-		}
-	}
-	return nil
-}
-
-func validateItem(itemType flow.RteFlowItemType, itemName string, spec, item *any.Any) error {
-	if spec == nil && itemName != "spec" {
-		return fmt.Errorf("%s spec must be specified", itemType)
-	}
-
-	switch itemType {
-	case flow.RteFlowItemType_RTE_FLOW_ITEM_TYPE_ETH:
-		return validateRteFlowItemEth(itemName, spec, item)
-	case flow.RteFlowItemType_RTE_FLOW_ITEM_TYPE_VLAN:
-		return validateRteFlowItemVlan(itemName, spec, item)
-	case flow.RteFlowItemType_RTE_FLOW_ITEM_TYPE_IPV4:
-		return validateRteFlowItemIpv4(itemName, spec, item)
-	case flow.RteFlowItemType_RTE_FLOW_ITEM_TYPE_UDP:
-		return validateRteFlowItemUdp(itemName, spec, item)
-	case flow.RteFlowItemType_RTE_FLOW_ITEM_TYPE_PPPOES,
-		flow.RteFlowItemType_RTE_FLOW_ITEM_TYPE_PPPOED:
-		return validateRteFlowItemPppoe(itemName, spec, item)
-	case flow.RteFlowItemType_RTE_FLOW_ITEM_TYPE_PPPOE_PROTO_ID:
-		return validateRteFlowItemPppoeProtoId(itemName, spec, item)
-	default:
-		nodeflowconfiglog.Info("validating other flow item", "type", itemType)
-		return nil
-	}
 }
 
 func validateRteFlowAction(rteFlowAction *flow.RteFlowAction) error {
@@ -262,7 +154,7 @@ func (r *NodeFlowConfig) ValidateCreate() error {
 
 	spec := r.Spec
 	for _, rule := range spec.Rules {
-		err := validate(rule)
+		err := rule.validate()
 		if err != nil {
 			return err
 		}
@@ -276,7 +168,7 @@ func (r *NodeFlowConfig) ValidateUpdate(old runtime.Object) error {
 
 	spec := r.Spec
 	for _, rule := range spec.Rules {
-		err := validate(rule)
+		err := rule.validate()
 		if err != nil {
 			return err
 		}

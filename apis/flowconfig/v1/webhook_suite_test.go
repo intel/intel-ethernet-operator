@@ -94,6 +94,9 @@ var _ = BeforeSuite(func() {
 	err = (&NodeFlowConfig{}).SetupWebhookWithManager(mgr)
 	Expect(err).NotTo(HaveOccurred())
 
+	err = (&ClusterFlowConfig{}).SetupWebhookWithManager(mgr)
+	Expect(err).NotTo(HaveOccurred())
+
 	managerMutex.Unlock()
 
 	//+kubebuilder:scaffold:webhook

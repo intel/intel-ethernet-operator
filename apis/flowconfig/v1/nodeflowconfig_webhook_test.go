@@ -243,7 +243,7 @@ spec:
 
 			spec := config.Spec
 			for _, rule := range spec.Rules {
-				if err := validate(rule); (err != nil) != tt.wantErr {
+				if err := rule.validate(); (err != nil) != tt.wantErr {
 					t.Errorf("validate() error = %v, wantErr %v", err, tt.wantErr)
 				}
 			}
