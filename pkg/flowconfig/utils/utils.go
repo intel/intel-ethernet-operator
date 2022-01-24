@@ -100,7 +100,7 @@ func GetFlowActionAny(actionType string, b []byte) (*any.Any, error) {
 	actionTypeVal, ok := flowapi.RteFlowActionType_value[actionType]
 	if !ok {
 		// due to the fact that this is action type not defined in proto it has to be handled separately
-		if actionType == "RTE_FLOW_ACTION_TYPE_VFPCIADDR" {
+		if actionType == flowapi.RTE_FLOW_ACTION_TYPE_VFPCIADDR {
 			return handleActionVfPciAddr(b)
 		} else {
 			return nil, fmt.Errorf("invalid action type %s", actionType)

@@ -11,6 +11,7 @@ import (
 	"reflect"
 
 	"github.com/go-logr/logr"
+	resourceUtils "github.com/k8snetworkplumbingwg/sriov-network-device-plugin/pkg/utils"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -155,7 +156,7 @@ func (r *NodeFlowConfigReconciler) syncRules(policyInstance *flowconfigv1.NodeFl
 	// Create FlowCreateRequests from rules in Specs
 	if policyInstance.Spec.Rules != nil {
 		for _, fr := range policyInstance.Spec.Rules {
-			rteFlowCreateRequests, err := getFlowCreateRequests(fr)
+			rteFlowCreateRequests, err := r.getFlowCreateRequests(fr)
 			if err != nil {
 				return err
 			}
@@ -255,12 +256,16 @@ func (r *NodeFlowConfigReconciler) getToAddAndDelete(flowReqs []*flowapi.Request
 	toDelete map[string]*flowsets.FlowCreateRecord) {
 	toAdd = make(map[string]*flowapi.RequestFlowCreate)
 
+	logger := r.Log.WithName("getToAddAndDelete")
 	// newKeys is a placeholder for hash values from all flowRequest objects.
 	// These keys will be used for look-up which older flowRequests needs to be deleted.
 	newKeys := []string{}
 	for _, req := range flowReqs {
-		key := getFlowCreateHash(req)
+		key, err := getFlowCreateHash(req)
 		newKeys = append(newKeys, key)
+		if err != nil {
+			logger.Info("error getting flowCreateHash", "error", err)
+		}
 		if key != "" {
 			if r.flowSets.Has(key) {
 				continue
@@ -274,7 +279,9 @@ func (r *NodeFlowConfigReconciler) getToAddAndDelete(flowReqs []*flowapi.Request
 	return toAdd, toDelete
 }
 
-func getFlowCreateRequests(fr *flowconfigv1.FlowRules) (*flowapi.RequestFlowCreate, error) {
+func (r *NodeFlowConfigReconciler) getFlowCreateRequests(fr *flowconfigv1.FlowRules) (*flowapi.RequestFlowCreate, error) {
+	logger := r.Log.WithName("getFlowCreateRequests()")
+
 	// TODO: consider refactoring
 	rteFlowCreateRequests := new(flowapi.RequestFlowCreate)
 	// 1 - Get flow patterns
@@ -319,6 +326,7 @@ func getFlowCreateRequests(fr *flowconfigv1.FlowRules) (*flowapi.RequestFlowCrea
 	}
 
 	// 2 - Get Flow actions
+	var podPciAddress string
 	for _, action := range fr.Action {
 		rteFlowAction := new(flowapi.RteFlowAction)
 
@@ -334,6 +342,21 @@ func getFlowCreateRequests(fr *flowconfigv1.FlowRules) (*flowapi.RequestFlowCrea
 				return nil, fmt.Errorf("error getting Spec pattern for flowtype %s : %v", actionAny, err)
 			}
 
+			// when action has PCI address we need to store it to be able to process it later, to get from it portId
+			if action.Type == flowapi.RTE_FLOW_ACTION_TYPE_VFPCIADDR {
+				actionObj := flowapi.RteFlowActionVfPciAddr{}
+
+				if err := json.Unmarshal(action.Conf.Raw, &actionObj); err != nil {
+					return nil, fmt.Errorf("error unmarshalling bytes %s to ptypes.Any: %v", string(action.Conf.Raw), err)
+				}
+
+				if podPciAddress == "" {
+					podPciAddress = actionObj.Addr
+				} else {
+					logger.Info("please check CR - duplicated RTE_FLOW_ACTION_TYPE_VFPCIADDR")
+				}
+			}
+
 			rteFlowAction.Conf = actionAny
 		} else {
 			rteFlowAction.Conf = nil
@@ -341,6 +364,7 @@ func getFlowCreateRequests(fr *flowconfigv1.FlowRules) (*flowapi.RequestFlowCrea
 
 		rteFlowCreateRequests.Action = append(rteFlowCreateRequests.Action, rteFlowAction)
 	}
+
 	// 3 - Get Flow attribute
 	if fr.Attr != nil {
 		// Copy from flowItem.Attr fields to FlowCreateRequest.Attr
@@ -356,9 +380,48 @@ func getFlowCreateRequests(fr *flowconfigv1.FlowRules) (*flowapi.RequestFlowCrea
 		rteFlowCreateRequests.Attr = fAttr
 	}
 
-	// 4 - Get port information
-	rteFlowCreateRequests.PortId = fr.PortId
+	// 4 - Get port information - ClusterFlowConfig controller should assing defined value to portId if not specified by user in CR
+	if fr.PortId != invalidPortId {
+		rteFlowCreateRequests.PortId = fr.PortId
+	} else {
+		portId, err := r.getPortIdFromDCFPort(podPciAddress)
+		if err != nil {
+			return nil, err
+		}
+
+		rteFlowCreateRequests.PortId = portId
+	}
+
 	return rteFlowCreateRequests, nil
+}
+
+// getPortIdFromDCFPort find a portId of VF that handles traffic based on such steps:
+// - getting the pfName of the VF on which traffic is handled
+// - getting the pfName of the trusted VF (DCF)
+// - and compare those names. If matches, we can get portId from DCF.
+func (r *NodeFlowConfigReconciler) getPortIdFromDCFPort(otherVfPciAddress string) (uint32, error) {
+	pfName, err := resourceUtils.GetPfName(otherVfPciAddress)
+	if err != nil {
+		return invalidPortId, fmt.Errorf("unable to get pfName of VF that handles traffic. Err %v", err)
+	}
+
+	dcfPorts, err := r.listDCFPorts()
+	if err != nil {
+		return invalidPortId, fmt.Errorf("unable to get list of DCF ports. Err %v", err)
+	}
+
+	for _, dcfPort := range dcfPorts {
+		dcfPfName, err := resourceUtils.GetPfName(dcfPort.PortPci)
+		if err != nil {
+			return invalidPortId, fmt.Errorf("unable to get pfName of VF that handles DCF. Err %v", err)
+		}
+
+		if pfName == dcfPfName {
+			return dcfPort.PortId, nil
+		}
+	}
+
+	return invalidPortId, fmt.Errorf("unable to find DCF port that matches to traffic. Err %v", err)
 }
 
 func (r *NodeFlowConfigReconciler) listDCFPorts() ([]flowconfigv1.PortsInformation, error) {
@@ -401,16 +464,15 @@ func NewDCFError(msg string) error {
 }
 
 // getFlowCreateHash returns a hash value from a RequestFlowCreate object
-func getFlowCreateHash(req *flowapi.RequestFlowCreate) string {
+func getFlowCreateHash(req *flowapi.RequestFlowCreate) (string, error) {
 
 	reqBytes, err := json.Marshal(req)
 	if err != nil {
-		// TODO: log error
-		return ""
+		return "", err
 	}
 
 	h := sha256.New()
 	h.Write(reqBytes)
 
-	return fmt.Sprintf("%x", h.Sum(nil))
+	return fmt.Sprintf("%x", h.Sum(nil)), nil
 }

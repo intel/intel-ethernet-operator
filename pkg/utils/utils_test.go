@@ -287,7 +287,6 @@ var _ = Describe("Utils", func() {
 			sort.Strings(untaredFilenames)
 
 			Expect(filenames).To(Equal(untaredFilenames))
-			// TODO: walk over extracted files and compare their content to the original ones
 		})
 	})
 

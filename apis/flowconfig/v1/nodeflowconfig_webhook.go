@@ -79,7 +79,6 @@ func (rules *FlowRules) validate() error {
 }
 
 func validatePortId(id uint32) error {
-	// TODO: Port ID validation
 	return nil
 }
 
@@ -149,9 +148,6 @@ func validateRteFlowAction(rteFlowAction *flow.RteFlowAction) error {
 // ValidateCreate implements webhook.Validator so a webhook will be registered for the type
 func (r *NodeFlowConfig) ValidateCreate() error {
 	nodeflowconfiglog.Info("validate create", "name", r.Name)
-
-	// TODO: it might be worth to check if the requested node (r.Name) exists
-
 	spec := r.Spec
 	for _, rule := range spec.Rules {
 		err := rule.validate()

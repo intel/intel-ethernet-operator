@@ -29,8 +29,8 @@ LABEL name="Intel Ethernet Operator" \
     vendor="Intel Corporation" \
     version=$VERSION \
     release="1" \
-    summary="Manages the FW and DPP updates of E810 NICs" \
-    description="TODO"
+    summary="Intel Ethernet Operator for E810 NICs" \
+    description="The role of the Intel Ethernet Operator is to orchestrate and manage the configuration of the capabilities exposed by the Intel E810 Series network interface cards (NICs)"
 
 USER 1001
 WORKDIR /

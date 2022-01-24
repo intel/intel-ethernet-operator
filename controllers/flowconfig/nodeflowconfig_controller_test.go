@@ -32,8 +32,9 @@ var _ = Describe("NodeFlowConfig controller", func() {
 	const (
 		nodeFlowConfigNamespace = "default"
 
-		timeout  = time.Second * 20
-		interval = time.Millisecond * 250
+		timeout   = time.Second * 20
+		interval  = time.Millisecond * 250
+		maxportId = invalidPortId
 	)
 
 	Context("when the controller is reconciling", func() {
@@ -242,9 +243,9 @@ var _ = Describe("NodeFlowConfig controller", func() {
 			},
 		}
 
-		hash1 := getFlowCreateHash(req1)
-		hash2 := getFlowCreateHash(req2)
-		hash3 := getFlowCreateHash(req3)
+		hash1, _ := getFlowCreateHash(req1)
+		hash2, _ := getFlowCreateHash(req2)
+		hash3, _ := getFlowCreateHash(req3)
 
 		It("should create create the same hash for requests with the same properties", func() {
 			Expect(hash1).Should(Equal(hash2))
@@ -300,7 +301,8 @@ var _ = Describe("NodeFlowConfig controller", func() {
 	Context("When creating a FlowCreateRequests from a flow rule", func() {
 		Context("with a valid yaml", func() {
 			var (
-				data = `
+				testRawSpec *flow.RequestFlowCreate
+				data        = `
 ---
 apiVersion: flowconfig.intel.com/v1
 kind: NodeFlowConfig
@@ -332,24 +334,26 @@ spec:
 `
 			)
 
-			policy := &flowconfigv1.NodeFlowConfig{}
+			It("initialize test data once", func() {
+				policy := &flowconfigv1.NodeFlowConfig{}
 
-			jObj, _ := yaml.ToJSON([]byte(data))
-			err := json.Unmarshal(jObj, policy)
-			Expect(err).Should(BeNil())
-
-			for _, r := range policy.Spec.Rules {
-				_, err := getFlowCreateRequests(r)
+				jObj, _ := yaml.ToJSON([]byte(data))
+				err := json.Unmarshal(jObj, policy)
 				Expect(err).Should(BeNil())
-			}
 
-			// Check dst_addr value
-			testRawSpec, err := getFlowCreateRequests(policy.Spec.Rules[0])
-			Expect(err).Should(BeNil())
+				for _, r := range policy.Spec.Rules {
+					_, err := nodeFlowConfigRc.getFlowCreateRequests(r)
+					Expect(err).Should(BeNil())
+				}
+
+				// Check dst_addr value
+				testRawSpec, err = nodeFlowConfigRc.getFlowCreateRequests(policy.Spec.Rules[0])
+				Expect(err).Should(BeNil())
+			})
 
 			It("should inherit all flow patterns from the rule", func() {
 				rteFlowItemIpv4 := &flow.RteFlowItemIpv4{}
-				err = testRawSpec.Pattern[1].Spec.UnmarshalTo(rteFlowItemIpv4)
+				err := testRawSpec.Pattern[1].Spec.UnmarshalTo(rteFlowItemIpv4)
 				Expect(err).Should(BeNil())
 
 				dstAddr := flow.Uint32ToIP(rteFlowItemIpv4.Hdr.DstAddr)
@@ -358,7 +362,7 @@ spec:
 
 			It("Should inherit all flow actions from the rule", func() {
 				rteFlowActionTypeVF := &flow.RteFlowActionVf{}
-				err = testRawSpec.Action[0].Conf.UnmarshalTo(rteFlowActionTypeVF)
+				err := testRawSpec.Action[0].Conf.UnmarshalTo(rteFlowActionTypeVF)
 				Expect(err).Should(BeNil())
 
 				actionId := rteFlowActionTypeVF.Id
@@ -384,7 +388,7 @@ spec:
 						Pattern: invalidPattern,
 					}
 
-					flowReqs, err := getFlowCreateRequests(flowRules)
+					flowReqs, err := nodeFlowConfigRc.getFlowCreateRequests(flowRules)
 					Expect(flowReqs).Should(BeNil())
 
 					expectedErr := fmt.Errorf("invalid flow item type %s", "INVALID_PATTERN_TYPE")
@@ -408,7 +412,7 @@ spec:
 						Pattern: invalidPattern,
 					}
 
-					flowReqs, err := getFlowCreateRequests(flowRules)
+					flowReqs, err := nodeFlowConfigRc.getFlowCreateRequests(flowRules)
 					Expect(flowReqs).Should(BeNil())
 
 					expectedErrSegment := "error getting Spec pattern for flowtype"
@@ -431,7 +435,7 @@ spec:
 						Pattern: invalidPattern,
 					}
 
-					flowReqs, err := getFlowCreateRequests(flowRules)
+					flowReqs, err := nodeFlowConfigRc.getFlowCreateRequests(flowRules)
 					Expect(flowReqs).Should(BeNil())
 
 					expectedErrSegment := "error getting Last pattern for flowtype"
@@ -454,7 +458,7 @@ spec:
 						Pattern: invalidPattern,
 					}
 
-					flowReqs, err := getFlowCreateRequests(flowRules)
+					flowReqs, err := nodeFlowConfigRc.getFlowCreateRequests(flowRules)
 					Expect(flowReqs).Should(BeNil())
 
 					expectedErrSegment := "error getting Mask pattern for flowtype"
@@ -463,6 +467,7 @@ spec:
 			})
 
 		})
+
 		Context("action is invalid", func() {
 			It("should throw an error if action type is invalid", func() {
 				invalidAction := []*flowconfigv1.FlowAction{
@@ -475,7 +480,7 @@ spec:
 					Action: invalidAction,
 				}
 
-				flowReqs, err := getFlowCreateRequests(flowRules)
+				flowReqs, err := nodeFlowConfigRc.getFlowCreateRequests(flowRules)
 				Expect(flowReqs).Should(BeNil())
 
 				expectedErr := fmt.Errorf("invalid action type %s", "INVALID_ACTION_TYPE")
@@ -498,7 +503,7 @@ spec:
 					Action: invalidAction,
 				}
 
-				flowReqs, err := getFlowCreateRequests(flowRules)
+				flowReqs, err := nodeFlowConfigRc.getFlowCreateRequests(flowRules)
 				Expect(flowReqs).Should(BeNil())
 
 				expectedErrSegment := "error getting Spec pattern for flowtype"
@@ -534,7 +539,8 @@ spec:
 					flowClient: mockFlowServiceClient,
 				}
 
-				toAdd[getFlowCreateHash(reqFlowCreate)] = reqFlowCreate
+				key, _ := getFlowCreateHash(reqFlowCreate)
+				toAdd[key] = reqFlowCreate
 
 				expectedErr := fmt.Sprintf("error validating flow create request: %v", mockError)
 				err := reconciler.createRules(toAdd)
@@ -558,7 +564,8 @@ spec:
 					flowClient: mockFlowServiceClient,
 				}
 
-				toAdd[getFlowCreateHash(reqFlowCreate)] = reqFlowCreate
+				key, _ := getFlowCreateHash(reqFlowCreate)
+				toAdd[key] = reqFlowCreate
 
 				expectedErr := "received validation error: mock error"
 				err := reconciler.createRules(toAdd)
@@ -577,7 +584,8 @@ spec:
 					flowClient: mockFlowServiceClient,
 				}
 
-				toAdd[getFlowCreateHash(reqFlowCreate)] = reqFlowCreate
+				key, _ := getFlowCreateHash(reqFlowCreate)
+				toAdd[key] = reqFlowCreate
 
 				expectedErr := "error creating flow rules: this error is forced"
 				err := reconciler.createRules(toAdd)
@@ -602,7 +610,8 @@ spec:
 					flowClient: mockFlowServiceClient,
 				}
 
-				toAdd[getFlowCreateHash(reqFlowCreate)] = reqFlowCreate
+				key, _ := getFlowCreateHash(reqFlowCreate)
+				toAdd[key] = reqFlowCreate
 
 				expectedErr := "received flow create error: mock error"
 				err := reconciler.createRules(toAdd)
@@ -613,9 +622,6 @@ spec:
 
 	Context("when converting PCI address into VF index", func() {
 		var (
-			policy *flowconfigv1.NodeFlowConfig
-			portID uint32 = 0
-
 			createNodeFlowConfig = func(nodeName string, portID uint32, configurers ...func(config *flowconfigv1.NodeFlowConfig)) *flowconfigv1.NodeFlowConfig {
 				policy := &flowconfigv1.NodeFlowConfig{
 					TypeMeta: metav1.TypeMeta{
@@ -647,7 +653,7 @@ spec:
 		)
 
 		It("Verify full flow", func() {
-			policy = createNodeFlowConfig(nodeName, portID, func(config *flowconfigv1.NodeFlowConfig) {
+			policy := createNodeFlowConfig(nodeName, maxportId, func(config *flowconfigv1.NodeFlowConfig) {
 				config.Spec.Rules[0].Action = []*flowconfigv1.FlowAction{
 					{
 						Type: "RTE_FLOW_ACTION_TYPE_VFPCIADDR",
@@ -726,7 +732,7 @@ spec:
 				Action: action,
 			}
 
-			flowReqs, err := getFlowCreateRequests(flowRules)
+			flowReqs, err := nodeFlowConfigRc.getFlowCreateRequests(flowRules)
 			Expect(err).Should(BeNil())
 			Expect(flowReqs).ShouldNot(BeNil())
 			Expect(flowReqs.PortId).Should(Equal(uint32(0)))
@@ -765,7 +771,7 @@ spec:
 				Action: action,
 			}
 
-			flowReqs, err := getFlowCreateRequests(flowRules)
+			flowReqs, err := nodeFlowConfigRc.getFlowCreateRequests(flowRules)
 			Expect(flowReqs).Should(BeNil())
 
 			expectedErr := fmt.Errorf("error getting Spec pattern for flowtype %v : error unable to get VF ID for PCI: 0000:0a:55.1, Err: %v", nil, nil)
@@ -783,7 +789,7 @@ spec:
 				Action: action,
 			}
 
-			flowReqs, err := getFlowCreateRequests(flowRules)
+			flowReqs, err := nodeFlowConfigRc.getFlowCreateRequests(flowRules)
 			Expect(err).Should(BeNil())
 			Expect(flowReqs).ShouldNot(BeNil())
 			Expect(flowReqs.PortId).Should(Equal(uint32(0)))
@@ -795,6 +801,248 @@ spec:
 			rteFlowActionTypeVF := &flow.RteFlowActionVf{}
 			err = flowReqs.Action[0].Conf.UnmarshalTo(rteFlowActionTypeVF)
 			Expect(err).ShouldNot(BeNil())
+		})
+	})
+
+	Context("when getting portId from VF PCI address that handles traffic", func() {
+		It("NodeFlowConfig have information about portId", func() {
+			flowRules := &flowconfigv1.FlowRules{
+				PortId: 10,
+			}
+
+			flowReqs, err := nodeFlowConfigRc.getFlowCreateRequests(flowRules)
+			Expect(err).Should(BeNil())
+			Expect(flowReqs).ShouldNot(BeNil())
+			Expect(flowReqs.PortId).Should(Equal(uint32(10)))
+			Expect(flowReqs.Attr).Should(BeNil())
+			Expect(flowReqs.Pattern).Should(BeNil())
+			Expect(flowReqs.Action).Should(BeNil())
+		})
+
+		It("unable to get pfName of the VF that handles traffic", func() {
+			fs := &sriovutils.FakeFilesystem{
+				Dirs: []string{"sys/bus/pci/devices/0000:01:10.0/", "sys/bus/pci/devices/0000:01:00.0/"},
+				Symlinks: map[string]string{"sys/bus/pci/devices/0000:01:10.0/physfn": "../0000:01:00.0",
+					"sys/bus/pci/devices/0000:01:00.0/virtfn0": "../0000:01:08.0",
+					"sys/bus/pci/devices/0000:01:00.0/virtfn1": "../0000:01:09.0",
+					"sys/bus/pci/devices/0000:01:00.0/virtfn2": "../0000:01:10.0",
+				},
+			}
+			defer fs.Use()()
+
+			action := []*flowconfigv1.FlowAction{
+				{
+					Type: "RTE_FLOW_ACTION_TYPE_VFPCIADDR",
+					Conf: &runtime.RawExtension{
+						Raw: []byte(`{ "addr": "0000:01:10.0" }`),
+					},
+				},
+			}
+
+			flowRules := &flowconfigv1.FlowRules{
+				Action: action,
+				PortId: invalidPortId,
+			}
+
+			flowReqs, err := nodeFlowConfigRc.getFlowCreateRequests(flowRules)
+			Expect(err).ShouldNot(BeNil())
+			Expect(fmt.Sprint(err)).Should(ContainSubstring("unable to get pfName of VF that handles traffic"))
+			Expect(flowReqs).Should(BeNil())
+		})
+
+		It("DCF ports are not available", func() {
+			fs := &sriovutils.FakeFilesystem{
+				Dirs: []string{
+					"sys/bus/pci/devices/0000:01:10.0/",
+					"sys/bus/pci/devices/0000:01:00.0/",
+					"sys/bus/pci/devices/net/ens1000"},
+				Symlinks: map[string]string{
+					"sys/bus/pci/devices/0000:01:10.0/physfn":  "../0000:01:00.0",
+					"sys/bus/pci/devices/0000:01:00.0/virtfn0": "../0000:01:08.0",
+					"sys/bus/pci/devices/0000:01:00.0/virtfn1": "../0000:01:09.0",
+					"sys/bus/pci/devices/0000:01:00.0/virtfn2": "../0000:01:10.0",
+					"sys/bus/pci/devices/0000:01:10.0/net":     "../net",
+				},
+			}
+			defer fs.Use()()
+
+			mockDCF := &mocks.FlowServiceClient{}
+			nodeFlowConfigRc.flowClient = mockDCF
+			mockDCF.On("ListPorts", context.TODO(), &flow.RequestListPorts{}).Return(nil, fmt.Errorf("Quit"))
+
+			action := []*flowconfigv1.FlowAction{
+				{
+					Type: "RTE_FLOW_ACTION_TYPE_VFPCIADDR",
+					Conf: &runtime.RawExtension{
+						Raw: []byte(`{ "addr": "0000:01:10.0" }`),
+					},
+				},
+			}
+
+			flowRules := &flowconfigv1.FlowRules{
+				Action: action,
+				PortId: invalidPortId,
+			}
+
+			flowReqs, err := nodeFlowConfigRc.getFlowCreateRequests(flowRules)
+			Expect(err).ShouldNot(BeNil())
+			Expect(fmt.Sprint(err)).Should(ContainSubstring("unable to get list of DCF ports"))
+			Expect(flowReqs).Should(BeNil())
+		})
+
+		It("unable to get pfName of the VF that is trusted", func() {
+			fs := &sriovutils.FakeFilesystem{
+				Dirs: []string{
+					"sys/bus/pci/devices/0000:01:10.0/",
+					"sys/bus/pci/devices/0000:01:00.0/",
+					"sys/bus/pci/devices/net/ens1000"},
+				Symlinks: map[string]string{
+					"sys/bus/pci/devices/0000:01:10.0/physfn":  "../0000:01:00.0",
+					"sys/bus/pci/devices/0000:01:00.0/virtfn0": "../0000:01:08.0",
+					"sys/bus/pci/devices/0000:01:00.0/virtfn1": "../0000:01:09.0",
+					"sys/bus/pci/devices/0000:01:00.0/virtfn2": "../0000:01:10.0",
+					"sys/bus/pci/devices/0000:01:10.0/net":     "../net",
+				},
+			}
+			defer fs.Use()()
+
+			mockDCF := &mocks.FlowServiceClient{}
+			nodeFlowConfigRc.flowClient = mockDCF
+			mockRes := &flow.ResponsePortList{
+				Ports: []*flow.PortsInformation{
+					{
+						PortId:   0,
+						PortMode: "dcf",
+						PortPci:  "0000:01.01",
+					},
+				},
+			}
+			mockDCF.On("ListPorts", context.TODO(), &flow.RequestListPorts{}).Return(mockRes, nil)
+
+			action := []*flowconfigv1.FlowAction{
+				{
+					Type: "RTE_FLOW_ACTION_TYPE_VFPCIADDR",
+					Conf: &runtime.RawExtension{
+						Raw: []byte(`{ "addr": "0000:01:10.0" }`),
+					},
+				},
+			}
+
+			flowRules := &flowconfigv1.FlowRules{
+				Action: action,
+				PortId: invalidPortId,
+			}
+
+			flowReqs, err := nodeFlowConfigRc.getFlowCreateRequests(flowRules)
+			Expect(err).ShouldNot(BeNil())
+			Expect(fmt.Sprint(err)).Should(ContainSubstring("unable to get pfName of VF that handles DCF"))
+			Expect(flowReqs).Should(BeNil())
+		})
+
+		It("pfName that handles traffic is not on a list of DCF ports", func() {
+			fs := &sriovutils.FakeFilesystem{
+				Dirs: []string{
+					"sys/bus/pci/devices/0000:01:10.0/",
+					"sys/bus/pci/devices/0000:01:00.0/",
+					"sys/bus/pci/devices/0000:01:01.0/",
+					"sys/bus/pci/devices/0000:20:00.0/",
+					"sys/bus/pci/devices/net1/ens1000",
+					"sys/bus/pci/devices/net2/ens2000"},
+				Symlinks: map[string]string{
+					"sys/bus/pci/devices/0000:01:10.0/physfn":  "../0000:01:00.0",
+					"sys/bus/pci/devices/0000:01:00.0/virtfn0": "../0000:01:08.0",
+					"sys/bus/pci/devices/0000:01:00.0/virtfn1": "../0000:01:09.0",
+					"sys/bus/pci/devices/0000:01:00.0/virtfn2": "../0000:01:10.0",
+					"sys/bus/pci/devices/0000:01:10.0/net":     "../net1",
+					"sys/bus/pci/devices/0000:01:01.0/physfn":  "../0000:20:00.0",
+					"sys/bus/pci/devices/0000:20:00.0/virtfn0": "../0000:01:01.0",
+					"sys/bus/pci/devices/0000:01:01.0/net":     "../net2",
+				},
+			}
+			defer fs.Use()()
+
+			mockDCF := &mocks.FlowServiceClient{}
+			nodeFlowConfigRc.flowClient = mockDCF
+			mockRes := &flow.ResponsePortList{
+				Ports: []*flow.PortsInformation{
+					{
+						PortId:   0,
+						PortMode: "dcf",
+						PortPci:  "0000:01:01.0",
+					},
+				},
+			}
+			mockDCF.On("ListPorts", context.TODO(), &flow.RequestListPorts{}).Return(mockRes, nil)
+
+			action := []*flowconfigv1.FlowAction{
+				{
+					Type: "RTE_FLOW_ACTION_TYPE_VFPCIADDR",
+					Conf: &runtime.RawExtension{
+						Raw: []byte(`{ "addr": "0000:01:10.0" }`),
+					},
+				},
+			}
+
+			flowRules := &flowconfigv1.FlowRules{
+				Action: action,
+				PortId: invalidPortId,
+			}
+
+			flowReqs, err := nodeFlowConfigRc.getFlowCreateRequests(flowRules)
+			Expect(err).ShouldNot(BeNil())
+			Expect(fmt.Sprint(err)).Should(ContainSubstring("unable to find DCF port that matches to traffic"))
+			Expect(flowReqs).Should(BeNil())
+		})
+
+		It("pfName of traffic VF matches pfName of DCF VF - return portId", func() {
+			fs := &sriovutils.FakeFilesystem{
+				Dirs: []string{
+					"sys/bus/pci/devices/0000:01:10.0/",
+					"sys/bus/pci/devices/0000:01:08.0/",
+					"sys/bus/pci/devices/0000:01:00.0/",
+					"sys/bus/pci/devices/net/ens1000"},
+				Symlinks: map[string]string{
+					"sys/bus/pci/devices/0000:01:10.0/physfn":  "../0000:01:00.0",
+					"sys/bus/pci/devices/0000:01:00.0/virtfn0": "../0000:01:08.0",
+					"sys/bus/pci/devices/0000:01:00.0/virtfn1": "../0000:01:09.0",
+					"sys/bus/pci/devices/0000:01:00.0/virtfn2": "../0000:01:10.0",
+					"sys/bus/pci/devices/0000:01:10.0/net":     "../net",
+					"sys/bus/pci/devices/0000:01:08.0/net":     "../net",
+				},
+			}
+			defer fs.Use()()
+
+			mockDCF := &mocks.FlowServiceClient{}
+			nodeFlowConfigRc.flowClient = mockDCF
+			mockRes := &flow.ResponsePortList{
+				Ports: []*flow.PortsInformation{
+					{
+						PortId:   3,
+						PortMode: "dcf",
+						PortPci:  "0000:01:08.0",
+					},
+				},
+			}
+			mockDCF.On("ListPorts", context.TODO(), &flow.RequestListPorts{}).Return(mockRes, nil)
+
+			action := []*flowconfigv1.FlowAction{
+				{
+					Type: "RTE_FLOW_ACTION_TYPE_VFPCIADDR",
+					Conf: &runtime.RawExtension{
+						Raw: []byte(`{ "addr": "0000:01:10.0" }`),
+					},
+				},
+			}
+
+			flowRules := &flowconfigv1.FlowRules{
+				Action: action,
+				PortId: invalidPortId,
+			}
+
+			flowReqs, err := nodeFlowConfigRc.getFlowCreateRequests(flowRules)
+			Expect(err).Should(BeNil())
+			Expect(flowReqs).ShouldNot(BeNil())
+			Expect(flowReqs.PortId).Should(Equal(uint32(3)))
 		})
 	})
 })

@@ -5,28 +5,23 @@ package daemon
 
 import (
 	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+
 	"github.com/go-logr/logr"
 	ethernetv1 "github.com/otcshare/intel-ethernet-operator/apis/ethernet/v1"
 	"github.com/otcshare/intel-ethernet-operator/pkg/utils"
-	"os"
-	"os/exec"
-	"path"
-	"path/filepath"
-	"strings"
-)
-
-const (
-	ddpPackageFilename = "ddp.tar.gz"
-	// /host comes from mounted folder in OCP
-	// /var/lib/firmware comes from modified kernel argument, which allows OS to read DDP profile from that path.
-	// This is done because on RHCOS /lib/firmware/* path is read-only
-	// intel/ice/ddp is default path for ICE *.pkg files
 )
 
 var (
 	findDdp           = findDdpProfile
 	reloadIceServiceP = reloadIceService
-
+	// /host comes from mounted folder in OCP
+	// /var/lib/firmware comes from modified kernel argument, which allows OS to read DDP profile from that path.
+	// This is done because on RHCOS /lib/firmware/* path is read-only
+	// intel/ice/ddp is default path for ICE *.pkg files
 	ddpUpdateFolder = "/host/var/lib/firmware/intel/ice/ddp/"
 )
 
@@ -60,19 +55,6 @@ func (d *ddpUpdater) handleDDPUpdate(pciAddr string, forceReboot bool, ddpPath s
 	return nil
 }
 
-func (d *ddpUpdater) getDDPVersion(ddpPath string, dev ethernetv1.Device) (string, error) {
-	log := d.log.WithName("getDDPVersion")
-	if ddpPath == "" {
-		log.V(4).Info("DDP package not provided - retrieving version from device")
-		return dev.DDP.PackageName + "-" + dev.DDP.Version, nil
-	} else {
-		// TODO: DDP Tool currently does not allow to get package version from file
-		// return ddpPath instead
-		log.V(4).Info("Retrieving version from", "path", ddpPath)
-		return ddpPath, nil
-	}
-}
-
 // ddpProfilePath is the path to our extracted DDP profile
 // we copy it to ddpUpdateFolder
 func (d *ddpUpdater) updateDDP(pciAddr, ddpProfilePath string) error {
@@ -93,7 +75,7 @@ func (d *ddpUpdater) updateDDP(pciAddr, ddpProfilePath string) error {
 		return fmt.Errorf("failed to extract devId")
 	}
 
-	target := path.Join(ddpUpdateFolder, "ice-"+devId+".pkg")
+	target := filepath.Join(ddpUpdateFolder, "ice-"+devId+".pkg")
 	log.V(4).Info("Copying", "source", ddpProfilePath, "target", target)
 
 	return utils.CopyFile(ddpProfilePath, target)
@@ -107,14 +89,14 @@ func (d *ddpUpdater) prepareDDP(config ethernetv1.DeviceNodeConfig) (string, err
 		return "", nil
 	}
 
-	targetPath := path.Join(artifactsFolder, config.PCIAddress)
+	targetPath := filepath.Join(artifactsFolder, config.PCIAddress)
 
 	err := utils.CreateFolder(targetPath, log)
 	if err != nil {
 		return "", err
 	}
 
-	fullPath := path.Join(targetPath, ddpPackageFilename)
+	fullPath := filepath.Join(targetPath, filepath.Base(config.DeviceConfig.DDPURL))
 	log.V(4).Info("Downloading", "url", config.DeviceConfig.DDPURL, "dstPath", fullPath)
 	err = downloadFile(fullPath, config.DeviceConfig.DDPURL, config.DeviceConfig.DDPChecksum)
 	if err != nil {

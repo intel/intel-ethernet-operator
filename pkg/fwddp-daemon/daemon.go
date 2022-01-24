@@ -5,13 +5,15 @@ package daemon
 
 import (
 	"context"
-	"fmt"
+
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/retry"
+
 	"os"
-	"sigs.k8s.io/controller-runtime/pkg/event"
 	"syscall"
 	"time"
+
+	"sigs.k8s.io/controller-runtime/pkg/event"
 
 	"github.com/go-logr/logr"
 	ethernetv1 "github.com/otcshare/intel-ethernet-operator/apis/ethernet/v1"
@@ -34,15 +36,24 @@ const (
 
 var (
 	getInventory = GetInventory
-	getIDs       = getDeviceIDs
 	execCmd      = utils.ExecCmd
 
 	downloadFile     = utils.DownloadFile
 	untarFile        = utils.Untar
 	unpackDDPArchive = utils.UnpackDDPArchive
 
-	artifactsFolder = "/host/tmp/fwddp_artifacts/nvmupdate/"
+	artifactsFolder  = "/host/tmp/fwddp_artifacts/nvmupdate/"
+	compatMapPath    = "./devices.json"
+	compatibilityMap *CompatibilityMap
 )
+
+type CompatibilityMap map[string]Compatibility
+type Compatibility struct {
+	utils.SupportedDevice
+	Driver   string
+	Firmware string
+	DDP      []string
+}
 
 type UpdateConditionReason string
 
@@ -324,11 +335,6 @@ func (r *NodeConfigReconciler) prepareUpdateQueue(nodeConfig *ethernetv1.Etherne
 func (r *NodeConfigReconciler) prepareArtifacts(config ethernetv1.DeviceNodeConfig, inv []ethernetv1.Device) (deviceUpdateArtifacts, error) {
 	log := r.log.WithName("prepare")
 
-	dev, err := r.findCard(config, inv)
-	if err != nil {
-		return deviceUpdateArtifacts{}, err
-	}
-
 	fwPath, err := r.fwUpdater.prepareFirmware(config)
 	if err != nil {
 		log.Error(err, "Failed to prepare firmware")
@@ -341,23 +347,7 @@ func (r *NodeConfigReconciler) prepareArtifacts(config ethernetv1.DeviceNodeConf
 		return deviceUpdateArtifacts{}, err
 	}
 
-	err = r.verifyCompatibility(fwPath, ddpPath, dev, config.DeviceConfig.Force)
-	if err != nil {
-		log.Error(err, "Failed to verify compatibility")
-		return deviceUpdateArtifacts{}, err
-	}
-
 	return deviceUpdateArtifacts{fwPath, ddpPath}, nil
-}
-
-func (r *NodeConfigReconciler) findCard(config ethernetv1.DeviceNodeConfig, inv []ethernetv1.Device) (ethernetv1.Device, error) {
-	for _, i := range inv {
-		if i.PCIAddress == config.PCIAddress {
-			return i, nil
-		}
-	}
-
-	return ethernetv1.Device{}, fmt.Errorf("device %v not found", config.PCIAddress)
 }
 
 func (r *NodeConfigReconciler) CreateEmptyNodeConfigIfNeeded(c client.Client) error {

@@ -5,23 +5,20 @@ package daemon
 
 import (
 	"fmt"
-	"github.com/go-logr/logr"
-	ethernetv1 "github.com/otcshare/intel-ethernet-operator/apis/ethernet/v1"
-	"github.com/otcshare/intel-ethernet-operator/pkg/utils"
 	"os"
 	"os/exec"
-	"path"
 	"path/filepath"
 	"strings"
 	"syscall"
+
+	"github.com/go-logr/logr"
+	ethernetv1 "github.com/otcshare/intel-ethernet-operator/apis/ethernet/v1"
+	"github.com/otcshare/intel-ethernet-operator/pkg/utils"
 )
 
 const (
-	nvmupdate64e             = "./nvmupdate64e"
-	nvmupdateVersionFilesize = 10
-	nvmupdatePackageFilename = "nvmupdate.tar.gz"
-	updateOutFile            = "update.xml"
-	nvmupdateVersionFilename = "version.txt"
+	nvmupdate64e  = "./nvmupdate64e"
+	updateOutFile = "update.xml"
 )
 
 var (
@@ -41,14 +38,14 @@ func (f *fwUpdater) prepareFirmware(config ethernetv1.DeviceNodeConfig) (string,
 		return "", nil
 	}
 
-	targetPath := path.Join(artifactsFolder, config.PCIAddress)
+	targetPath := filepath.Join(artifactsFolder, config.PCIAddress)
 
 	err := utils.CreateFolder(targetPath, log)
 	if err != nil {
 		return "", err
 	}
 
-	fullPath := path.Join(targetPath, nvmupdatePackageFilename)
+	fullPath := filepath.Join(targetPath, filepath.Base(config.DeviceConfig.FWURL))
 	log.V(4).Info("Downloading", "url", config.DeviceConfig.FWURL, "dstPath", fullPath)
 	err = downloadFile(fullPath, config.DeviceConfig.FWURL, config.DeviceConfig.FWChecksum)
 	if err != nil {
@@ -62,36 +59,6 @@ func (f *fwUpdater) prepareFirmware(config ethernetv1.DeviceNodeConfig) (string,
 	}
 
 	return findFw(targetPath)
-}
-
-func (f *fwUpdater) getFWVersion(fwPath string, dev ethernetv1.Device) (string, error) {
-	log := f.log.WithName("getFWVersion")
-	if fwPath == "" {
-		log.V(4).Info("Firmware package not provided - retrieving version from device")
-		v := strings.Split(dev.Firmware.Version, " ")
-		if len(v) != 3 {
-			return "", fmt.Errorf("Invalid firmware package version: %v", dev.Firmware.Version)
-		}
-		// Pick first element from eg: 2.40 0x80007064 1.2898.0 which is the NVM Version
-		return v[0], nil
-
-	} else {
-		log.V(4).Info("Retrieving version from", "path", fwPath)
-		path := filepath.Join(fwPath, nvmupdateVersionFilename)
-		file, err := utils.OpenNoLinks(path)
-		if err != nil {
-			return "", fmt.Errorf("failed to open version file: %v", err)
-		}
-		defer file.Close()
-
-		ver := make([]byte, nvmupdateVersionFilesize)
-		n, err := file.Read(ver)
-		if err != nil {
-			return "", fmt.Errorf("unable to read: %v", path)
-		}
-		// Example version.txt content: v2.40
-		return strings.ReplaceAll(strings.TrimSpace(string(ver[:n])), "v", ""), nil
-	}
 }
 
 func (f *fwUpdater) handleFWUpdate(pciAddr, fwPath string) (bool, error) {
@@ -172,6 +139,6 @@ func findFwExec(targetPath string) (string, error) {
 	return fwPaths[0], err
 }
 
-func nvmupdate64eCfgPath(p string) string { return path.Join(p, "nvmupdate.cfg") }
-func updateResultPath(p string) string    { return path.Join(p, updateOutFile) }
+func nvmupdate64eCfgPath(p string) string { return filepath.Join(p, "nvmupdate.cfg") }
+func updateResultPath(p string) string    { return filepath.Join(p, updateOutFile) }
 func isExecutable(info os.FileInfo) bool  { return info.Mode()&0100 != 0 }

@@ -13,6 +13,5 @@ func (ds DeviceSelector) Matches(d Device) bool {
 	if ds.DeviceID != "" && ds.DeviceID != d.DeviceID {
 		return false
 	}
-	// TODO: Add Firmware and DDP specific values to DeviceSelector in API and handling here
 	return true
 }

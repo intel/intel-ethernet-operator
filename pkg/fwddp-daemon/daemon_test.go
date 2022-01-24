@@ -10,12 +10,8 @@ import (
 	"os"
 	"os/exec"
 	"path"
-	"path/filepath"
 	"strings"
 	"syscall"
-
-	"github.com/jaypipes/ghw"
-	"github.com/jaypipes/pcidb"
 
 	gerrors "errors"
 
@@ -58,7 +54,6 @@ func initTestData() TestData {
 						PCIAddress: "0000:00:00.1",
 						DeviceConfig: ethernetv1.DeviceConfig{
 							FWURL: "http://testfwurl",
-							Force: true,
 						},
 					},
 				},
@@ -231,6 +226,9 @@ var _ = Describe("DaemonTests", func() {
 		})
 
 		var _ = It("will update condition to UpdateFailed if no matching devices were found", func() {
+
+			findFw = func(localpath string) (string, error) { return localpath, nil }
+
 			Expect(k8sClient.Create(context.TODO(), &data.Node)).To(Succeed())
 			Expect(k8sClient.Create(context.TODO(), &data.NodeConfig)).To(Succeed())
 			Expect(initReconciler(reconciler, data.NodeConfig.Name, data.NodeConfig.Namespace)).To(Succeed())
@@ -247,7 +245,7 @@ var _ = Describe("DaemonTests", func() {
 			Expect(nodeConfigs.Items[0].Status.Conditions).To(HaveLen(1))
 			Expect(nodeConfigs.Items[0].Status.Conditions[0].Status).To(Equal(metav1.ConditionFalse))
 			Expect(nodeConfigs.Items[0].Status.Conditions[0].Reason).To(Equal(string(UpdateFailed)))
-			Expect(nodeConfigs.Items[0].Status.Conditions[0].Message).To(Equal("device 0000:00:00.1 not found"))
+			Expect(nodeConfigs.Items[0].Status.Conditions[0].Message).To(Equal("failed to get MAC for device 0000:00:00.1. Device not found"))
 		})
 
 		var _ = It("will update condition to UpdateFailed if not able to download firmware", func() {
@@ -647,10 +645,9 @@ var _ = Describe("DaemonTests", func() {
 			Expect(nodeConfigs.Items[0].Status.Conditions[0].Message).To(ContainSubstring("failed to get MAC for device 0000:00:00.1. Device not found"))
 		})
 
-		var _ = It("will update update condition to UpdateFailed because of no FWURL", func() {
+		var _ = It("if FWUrl is empty then FW update is skipped and status updated to UpdateSucceeded", func() {
 
 			data.NodeConfig.Spec.Config[0].DeviceConfig.FWURL = ""
-			data.NodeConfig.Spec.Config[0].DeviceConfig.Force = false
 
 			Expect(k8sClient.Create(context.TODO(), &data.Node)).To(Succeed())
 			Expect(k8sClient.Create(context.TODO(), &data.NodeConfig)).To(Succeed())
@@ -678,102 +675,8 @@ var _ = Describe("DaemonTests", func() {
 			Expect(k8sClient.List(context.TODO(), nodeConfigs)).To(Succeed())
 			Expect(nodeConfigs.Items).To(HaveLen(1))
 			Expect(nodeConfigs.Items[0].Status.Conditions).To(HaveLen(1))
-			Expect(nodeConfigs.Items[0].Status.Conditions[0].Status).To(Equal(metav1.ConditionFalse))
-			Expect(nodeConfigs.Items[0].Status.Conditions[0].Reason).To(Equal(string(UpdateFailed)))
-			Expect(nodeConfigs.Items[0].Status.Conditions[0].Message).To(ContainSubstring("Invalid firmware package version"))
-		})
-
-		var _ = It("will update update condition to UpdateFailed because of no version file", func() {
-
-			data.NodeConfig.Spec.Config[0].DeviceConfig.Force = false
-
-			Expect(k8sClient.Create(context.TODO(), &data.Node)).To(Succeed())
-			Expect(k8sClient.Create(context.TODO(), &data.NodeConfig)).To(Succeed())
-
-			data.Inventory[0].PCIAddress = "0000:00:00.1"
-
-			rootAttr := &syscall.SysProcAttr{
-				Credential: &syscall.Credential{Uid: 0, Gid: 0},
-			}
-			nvmupdateExec = func(cmd *exec.Cmd, log logr.Logger) error {
-				Expect(cmd.SysProcAttr).To(Equal(rootAttr))
-				Expect(cmd.Dir).To(Equal(path.Join(artifactsFolder, data.NodeConfig.Spec.Config[0].PCIAddress)))
-				return nil
-			}
-
-			Expect(initReconciler(reconciler, data.NodeConfig.Name, data.NodeConfig.Namespace)).To(Succeed())
-
-			_, err := reconciler.Reconcile(context.TODO(), ctrl.Request{NamespacedName: types.NamespacedName{
-				Namespace: data.NodeConfig.Namespace,
-				Name:      data.NodeConfig.Name,
-			}})
-			Expect(err).ToNot(HaveOccurred())
-
-			nodeConfigs := &ethernetv1.EthernetNodeConfigList{}
-			Expect(k8sClient.List(context.TODO(), nodeConfigs)).To(Succeed())
-			Expect(nodeConfigs.Items).To(HaveLen(1))
-			Expect(nodeConfigs.Items[0].Status.Conditions).To(HaveLen(1))
-			Expect(nodeConfigs.Items[0].Status.Conditions[0].Status).To(Equal(metav1.ConditionFalse))
-			Expect(nodeConfigs.Items[0].Status.Conditions[0].Reason).To(Equal(string(UpdateFailed)))
-			Expect(nodeConfigs.Items[0].Status.Conditions[0].Message).To(ContainSubstring("failed to open version file"))
-		})
-
-		var _ = It("will update condition to UpdateFailed because of empty version file", func() {
-
-			defer os.RemoveAll(artifactsFolder)
-			data.NodeConfig.Spec.Config[0].DeviceConfig.Force = false
-			data.NodeConfig.Spec.Config[0].DeviceConfig.DDPURL = ""
-
-			Expect(k8sClient.Create(context.TODO(), &data.Node)).To(Succeed())
-			Expect(k8sClient.Create(context.TODO(), &data.NodeConfig)).To(Succeed())
-
-			data.Inventory[0].PCIAddress = "0000:00:00.1"
-
-			rootAttr := &syscall.SysProcAttr{
-				Credential: &syscall.Credential{Uid: 0, Gid: 0},
-			}
-			nvmupdateExec = func(cmd *exec.Cmd, log logr.Logger) error {
-				Expect(cmd.SysProcAttr).To(Equal(rootAttr))
-				Expect(cmd.Dir).To(Equal(path.Join(artifactsFolder, data.NodeConfig.Spec.Config[0].PCIAddress)))
-				return nil
-			}
-
-			downloadFile = func(localpath, url, checksum string) error {
-
-				updateDir := path.Join(artifactsFolder, data.Inventory[0].PCIAddress)
-				updatePath := updateResultPath(updateDir)
-
-				err := os.MkdirAll(updateDir, 0777)
-				Expect(err).ToNot(HaveOccurred())
-
-				tmpfile, err := os.OpenFile(updatePath, os.O_RDWR|os.O_CREATE, 0777)
-				Expect(err).ToNot(HaveOccurred())
-				defer tmpfile.Close()
-
-				updatePath2 := path.Join(updateDir, nvmupdateVersionFilename)
-
-				tmpfile2, err := os.OpenFile(updatePath2, os.O_RDWR|os.O_CREATE, 0777)
-				Expect(err).ToNot(HaveOccurred())
-				defer tmpfile2.Close()
-
-				return nil
-			}
-
-			Expect(initReconciler(reconciler, data.NodeConfig.Name, data.NodeConfig.Namespace)).To(Succeed())
-
-			_, err := reconciler.Reconcile(context.TODO(), ctrl.Request{NamespacedName: types.NamespacedName{
-				Namespace: data.NodeConfig.Namespace,
-				Name:      data.NodeConfig.Name,
-			}})
-			Expect(err).ToNot(HaveOccurred())
-
-			nodeConfigs := &ethernetv1.EthernetNodeConfigList{}
-			Expect(k8sClient.List(context.TODO(), nodeConfigs)).To(Succeed())
-			Expect(nodeConfigs.Items).To(HaveLen(1))
-			Expect(nodeConfigs.Items[0].Status.Conditions).To(HaveLen(1))
-			Expect(nodeConfigs.Items[0].Status.Conditions[0].Status).To(Equal(metav1.ConditionFalse))
-			Expect(nodeConfigs.Items[0].Status.Conditions[0].Reason).To(Equal(string(UpdateFailed)))
-			Expect(nodeConfigs.Items[0].Status.Conditions[0].Message).To(ContainSubstring("unable to read: workdir/nvmupdate/0000:00:00.1/version.txt"))
+			Expect(nodeConfigs.Items[0].Status.Conditions[0].Reason).To(Equal(string(UpdateSucceeded)))
+			Expect(nodeConfigs.Items[0].Status.Conditions[0].Message).To(Equal("Updated successfully"))
 		})
 
 		var _ = It("will fail because of PCIAddress not matching pattern", func() {
@@ -1011,335 +914,6 @@ var _ = Describe("DaemonTests", func() {
 			Expect(nodeConfigs.Items[0].Status.Conditions).To(HaveLen(1))
 			Expect(nodeConfigs.Items[0].Status.Conditions[0].Reason).To(Equal(string(UpdatePostUpdateReboot)))
 			Expect(nodeConfigs.Items[0].Status.Conditions[0].Message).To(Equal("Post-update node reboot"))
-		})
-	})
-
-	var _ = Context("verifyCompatibility", func() {
-		BeforeEach(func() {
-			getIDs = func(string, logr.Logger) (DeviceIDs, error) {
-				return DeviceIDs{
-					VendorID: "0001",
-					Class:    "00",
-					SubClass: "00",
-					DeviceID: "123",
-				}, nil
-			}
-		})
-
-		AfterEach(func() {
-		})
-
-		var _ = It("will return no error if force flag is provided", func() {
-			dev := ethernetv1.Device{
-				PCIAddress:    "00:00:00.0",
-				Name:          "TestName",
-				Driver:        "ice",
-				DriverVersion: "1.0.0",
-				Firmware: ethernetv1.FirmwareInfo{
-					MAC:     "aa:bb:cc:dd:ee:ff",
-					Version: "2.00",
-				},
-			}
-
-			Expect(initReconciler(reconciler, data.NodeConfig.Name, data.NodeConfig.Namespace)).To(Succeed())
-
-			err := reconciler.verifyCompatibility("testfwpath", "testddppath", dev, true)
-			Expect(err).ToNot(HaveOccurred())
-		})
-		var _ = It("will use firmware version from device if no path is provided", func() {
-			dev := ethernetv1.Device{
-				PCIAddress:    "00:00:00.0",
-				Name:          "TestName",
-				Driver:        "ice",
-				DriverVersion: "1.0.0",
-				Firmware: ethernetv1.FirmwareInfo{
-					MAC:     "aa:bb:cc:dd:ee:ff",
-					Version: "2.00 0xffffffff 1234",
-				},
-			}
-
-			Expect(initReconciler(reconciler, data.NodeConfig.Name, data.NodeConfig.Namespace)).To(Succeed())
-
-			err := reconciler.verifyCompatibility("", "profile2-2.00", dev, false)
-			Expect(err).ToNot(HaveOccurred())
-		})
-		var _ = It("will return error if firmware path is provided but fails when opening version.txt file", func() {
-			dev := ethernetv1.Device{
-				PCIAddress:    "00:00:00.0",
-				Name:          "TestName",
-				Driver:        "ice",
-				DriverVersion: "1.0.0",
-				Firmware: ethernetv1.FirmwareInfo{
-					MAC:     "aa:bb:cc:dd:ee:ff",
-					Version: "2.00 0xffffffff 1234",
-				},
-				DDP: ethernetv1.DDPInfo{
-					PackageName: "profile2",
-					Version:     "2.00",
-					TrackID:     "0xffffffff",
-				},
-			}
-
-			Expect(initReconciler(reconciler, data.NodeConfig.Name, data.NodeConfig.Namespace)).To(Succeed())
-
-			err := reconciler.verifyCompatibility("someinvalidpath", "", dev, false)
-			Expect(err).To(HaveOccurred())
-		})
-		var _ = It("will return no error if firmware path with valid version.txt file is provided", func() {
-			dev := ethernetv1.Device{
-				PCIAddress:    "00:00:00.0",
-				Name:          "TestName",
-				Driver:        "ice",
-				DriverVersion: "1.0.0",
-				Firmware: ethernetv1.FirmwareInfo{
-					MAC:     "aa:bb:cc:dd:ee:ff",
-					Version: "99.99 0xffffffff 1234",
-				},
-				DDP: ethernetv1.DDPInfo{
-					PackageName: "profile2",
-					Version:     "2.00",
-					TrackID:     "0xffffffff",
-				},
-			}
-
-			Expect(initReconciler(reconciler, data.NodeConfig.Name, data.NodeConfig.Namespace)).To(Succeed())
-
-			tmpdir, err := ioutil.TempDir("/tmp/", "testdir")
-			Expect(err).ToNot(HaveOccurred())
-			defer os.RemoveAll(tmpdir)
-
-			err = os.MkdirAll(tmpdir, 0777)
-			Expect(err).ToNot(HaveOccurred())
-
-			err = ioutil.WriteFile(filepath.Join(tmpdir, nvmupdateVersionFilename), []byte("v2.00"), 0666)
-			Expect(err).ToNot(HaveOccurred())
-
-			err = reconciler.verifyCompatibility(tmpdir, "", dev, false)
-			Expect(err).ToNot(HaveOccurred())
-		})
-		var _ = It("will return no error on any firmware provided if compatibility map entry with wildcard matches", func() {
-			dev := ethernetv1.Device{
-				PCIAddress:    "00:00:00.0",
-				Name:          "TestName",
-				Driver:        "ice",
-				DriverVersion: "9.9.9",
-				Firmware: ethernetv1.FirmwareInfo{
-					MAC:     "aa:bb:cc:dd:ee:ff",
-					Version: "0.99 0xffffffff 1234",
-				},
-				DDP: ethernetv1.DDPInfo{
-					PackageName: "profile3",
-					Version:     "3.00",
-					TrackID:     "0xffffffff",
-				},
-			}
-
-			Expect(initReconciler(reconciler, data.NodeConfig.Name, data.NodeConfig.Namespace)).To(Succeed())
-
-			tmpdir, err := ioutil.TempDir("/tmp/", "testdir")
-			Expect(err).ToNot(HaveOccurred())
-			defer os.RemoveAll(tmpdir)
-
-			err = os.MkdirAll(tmpdir, 0777)
-			Expect(err).ToNot(HaveOccurred())
-
-			err = ioutil.WriteFile(filepath.Join(tmpdir, nvmupdateVersionFilename), []byte("v1.23"), 0666)
-			Expect(err).ToNot(HaveOccurred())
-
-			err = reconciler.verifyCompatibility(tmpdir, "", dev, false)
-			Expect(err).ToNot(HaveOccurred())
-		})
-	})
-
-	var _ = Context("verifyCompatibility no mocks", func() {
-		BeforeEach(func() {
-			getIDs = getDeviceIDs
-
-			getPCIDevices = func() ([]*ghw.PCIDevice, error) {
-				return []*ghw.PCIDevice{
-					{
-						Address: "00:00:00.0",
-						Vendor: &pcidb.Vendor{
-							ID: "0000",
-						},
-						Class: &pcidb.Class{
-							ID: "00",
-						},
-						Subclass: &pcidb.Subclass{
-							ID: "00",
-						},
-						Product: &pcidb.Product{
-							ID:   "test",
-							Name: "testname",
-						},
-					},
-					nil,
-				}, nil
-			}
-		})
-
-		AfterEach(func() {
-		})
-
-		var _ = It("will return error no matching compatibility even if pci address matches", func() {
-
-			dev := ethernetv1.Device{
-				PCIAddress:    "00:00:00.0",
-				Name:          "TestName",
-				Driver:        "ice",
-				DriverVersion: "1.0.0",
-				Firmware: ethernetv1.FirmwareInfo{
-					MAC:     "aa:bb:cc:dd:ee:ff",
-					Version: "99.99 0xffffffff 1234",
-				},
-				DDP: ethernetv1.DDPInfo{
-					PackageName: "profile2",
-					Version:     "2.00",
-					TrackID:     "0xffffffff",
-				},
-			}
-
-			Expect(initReconciler(reconciler, data.NodeConfig.Name, data.NodeConfig.Namespace)).To(Succeed())
-
-			tmpdir, err := ioutil.TempDir("/tmp/", "testdir")
-			Expect(err).ToNot(HaveOccurred())
-			defer os.RemoveAll(tmpdir)
-
-			err = os.MkdirAll(tmpdir, 0777)
-			Expect(err).ToNot(HaveOccurred())
-
-			err = ioutil.WriteFile(filepath.Join(tmpdir, nvmupdateVersionFilename), []byte("v2.00"), 0666)
-			Expect(err).ToNot(HaveOccurred())
-
-			err = reconciler.verifyCompatibility(tmpdir, "", dev, false)
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("no matching compatibility entry for 00:00:00.0"))
-		})
-
-		var _ = It("will return no error if pci address matches", func() {
-
-			dev := ethernetv1.Device{
-				PCIAddress:    "00:00:00.0",
-				Name:          "TestName",
-				Driver:        "ice",
-				DriverVersion: "1.0.0",
-				Firmware: ethernetv1.FirmwareInfo{
-					MAC:     "aa:bb:cc:dd:ee:ff",
-					Version: "99.99 0xffffffff 1234",
-				},
-				DDP: ethernetv1.DDPInfo{
-					PackageName: "profile2",
-					Version:     "2.00",
-					TrackID:     "0xffffffff",
-				},
-			}
-			deviceMatcher = func(ids DeviceIDs, fwVer, ddpVer, driverVer string, entry Compatibility) bool {
-				return true
-			}
-
-			Expect(initReconciler(reconciler, data.NodeConfig.Name, data.NodeConfig.Namespace)).To(Succeed())
-
-			tmpdir, err := ioutil.TempDir("/tmp/", "testdir")
-			Expect(err).ToNot(HaveOccurred())
-			defer os.RemoveAll(tmpdir)
-
-			err = os.MkdirAll(tmpdir, 0777)
-			Expect(err).ToNot(HaveOccurred())
-
-			err = ioutil.WriteFile(filepath.Join(tmpdir, nvmupdateVersionFilename), []byte("v2.00"), 0666)
-			Expect(err).ToNot(HaveOccurred())
-
-			err = reconciler.verifyCompatibility(tmpdir, "", dev, false)
-			Expect(err).ToNot(HaveOccurred())
-		})
-
-		var _ = It("will return error if fail to get PCI Devices", func() {
-
-			dev := ethernetv1.Device{
-				PCIAddress:    "00:00:00.0",
-				Name:          "TestName",
-				Driver:        "ice",
-				DriverVersion: "1.0.0",
-				Firmware: ethernetv1.FirmwareInfo{
-					MAC:     "aa:bb:cc:dd:ee:ff",
-					Version: "99.99 0xffffffff 1234",
-				},
-				DDP: ethernetv1.DDPInfo{
-					PackageName: "profile2",
-					Version:     "2.00",
-					TrackID:     "0xffffffff",
-				},
-			}
-
-			testPciErrorStr := "TestPciError"
-
-			getPCIDevices = func() ([]*ghw.PCIDevice, error) {
-				return nil, gerrors.New(testPciErrorStr)
-			}
-
-			Expect(initReconciler(reconciler, data.NodeConfig.Name, data.NodeConfig.Namespace)).To(Succeed())
-
-			tmpdir, err := ioutil.TempDir("/tmp/", "testdir")
-			Expect(err).ToNot(HaveOccurred())
-			defer os.RemoveAll(tmpdir)
-
-			err = os.MkdirAll(tmpdir, 0777)
-			Expect(err).ToNot(HaveOccurred())
-
-			err = ioutil.WriteFile(filepath.Join(tmpdir, nvmupdateVersionFilename), []byte("v2.00"), 0666)
-			Expect(err).ToNot(HaveOccurred())
-
-			err = reconciler.verifyCompatibility(tmpdir, "", dev, false)
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring(testPciErrorStr))
-		})
-
-		var _ = It("will return error if fail to match PCI address", func() {
-
-			dev := ethernetv1.Device{
-				PCIAddress:    "00:00:00.0",
-				Name:          "TestName",
-				Driver:        "ice",
-				DriverVersion: "1.0.0",
-				Firmware: ethernetv1.FirmwareInfo{
-					MAC:     "aa:bb:cc:dd:ee:ff",
-					Version: "99.99 0xffffffff 1234",
-				},
-				DDP: ethernetv1.DDPInfo{
-					PackageName: "profile2",
-					Version:     "2.00",
-					TrackID:     "0xffffffff",
-				},
-			}
-			getPCIDevices = func() ([]*ghw.PCIDevice, error) {
-				return nil, nil
-			}
-
-			Expect(initReconciler(reconciler, data.NodeConfig.Name, data.NodeConfig.Namespace)).To(Succeed())
-
-			tmpdir, err := ioutil.TempDir("/tmp/", "testdir")
-			Expect(err).ToNot(HaveOccurred())
-			defer os.RemoveAll(tmpdir)
-
-			err = os.MkdirAll(tmpdir, 0777)
-			Expect(err).ToNot(HaveOccurred())
-
-			err = ioutil.WriteFile(filepath.Join(tmpdir, nvmupdateVersionFilename), []byte("v2.00"), 0666)
-			Expect(err).ToNot(HaveOccurred())
-
-			err = reconciler.verifyCompatibility(tmpdir, "", dev, false)
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("device 00:00:00.0 not found"))
-		})
-
-		var _ = It("will return error because of invalid manager", func() {
-
-			var mgr ctrl.Manager
-			Expect(initReconciler(reconciler, data.NodeConfig.Name, data.NodeConfig.Namespace)).To(Succeed())
-
-			err := reconciler.SetupWithManager(mgr)
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("must provide a non-nil Manager"))
 		})
 	})
 })

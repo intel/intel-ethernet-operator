@@ -98,7 +98,6 @@ func verifyChecksum(path, expected string) (bool, error) {
 	return true, nil
 }
 
-// TODO: [ESS-2843] Add cert validation support
 func DownloadFile(path, url, checksum string) error {
 	f, err := CreateNoLinks(path)
 	if err != nil {
@@ -158,7 +157,7 @@ type LogWriter struct {
 }
 
 func Untar(srcPath string, dstPath string, log logr.Logger) error {
-	log.V(4).Info("Extracting file", "srcPath", srcPath, "dstPath", dstPath)
+	log.V(4).Info("Untar file", "srcPath", srcPath, "dstPath", dstPath)
 
 	f, err := OpenNoLinks(srcPath)
 	if err != nil {
@@ -210,7 +209,7 @@ func Untar(srcPath string, dstPath string, log logr.Logger) error {
 				return err
 			}
 		case tar.TypeSymlink, tar.TypeLink:
-			log.Info("Skipping (sym)link %v", fh.FileInfo().Name())
+			log.Info("Skipping (sym)link", "filename", fh.FileInfo().Name())
 		default:
 			err = fmt.Errorf("unable to untar type: %c in file %s", fh.Typeflag, fh.Name)
 			log.Error(err, "Invalid untar type")
@@ -243,18 +242,18 @@ func unzipFile(zipFile *zip.File, path string, mode os.FileMode) error {
 }
 
 func Unzip(srcPath, dstPath string, log logr.Logger) error {
-	log.V(4).Info("Extracting file", "srcPath", srcPath, "dstPath", dstPath)
+	log.V(4).Info("Unzip file", "srcPath", srcPath, "dstPath", dstPath)
 
 	f, err := OpenNoLinks(srcPath)
 	if err != nil {
-		log.Error(err, "Unable to open file %v", srcPath)
+		log.Error(err, "Unable to open", "file", srcPath)
 		return err
 	}
 	defer f.Close()
 
 	stat, err := f.Stat()
 	if err != nil {
-		log.Error(err, "Can't stat file %v", f.Name())
+		log.Error(err, "Can't stat", "file", f.Name())
 		return err
 	}
 
@@ -282,7 +281,7 @@ func Unzip(srcPath, dstPath string, log logr.Logger) error {
 			}
 
 		case mode&os.ModeSymlink == os.ModeSymlink:
-			log.Info("Skipping symlink %v", zipFile.Name)
+			log.Info("Skipping symlink", "filename", zipFile.Name)
 
 		default:
 			err = fmt.Errorf("unable to unzip file %v", zipFile.Name)
@@ -295,6 +294,7 @@ func Unzip(srcPath, dstPath string, log logr.Logger) error {
 }
 
 func UnpackDDPArchive(srcPath, dstPath string, log logr.Logger) error {
+	log.V(4).Info("Unpack DDP archive", "srcPath", srcPath, "dstPath", dstPath)
 	err := Unzip(srcPath, dstPath, log)
 
 	switch {

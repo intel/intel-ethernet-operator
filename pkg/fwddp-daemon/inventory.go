@@ -181,23 +181,3 @@ func getDeviceMAC(pciAddr string, log logr.Logger) (string, error) {
 }
 
 type DeviceIDs utils.SupportedDevice
-
-func getDeviceIDs(pciAddr string, log logr.Logger) (DeviceIDs, error) {
-	pciDevices, err := getPCIDevices()
-	if err != nil {
-		log.Error(err, "Failed to get PCI Devices")
-		return DeviceIDs{}, err
-	}
-
-	for _, pciDevice := range pciDevices {
-		if pciDevice.Address == pciAddr {
-			return DeviceIDs{
-				VendorID: pciDevice.Vendor.ID,
-				Class:    pciDevice.Class.ID,
-				SubClass: pciDevice.Subclass.ID,
-				DeviceID: pciDevice.Product.ID,
-			}, nil
-		}
-	}
-	return DeviceIDs{}, fmt.Errorf("device %v not found", pciAddr)
-}

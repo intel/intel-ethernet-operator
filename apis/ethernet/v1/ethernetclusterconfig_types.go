@@ -27,9 +27,6 @@ type DeviceConfig struct {
 	FWURL string `json:"fwURL,omitempty"`
 	// +kubebuilder:validation:Pattern=`^[a-fA-F0-9]{32}$`
 	FWChecksum string `json:"fwChecksum,omitempty"`
-
-	// Force DDP and/or FW application given incompatibility
-	Force bool `json:"force,omitempty"`
 }
 
 // EthernetClusterConfigSpec defines the desired state of EthernetClusterConfig
