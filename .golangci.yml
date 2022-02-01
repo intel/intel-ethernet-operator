@@ -1,6 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
 # Copyright (c) 2021 Intel Corporation
-
+---
+run:
+  timeout: 5m
 issues:
   exclude-rules:
     - linters:
