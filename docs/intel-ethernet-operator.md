@@ -592,12 +592,8 @@ EOF
 
 ```shell
 # export IMAGE_REGISTRY=<OCP Image registry>
-# export IEO_SRC_DIR=<This repo source directory location>
 
 # git clone https://github.com/intel/UFT.git
-
-## Apply UFT patch
-# git apply $IEO_SRC_DIR/patches/uft-dockerfile-and-entrypoint.patch
 
 # make dcf-image
 
