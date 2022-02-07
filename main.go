@@ -9,25 +9,24 @@ import (
 	"os"
 	"time"
 
-	fwddp_manager "github.com/otcshare/intel-ethernet-operator/pkg/fwddp-manager"
-	"github.com/otcshare/intel-ethernet-operator/pkg/utils/assets"
-	appsv1 "k8s.io/api/apps/v1"
-	"sigs.k8s.io/controller-runtime/pkg/client"
-
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
+	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	ethernetv1 "github.com/otcshare/intel-ethernet-operator/apis/ethernet/v1"
 	flowconfigv1 "github.com/otcshare/intel-ethernet-operator/apis/flowconfig/v1"
 	flowconfigcontrollers "github.com/otcshare/intel-ethernet-operator/controllers/flowconfig"
+	fwddp_manager "github.com/otcshare/intel-ethernet-operator/pkg/fwddp-manager"
+	"github.com/otcshare/intel-ethernet-operator/pkg/utils/assets"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -128,18 +127,26 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := (&assets.Manager{
+	assetsManager := &assets.Manager{
 		Client:    adHocClient,
+		Namespace: fwddp_manager.NAMESPACE,
 		Log:       ctrl.Log.WithName("manager"),
 		EnvPrefix: "ETHERNET_",
 		Scheme:    scheme,
 		Owner:     owner,
 		Assets: []assets.Asset{
-			{Path: "assets/100-labeler.yaml"},
-			{Path: "assets/200-daemon.yaml", BlockingReadiness: assets.ReadinessPollConfig{Retries: 30, Delay: 20 * time.Second}},
-			{Path: "assets/300-machine-config.yaml"},
+			{ConfigMapName: "labeler-config", Path: "assets/100-labeler.yaml"},
+			{ConfigMapName: "daemon-config", Path: "assets/200-daemon.yaml", BlockingReadiness: assets.ReadinessPollConfig{Retries: 30, Delay: 20 * time.Second}},
+			{ConfigMapName: "machine-config", Path: "assets/300-machine-config.yaml"},
 		},
-	}).LoadAndDeploy(context.Background()); err != nil {
+	}
+
+	if err := assetsManager.DeployConfigMaps(context.Background()); err != nil {
+		setupLog.Error(err, "failed to deploy the config maps")
+		os.Exit(1)
+	}
+
+	if err := assetsManager.LoadFromConfigMapAndDeploy(context.Background()); err != nil {
 		setupLog.Error(err, "failed to deploy the assets")
 		os.Exit(1)
 	}
