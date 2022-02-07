@@ -337,6 +337,10 @@ The user can observe the change of the cards' NICs firmware:
 }
 ```
 
+If `fwUrl` points to external location, then you might need to configure proxy on cluster. You can configure it by using [OCP cluster-wide proxy](https://docs.openshift.com/container-platform/4.9/networking/enable-cluster-wide-proxy.html) 
+or by setting HTTP_PROXY, HTTPS_PROXY and NO_PROXY environmental variables in [operator's subscription](https://docs.openshift.com/container-platform/4.9/operators/admin/olm-configuring-proxy-support.html). 
+Be aware that operator will ignore lowercase `http_proxy` variables and will accept only uppercase variables.
+
 #### Updating DDP
 
 To update the DDP profile of the supported device run following steps:

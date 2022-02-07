@@ -40,12 +40,18 @@ func (m *Manager) buildTemplateVars() (map[string]string, error) {
 
 	for _, pair := range os.Environ() {
 		kv := strings.Split(pair, "=")
-		if len(kv) == 2 && strings.HasPrefix(kv[0], m.EnvPrefix) {
+		if len(kv) == 2 && (strings.HasPrefix(kv[0], m.EnvPrefix) || isProxy(kv[0])) {
 			tp[kv[0]] = kv[1]
 		}
 	}
 
 	return tp, nil
+}
+
+func isProxy(name string) bool {
+	//ignores lowercase proxy settings because our operator only sets/reads uppercase values
+	// and OCP proxy/cluster object sets uppercase proxy
+	return name == "HTTP_PROXY" || name == "HTTPS_PROXY" || name == "NO_PROXY"
 }
 
 // DeployConfigMaps issues an asset load from the path and then deployment
