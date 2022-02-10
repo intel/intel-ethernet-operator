@@ -55,12 +55,6 @@ func WaitForPodCreation(core client.Client, podName, ns string, timeout, interva
 
 var _ = Describe("FlowConfigNodeAgentDeployment controller", func() {
 	var (
-		nodePrototype = &corev1.Node{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: "node-dummy",
-			},
-		}
-
 		namespacePrototype = &corev1.Namespace{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "namespace-dummy",
@@ -74,28 +68,7 @@ var _ = Describe("FlowConfigNodeAgentDeployment controller", func() {
 		nodeName1        = "k8snode-1"
 		nodeName2        = "k8snode-2"
 		vfPoolName       = "intel.com/cvl_uft_admin"
-
-		timeout  = 4 * time.Second
-		interval = 1000 * time.Millisecond
 	)
-
-	createNode := func(name string, configurers ...func(n *corev1.Node)) *corev1.Node {
-		node := nodePrototype.DeepCopy()
-		node.Name = name
-		for _, configure := range configurers {
-			configure(node)
-		}
-
-		Expect(k8sClient.Create(context.TODO(), node)).ToNot(HaveOccurred())
-
-		return node
-	}
-
-	deleteNode := func(node *corev1.Node) {
-		err := k8sClient.Delete(context.Background(), node)
-
-		Expect(err).Should(BeNil())
-	}
 
 	createNamespace := func(name string) *corev1.Namespace {
 		namespace := namespacePrototype.DeepCopy()
@@ -104,44 +77,6 @@ var _ = Describe("FlowConfigNodeAgentDeployment controller", func() {
 		Expect(k8sClient.Create(context.TODO(), namespace)).ToNot(HaveOccurred())
 
 		return namespace
-	}
-
-	createPod := func(name, ns string, configurers ...func(pod *corev1.Pod)) *corev1.Pod {
-		var graceTime int64 = 0
-		pod := &corev1.Pod{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      name,
-				Namespace: ns,
-			},
-			Spec: corev1.PodSpec{
-				TerminationGracePeriodSeconds: &graceTime,
-				Containers: []corev1.Container{
-					{
-						Name:    "uft",
-						Image:   "docker.io/alpine",
-						Command: []string{"/bin/sh", "-c", "sleep INF"},
-					},
-				},
-			},
-		}
-
-		for _, configure := range configurers {
-			configure(pod)
-		}
-
-		return pod
-	}
-
-	deletePod := func(name, ns string) {
-		pod := &corev1.Pod{
-			ObjectMeta: metav1.ObjectMeta{
-				Namespace: ns,
-				Name:      name,
-			},
-		}
-
-		err := k8sClient.Delete(context.Background(), pod)
-		Expect(err).Should(BeNil())
 	}
 
 	getFlowConfigNodeAgentDeployment := func(namespace string, configurers ...func(flow *flowconfigv1.FlowConfigNodeAgentDeployment)) *flowconfigv1.FlowConfigNodeAgentDeployment {

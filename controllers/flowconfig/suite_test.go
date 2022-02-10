@@ -4,6 +4,7 @@
 package flowconfig
 
 import (
+	"context"
 	"fmt"
 	"math/rand"
 	"os"
@@ -13,7 +14,9 @@ import (
 	"time"
 
 	"github.com/onsi/gomega/types"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -44,6 +47,16 @@ var (
 	nodeAgentDeploymentRc *FlowConfigNodeAgentDeploymentReconciler
 	clusterFlowConfigRc   *ClusterFlowConfigReconciler
 	managerMutex          = sync.Mutex{}
+	nodePrototype         = &corev1.Node{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "node-dummy",
+		},
+	}
+)
+
+const (
+	timeout  = 4 * time.Second
+	interval = 1000 * time.Millisecond
 )
 
 func MatchQuantityObject(expected interface{}) types.GomegaMatcher {
@@ -76,6 +89,62 @@ func (matcher *representQuantityMatcher) FailureMessage(actual interface{}) (mes
 
 func (matcher *representQuantityMatcher) NegatedFailureMessage(actual interface{}) (message string) {
 	return fmt.Sprintf("Expected\n\t%#v\nnot to contain\n\t%#v", actual, matcher.expected)
+}
+
+func createNode(name string, configurers ...func(n *corev1.Node)) *corev1.Node {
+	node := nodePrototype.DeepCopy()
+	node.Name = name
+	for _, configure := range configurers {
+		configure(node)
+	}
+
+	Expect(k8sClient.Create(context.TODO(), node)).ToNot(HaveOccurred())
+
+	return node
+}
+
+func deleteNode(node *corev1.Node) {
+	err := k8sClient.Delete(context.Background(), node)
+
+	Expect(err).Should(BeNil())
+}
+
+func createPod(name, ns string, configurers ...func(pod *corev1.Pod)) *corev1.Pod {
+	var graceTime int64 = 0
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: ns,
+		},
+		Spec: corev1.PodSpec{
+			TerminationGracePeriodSeconds: &graceTime,
+			Containers: []corev1.Container{
+				{
+					Name:    "uft",
+					Image:   "docker.io/alpine",
+					Command: []string{"/bin/sh", "-c", "sleep INF"},
+				},
+			},
+		},
+	}
+
+	for _, configure := range configurers {
+		configure(pod)
+	}
+
+	return pod
+}
+
+func deletePod(name, ns string) {
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: ns,
+			Name:      name,
+		},
+	}
+
+	err := k8sClient.Delete(context.Background(), pod)
+	Expect(err).Should(BeNil())
 }
 
 func TestAPIs(t *testing.T) {

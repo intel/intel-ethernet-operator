@@ -167,7 +167,7 @@ rm -rf $$TMP_DIR ;\
 endef
 
 test: manifests generate fmt vet envtest ## Run tests.
-	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path)" ETHERNET_NAMESPACE=default go test ./... -coverprofile cover.out
+	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path)" ETHERNET_NAMESPACE=default go test ./... -timeout 30m -coverprofile cover.out
 
 test_daemon: manifests generate fmt vet envtest ## Run tests only for the fwddp_daemon.
 	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path)" ETHERNET_NAMESPACE=default go test pkg/fwddp-daemon -coverprofile cover.out
