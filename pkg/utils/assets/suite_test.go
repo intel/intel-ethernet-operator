@@ -27,6 +27,7 @@ var fakeOwner metav1.Object
 var testEnv *envtest.Environment
 
 var fakeAssetFile string
+var fakeConfigMapName string
 
 func TestAssets(t *testing.T) {
 	RegisterFailHandler(Fail)
@@ -40,6 +41,7 @@ var _ = BeforeSuite(func(done Done) {
 	var err error
 
 	fakeAssetFile = "test/101-fake-labeler.yaml"
+	fakeConfigMapName = "fake-config"
 
 	By("bootstrapping test environment")
 	testEnv = &envtest.Environment{

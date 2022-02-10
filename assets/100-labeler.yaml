@@ -1,102 +1,104 @@
-# SPDX-License-Identifier: Apache-2.0
-# Copyright (c) 2021 Intel Corporation
-
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: supported-clv-devices
+  name: labeler-config
   namespace: {{ .ETHERNET_NAMESPACE }}
 immutable: false
 data:
-  devices.json: |
-    {
-        "E810-CQDA2": {
-            "VendorID": "8086", "Class": "02", "SubClass": "00", "DeviceID": "1592"
-        },
-        "E810-2CQDA2": {
-            "VendorID": "8086", "Class": "02", "SubClass": "00", "DeviceID": "1592"
-        },
-        "E810-XXVDA2": {
-            "VendorID": "8086", "Class": "02", "SubClass": "00", "DeviceID": "159b"
-        },
-        "E810-XXVDA4": {
-            "VendorID": "8086", "Class": "02", "SubClass": "00", "DeviceID": "1593"
+  configMap: |
+    apiVersion: v1
+    kind: ConfigMap
+    metadata:
+      name: supported-clv-devices
+      namespace: {{ .ETHERNET_NAMESPACE }}
+    immutable: false
+    data:
+      devices.json: |
+        {
+            "E810-CQDA2": {
+                "VendorID": "8086", "Class": "02", "SubClass": "00", "DeviceID": "1592"
+            },
+            "E810-2CQDA2": {
+                "VendorID": "8086", "Class": "02", "SubClass": "00", "DeviceID": "1592"
+            },
+            "E810-XXVDA2": {
+                "VendorID": "8086", "Class": "02", "SubClass": "00", "DeviceID": "159b"
+            },
+            "E810-XXVDA4": {
+                "VendorID": "8086", "Class": "02", "SubClass": "00", "DeviceID": "1593"
+            }
         }
-    }
----
-
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: clv-discovery
-  namespace: "{{ .ETHERNET_NAMESPACE }}"
----
-
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
-metadata:
-  name: clv-discovery
-rules:
-  - apiGroups: [""]
-    resources: ["nodes"]
-    verbs: ["get", "update"]
-
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
-metadata:
-  name: clv-discovery
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: clv-discovery
-  namespace: "{{ .ETHERNET_NAMESPACE }}"
-subjects:
-  - kind: ServiceAccount
-    name: clv-discovery
-    namespace: "{{ .ETHERNET_NAMESPACE }}"
-userNames:
-  - system:serviceaccount:{{ .ETHERNET_NAMESPACE }}:clv-discovery
----
-apiVersion: apps/v1
-kind: DaemonSet
-metadata:
-  labels:
-    app: clv-discovery
-  name: clv-discovery
-  namespace: {{ .ETHERNET_NAMESPACE }}
-spec:
-  minReadySeconds: 10
-  selector:
-    matchLabels:
-      app: clv-discovery
-  template:
+  serviceAccount: |
+    apiVersion: v1
+    kind: ServiceAccount
+    metadata:
+      name: clv-discovery
+      namespace: "{{ .ETHERNET_NAMESPACE }}"
+  clusterRole: |
+    apiVersion: rbac.authorization.k8s.io/v1
+    kind: ClusterRole
+    metadata:
+      name: clv-discovery
+    rules:
+      - apiGroups: [""]
+        resources: ["nodes"]
+        verbs: ["get", "update"]
+  clusterRoleBinding: |
+    apiVersion: rbac.authorization.k8s.io/v1
+    kind: ClusterRoleBinding
+    metadata:
+      name: clv-discovery
+    roleRef:
+      apiGroup: rbac.authorization.k8s.io
+      kind: ClusterRole
+      name: clv-discovery
+      namespace: "{{ .ETHERNET_NAMESPACE }}"
+    subjects:
+      - kind: ServiceAccount
+        name: clv-discovery
+        namespace: "{{ .ETHERNET_NAMESPACE }}"
+    userNames:
+      - system:serviceaccount:{{ .ETHERNET_NAMESPACE }}:clv-discovery
+  daemonSet: |
+    apiVersion: apps/v1
+    kind: DaemonSet
     metadata:
       labels:
         app: clv-discovery
       name: clv-discovery
+      namespace: {{ .ETHERNET_NAMESPACE }}
     spec:
-      serviceAccount: clv-discovery
-      serviceAccountName: clv-discovery
-      containers:
-        - image: {{ .ETHERNET_NODE_LABELER_IMAGE }}
-          imagePullPolicy: IfNotPresent
+      minReadySeconds: 10
+      selector:
+        matchLabels:
+          app: clv-discovery
+      template:
+        metadata:
+          labels:
+            app: clv-discovery
           name: clv-discovery
-          securityContext:
-            readOnlyRootFilesystem: true
-          volumeMounts:
+        spec:
+          serviceAccount: clv-discovery
+          serviceAccountName: clv-discovery
+          containers:
+            - image: {{ .ETHERNET_NODE_LABELER_IMAGE }}
+              imagePullPolicy: IfNotPresent
+              name: clv-discovery
+              securityContext:
+                readOnlyRootFilesystem: true
+              volumeMounts:
+                - name: config-volume
+                  mountPath: "/labeler-workspace/devices.json"
+                  subPath: devices.json
+                  readOnly: true
+              env:
+                - name: NODENAME
+                  valueFrom:
+                    fieldRef:
+                      fieldPath: spec.nodeName
+                - name: NODELABEL
+                  value: "{{ .ETHERNET_NODE_LABEL }}"
+          volumes:
             - name: config-volume
-              mountPath: "/labeler-workspace/devices.json"
-              subPath: devices.json
-              readOnly: true
-          env:
-            - name: NODENAME
-              valueFrom:
-                fieldRef:
-                  fieldPath: spec.nodeName
-            - name: NODELABEL
-              value: "{{ .ETHERNET_NODE_LABEL }}"
-      volumes:
-        - name: config-volume
-          configMap:
-            name: supported-clv-devices
+              configMap:
+                name: supported-clv-devices

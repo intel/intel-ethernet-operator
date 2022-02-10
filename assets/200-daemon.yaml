@@ -1,163 +1,182 @@
-# SPDX-License-Identifier: Apache-2.0
-# Copyright (c) 2021 Intel Corporation
-
 apiVersion: v1
-kind: ServiceAccount
+kind: ConfigMap
 metadata:
-  name: fwddp-daemon
-  namespace: "{{ .ETHERNET_NAMESPACE }}"
-
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: Role
-metadata:
-  name: fwddp-daemon
-  namespace: "{{ .ETHERNET_NAMESPACE }}"
-rules:
-  - apiGroups:
-      - ethernet.intel.com
-    resources:
-      - '*'
-      - ethernetnodes
-    verbs:
-      - '*'
-  - apiGroups:
-      - security.openshift.io
-    resources:
-      - securitycontextconstraints
-    verbs:
-      - use
-    resourceNames:
-      - privileged
-  - apiGroups:
-      - coordination.k8s.io
-    resources:
-      - leases
-    verbs:
-      - '*'
-
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: RoleBinding
-metadata:
-  name: fwddp-daemon
-  namespace: "{{ .ETHERNET_NAMESPACE }}"
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: Role
-  name: fwddp-daemon
-subjects:
-  - kind: ServiceAccount
-    name: fwddp-daemon
-    namespace: "{{ .ETHERNET_NAMESPACE }}"
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
-metadata:
-  name: fwddp-daemon
-rules:
-  - apiGroups: [""]
-    resources: ["pods"]
-    verbs: ["*"]
-  - apiGroups: [""]
-    resources: ["nodes"]
-    verbs: ["get", "list", "watch", "patch", "update"]
-  - apiGroups: ["apps"]
-    resources: ["daemonsets"]
-    verbs: ["get"]
-  - apiGroups: [""]
-    resources: ["pods/eviction"]
-    verbs: ["create"]
-
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
-metadata:
-  name: fwddp-daemon
-subjects:
-  - kind: ServiceAccount
-    name: fwddp-daemon
-    namespace: "{{ .ETHERNET_NAMESPACE }}"
-roleRef:
-  kind: ClusterRole
-  name: fwddp-daemon
-  apiGroup: rbac.authorization.k8s.io
-  namespace: "{{ .ETHERNET_NAMESPACE }}"
-
----
-apiVersion: apps/v1
-kind: DaemonSet
-metadata:
-  labels:
-    app: fwddp-daemon
-  name: fwddp-daemon
-  namespace: "{{ .ETHERNET_NAMESPACE }}"
-  annotations:
-    openshift.io/scc: fwddp-daemon
-spec:
-  selector:
-    matchLabels:
-      app: fwddp-daemon
-  template:
+  name: daemon-config
+  namespace: {{ .ETHERNET_NAMESPACE }}
+immutable: false
+data:
+  serviceAccount: |
+    apiVersion: v1
+    kind: ServiceAccount
     metadata:
-      # Mark this pod as a critical add-on; when enabled, the critical add-on scheduler
-      # reserves resources for critical add-on pods so that they can be rescheduled after
-      # a failure.  This annotation works in tandem with the toleration below.
-      annotations:
-        scheduler.alpha.kubernetes.io/critical-pod: ""
+      name: fwddp-daemon
+      namespace: "{{ .ETHERNET_NAMESPACE }}"
+  role: |
+    apiVersion: rbac.authorization.k8s.io/v1
+    kind: Role
+    metadata:
+      name: fwddp-daemon
+      namespace: "{{ .ETHERNET_NAMESPACE }}"
+    rules:
+      - apiGroups:
+          - ethernet.intel.com
+        resources:
+          - '*'
+          - ethernetnodes
+        verbs:
+          - '*'
+      - apiGroups:
+          - security.openshift.io
+        resources:
+          - securitycontextconstraints
+        verbs:
+          - use
+        resourceNames:
+          - privileged
+      - apiGroups:
+          - coordination.k8s.io
+        resources:
+          - leases
+        verbs:
+          - '*'
+  roleBinding: |
+    apiVersion: rbac.authorization.k8s.io/v1
+    kind: RoleBinding
+    metadata:
+      name: fwddp-daemon
+      namespace: "{{ .ETHERNET_NAMESPACE }}"
+    roleRef:
+      apiGroup: rbac.authorization.k8s.io
+      kind: Role
+      name: fwddp-daemon
+    subjects:
+      - kind: ServiceAccount
+        name: fwddp-daemon
+        namespace: "{{ .ETHERNET_NAMESPACE }}"
+  clusterRole: |
+    apiVersion: rbac.authorization.k8s.io/v1
+    kind: ClusterRole
+    metadata:
+      name: fwddp-daemon
+    rules:
+      - apiGroups: [""]
+        resources: ["pods"]
+        verbs: ["*"]
+      - apiGroups: [""]
+        resources: ["nodes"]
+        verbs: ["get", "list", "watch", "patch", "update"]
+      - apiGroups: ["apps"]
+        resources: ["daemonsets"]
+        verbs: ["get"]
+      - apiGroups: [""]
+        resources: ["pods/eviction"]
+        verbs: ["create"]
+  clusterRoleBinding: |
+    apiVersion: rbac.authorization.k8s.io/v1
+    kind: ClusterRoleBinding
+    metadata:
+      name: fwddp-daemon
+    subjects:
+      - kind: ServiceAccount
+        name: fwddp-daemon
+        namespace: "{{ .ETHERNET_NAMESPACE }}"
+    roleRef:
+      kind: ClusterRole
+      name: fwddp-daemon
+      apiGroup: rbac.authorization.k8s.io
+      namespace: "{{ .ETHERNET_NAMESPACE }}"
+  daemonSet: |
+    apiVersion: apps/v1
+    kind: DaemonSet
+    metadata:
       labels:
         app: fwddp-daemon
+      name: fwddp-daemon
+      namespace: "{{ .ETHERNET_NAMESPACE }}"
+      annotations:
+        openshift.io/scc: fwddp-daemon
     spec:
-      nodeSelector:
-        {{ .ETHERNET_NODE_LABEL }}: ""
-      serviceAccount: fwddp-daemon
-      serviceAccountName: fwddp-daemon
-      hostPID: true
-      hostNetwork: true
-      dnsPolicy: ClusterFirstWithHostNet
-      containers:
-        - name: fwddp-daemon
-          image: "{{ .ETHERNET_DAEMON_IMAGE }}"
-          args:
-            - --zap-log-level=4
-          imagePullPolicy: IfNotPresent
-          volumeMounts:
+      selector:
+        matchLabels:
+          app: fwddp-daemon
+      template:
+        metadata:
+          # Mark this pod as a critical add-on; when enabled, the critical add-on scheduler
+          # reserves resources for critical add-on pods so that they can be rescheduled after
+          # a failure.  This annotation works in tandem with the toleration below.
+          annotations:
+            scheduler.alpha.kubernetes.io/critical-pod: ""
+          labels:
+            app: fwddp-daemon
+        spec:
+          nodeSelector:
+            {{ .ETHERNET_NODE_LABEL }}: ""
+          serviceAccount: fwddp-daemon
+          serviceAccountName: fwddp-daemon
+          hostPID: true
+          hostNetwork: true
+          dnsPolicy: ClusterFirstWithHostNet
+          containers:
+            - name: fwddp-daemon
+              image: "{{ .ETHERNET_DAEMON_IMAGE }}"
+              args:
+                - --zap-log-level=4
+              imagePullPolicy: IfNotPresent
+              volumeMounts:
+                - name: host
+                  mountPath: /host
+                - name: run-volume
+                  mountPath: /run
+                - name: config-volume
+                  mountPath: "/devices.json"
+                  subPath: devices.json
+                  readOnly: true
+                - name: libmodules
+                  mountPath: /lib/modules
+              env:
+                {{ if .NO_PROXY }}
+                - name: NO_PROXY
+                  value: {{ .NO_PROXY }}
+                - name: no_proxy
+                  value: {{ .NO_PROXY }}
+                {{ end }}
+                {{ if .HTTP_PROXY }}
+                - name: HTTP_PROXY
+                  value: {{ .HTTP_PROXY }}
+                - name: http_proxy
+                  value: {{ .HTTP_PROXY }}
+                {{ end }}
+                {{ if .HTTPS_PROXY }}
+                - name: HTTPS_PROXY
+                  value: {{ .HTTPS_PROXY }}
+                - name: https_proxy
+                  value: {{ .HTTPS_PROXY }}
+                {{ end }}
+                - name: ETHERNET_NAMESPACE
+                  valueFrom:
+                    fieldRef:
+                      fieldPath: metadata.namespace
+                - name: NODENAME
+                  valueFrom:
+                    fieldRef:
+                      fieldPath: spec.nodeName
+                - name: DRAIN_TIMEOUT_SECONDS
+                  value: "90"
+                - name: LEASE_DURATION_SECONDS
+                  value: "600"
+              securityContext:
+                readOnlyRootFilesystem: true
+                privileged: true
+                runAsUser: 0
+          volumes:
             - name: host
-              mountPath: /host
+              hostPath:
+                path: /
             - name: run-volume
-              mountPath: /run
+              emptyDir: {}
             - name: config-volume
-              mountPath: "/devices.json"
-              subPath: devices.json
-              readOnly: true
+              configMap:
+                name: supported-clv-devices
             - name: libmodules
-              mountPath: /lib/modules
-          env:
-            - name: ETHERNET_NAMESPACE
-              valueFrom:
-                fieldRef:
-                  fieldPath: metadata.namespace
-            - name: NODENAME
-              valueFrom:
-                fieldRef:
-                  fieldPath: spec.nodeName
-            - name: DRAIN_TIMEOUT_SECONDS
-              value: "90"
-            - name: LEASE_DURATION_SECONDS
-              value: "600"
-          securityContext:
-            readOnlyRootFilesystem: true
-            privileged: true
-            runAsUser: 0
-      volumes:
-        - name: host
-          hostPath:
-            path: /
-        - name: run-volume
-          emptyDir: {}
-        - name: config-volume
-          configMap:
-            name: supported-clv-devices
-        - name: libmodules
-          hostPath:
-            path: /lib/modules
+              hostPath:
+                path: /lib/modules

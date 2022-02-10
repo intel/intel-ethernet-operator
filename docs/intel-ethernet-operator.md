@@ -159,7 +159,7 @@ The Intel Ethernet Operator can be deployed by building the Bundle image and the
 
 ### Installing the dependencies
 
-Before building and installing the operator provide and install the OOT Intel ICE driver to the platforms. The driver can be downloaded from [Intel Download Centre](https://www.intel.com/content/www/us/en/download/19630/intel-network-adapter-driver-for-e810-series-devices-under-linux.html). 
+Before building and installing the operator provide and install the OOT Intel ICE driver to the platforms. The driver can be downloaded from [Intel Download Centre](https://www.intel.com/content/www/us/en/download/19630/intel-network-adapter-driver-for-e810-series-devices-under-linux.html).
 
 On OCP deployments the SRIOV Network operator will be deployed automatically as a dependency to Intel Ethernet Operator.
 
@@ -203,7 +203,7 @@ metadata:
   namespace: openshift-marketplace
 spec:
   sourceType: grpc
-  image: <IMAGE_REGISTRY>/intel-ethernet-operator-catalog:<VERSION>                                                            
+  image: <IMAGE_REGISTRY>/intel-ethernet-operator-catalog:<VERSION>
   publisher: Intel
   displayName: Intel ethernet operators(Local)
 ```
@@ -337,6 +337,10 @@ The user can observe the change of the cards' NICs firmware:
 }
 ```
 
+If `fwUrl` points to external location, then you might need to configure proxy on cluster. You can configure it by using [OCP cluster-wide proxy](https://docs.openshift.com/container-platform/4.9/networking/enable-cluster-wide-proxy.html) 
+or by setting HTTP_PROXY, HTTPS_PROXY and NO_PROXY environmental variables in [operator's subscription](https://docs.openshift.com/container-platform/4.9/operators/admin/olm-configuring-proxy-support.html). 
+Be aware that operator will ignore lowercase `http_proxy` variables and will accept only uppercase variables.
+
 #### Updating DDP
 
 To update the DDP profile of the supported device run following steps:
@@ -354,7 +358,7 @@ spec:
     kubernetes.io/hostname: <hostname>
   deviceSelector:
     pciAddress: "<pci-address>"
-  deviceConfig: 
+  deviceConfig:
     ddpURL: "<URL_to_DDP>"
     ddpChecksum: "<file_checksum_md5_hash>"
 ```
@@ -407,36 +411,36 @@ worker-01   1d
 
 
 # oc describe sriovnetworknodestates worker-01 -n intel-ethernet-operator
-Name:         worker-01                                                         
-Namespace:    intel-ethernet-operator                                                 
-Labels:       <none>                                                                  
-Annotations:  <none>                                                                  
-API Version:  sriovnetwork.openshift.io/v1                                            
-Kind:         SriovNetworkNodeState                                                   
-Metadata:                                                                                                  
-Spec:                                                                                 
-  Dp Config Version:  42872603                                                        
-Status:                                                                               
-  Interfaces:                                                                         
-    Device ID:      165f                                                              
-    Driver:         tg3                                                               
-    Link Speed:     100 Mb/s                                                          
-    Link Type:      ETH                                                               
-    Mac:            b0:7b:25:de:3f:be                                                 
-    Mtu:            1500                                                              
-    Name:           eno8303                                                           
-    Pci Address:    0000:04:00.0                                                      
-    Vendor:         14e4                                                              
-    Device ID:      165f                                                              
-    Driver:         tg3                                                               
-    Link Speed:     -1 Mb/s                                                           
-    Link Type:      ETH                                                               
-    Mac:            b0:7b:25:de:3f:bf                                                 
-    Mtu:            1500                                                              
-    Name:           eno8403                                                           
-    Pci Address:    0000:04:00.1                                                      
-    Vendor:         14e4                                                              
-    Device ID:      159b                                                              
+Name:         worker-01
+Namespace:    intel-ethernet-operator
+Labels:       <none>
+Annotations:  <none>
+API Version:  sriovnetwork.openshift.io/v1
+Kind:         SriovNetworkNodeState
+Metadata:
+Spec:
+  Dp Config Version:  42872603
+Status:
+  Interfaces:
+    Device ID:      165f
+    Driver:         tg3
+    Link Speed:     100 Mb/s
+    Link Type:      ETH
+    Mac:            b0:7b:25:de:3f:be
+    Mtu:            1500
+    Name:           eno8303
+    Pci Address:    0000:04:00.0
+    Vendor:         14e4
+    Device ID:      165f
+    Driver:         tg3
+    Link Speed:     -1 Mb/s
+    Link Type:      ETH
+    Mac:            b0:7b:25:de:3f:bf
+    Mtu:            1500
+    Name:           eno8403
+    Pci Address:    0000:04:00.1
+    Vendor:         14e4
+    Device ID:      159b
     Driver:         ice
     Link Speed:     -1 Mb/s
     Link Type:      ETH
@@ -490,6 +494,7 @@ apiVersion: sriovnetwork.openshift.io/v1
 kind: SriovNetworkNodePolicy
 metadata:
   name: uft-admin-policy
+  namespace: intel-ethernet-operator
 spec:
   deviceType: vfio-pci
   nicSelector:
@@ -507,6 +512,7 @@ apiVersion: sriovnetwork.openshift.io/v1
 kind: SriovNetworkNodePolicy
 metadata:
   name: cvl-vfio-policy
+  namespace: intel-ethernet-operator
 spec:
   deviceType: vfio-pci
   nicSelector:
@@ -524,6 +530,7 @@ apiVersion: sriovnetwork.openshift.io/v1
 kind: SriovNetworkNodePolicy
 metadata:
   name: cvl-iavf-policy
+  namespace: intel-ethernet-operator
 spec:
   deviceType: netdevice
   nicSelector:
@@ -547,7 +554,7 @@ The CR can be applied by running:
 # oc create -f sriov-network-policy.yaml
 ```
 
-##### Check node status 
+##### Check node status
 
 Check node status to confirm that cvl_uft_admin resource pool registered DCF capable VFs of the node
 
@@ -592,12 +599,8 @@ EOF
 
 ```shell
 # export IMAGE_REGISTRY=<OCP Image registry>
-# export IEO_SRC_DIR=<This repo source directory location>
 
 # git clone https://github.com/intel/UFT.git
-
-## Apply UFT patch
-# git apply $IEO_SRC_DIR/patches/uft-dockerfile-and-entrypoint.patch
 
 # make dcf-image
 
@@ -637,35 +640,35 @@ intel-ethernet-operator-controller-manager-79c4d5bf6d-bjlr5   1/1     Running   
 intel-ethernet-operator-controller-manager-79c4d5bf6d-txj5q   1/1     Running   0          44h
 
 # oc logs -n intel-ethernet-operator flowconfig-daemon-worker-01 -c uft
-Generating server_conf.yaml file...                                              
-Done!                                                                            
-server :                                                                         
-    ld_lib : "/usr/local/lib64"                                                  
-ports_info :                                                                     
-    - pci  : "0000:18:01.0"                                                      
-      mode : dcf                                                                 
-do eal init ...                                                                  
-[{'pci': '0000:18:01.0', 'mode': 'dcf'}]                                         
-[{'pci': '0000:18:01.0', 'mode': 'dcf'}]                                         
+Generating server_conf.yaml file...
+Done!
+server :
+    ld_lib : "/usr/local/lib64"
+ports_info :
+    - pci  : "0000:18:01.0"
+      mode : dcf
+do eal init ...
+[{'pci': '0000:18:01.0', 'mode': 'dcf'}]
+[{'pci': '0000:18:01.0', 'mode': 'dcf'}]
 the dcf cmd line is: a.out -c 0x30 -n 4 -a 0000:18:01.0,cap=dcf -d /usr/local/lib64 --file-prefix=dcf --
-EAL: Detected 96 lcore(s)                                                                               
-EAL: Detected 2 NUMA nodes                                                                              
-EAL: Detected shared linkage of DPDK                                                                    
-EAL: Multi-process socket /var/run/dpdk/dcf/mp_socket                                                   
-EAL: Selected IOVA mode 'VA'                                                                            
-EAL: No available 1048576 kB hugepages reported                                                         
-EAL: VFIO support initialized                                                                           
-EAL: Using IOMMU type 1 (Type 1)                                                                        
-EAL: Probe PCI driver: net_iavf (8086:1889) device: 0000:18:01.0 (socket 0)                             
-EAL: Releasing PCI mapped resource for 0000:18:01.0                                                     
-EAL: Calling pci_unmap_resource for 0000:18:01.0 at 0x2101000000                                        
-EAL: Calling pci_unmap_resource for 0000:18:01.0 at 0x2101020000                                        
-EAL: Using IOMMU type 1 (Type 1)                                                                        
-EAL: Probe PCI driver: net_ice_dcf (8086:1889) device: 0000:18:01.0 (socket 0)                          
-ice_load_pkg_type(): Active package is: 1.3.30.0, ICE COMMS Package (double VLAN mode)                  
-TELEMETRY: No legacy callbacks, legacy socket not created                                               
-grpc server start ...                                                                                   
-now in server cycle                
+EAL: Detected 96 lcore(s)
+EAL: Detected 2 NUMA nodes
+EAL: Detected shared linkage of DPDK
+EAL: Multi-process socket /var/run/dpdk/dcf/mp_socket
+EAL: Selected IOVA mode 'VA'
+EAL: No available 1048576 kB hugepages reported
+EAL: VFIO support initialized
+EAL: Using IOMMU type 1 (Type 1)
+EAL: Probe PCI driver: net_iavf (8086:1889) device: 0000:18:01.0 (socket 0)
+EAL: Releasing PCI mapped resource for 0000:18:01.0
+EAL: Calling pci_unmap_resource for 0000:18:01.0 at 0x2101000000
+EAL: Calling pci_unmap_resource for 0000:18:01.0 at 0x2101020000
+EAL: Using IOMMU type 1 (Type 1)
+EAL: Probe PCI driver: net_ice_dcf (8086:1889) device: 0000:18:01.0 (socket 0)
+ice_load_pkg_type(): Active package is: 1.3.30.0, ICE COMMS Package (double VLAN mode)
+TELEMETRY: No legacy callbacks, legacy socket not created
+grpc server start ...
+now in server cycle
 ```
 ##### Creating Flow Configuration rules with Intel Ethernet Operator
 

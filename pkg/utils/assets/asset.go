@@ -17,12 +17,14 @@ import (
 	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 
 	"k8s.io/apimachinery/pkg/api/equality"
 	apierr "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apimachinery/pkg/util/yaml"
 
@@ -31,6 +33,8 @@ import (
 )
 
 const _BUFFER_SIZE = 4096
+
+var getConfigMap = getConfigMapData
 
 // ReadinessPollConfig stores config for waiting block
 // Use when deployment of an asset should wait until the asset is ready
@@ -47,6 +51,8 @@ type Asset struct {
 	// Path contains a filepath to the asset
 	Path string
 
+	ConfigMapName string
+
 	// BlockingReadiness stores polling configuration.
 	BlockingReadiness ReadinessPollConfig
 
@@ -57,7 +63,7 @@ type Asset struct {
 	log logr.Logger
 }
 
-func (a *Asset) load() error {
+func (a *Asset) loadFromFile() error {
 	cleanPath := filepath.Clean(a.Path)
 
 	fileInfo, err := os.Stat(cleanPath)
@@ -95,6 +101,30 @@ func (a *Asset) load() error {
 		a.objects = append(a.objects, obj)
 	}
 	return nil
+}
+
+func (a *Asset) loadFromConfigMap(ctx context.Context, c client.Client, ns string) error {
+	configMap, err := getConfigMap(ctx, c, a.ConfigMapName, ns)
+	if err != nil {
+		return err
+	}
+
+	a.clearAllObjects()
+
+	for _, objectDef := range configMap.Data {
+		r := strings.NewReader(objectDef)
+		decoder := yaml.NewYAMLOrJSONDecoder(r, _BUFFER_SIZE)
+		obj := new(unstructured.Unstructured)
+		if err := decoder.Decode(obj); err != nil {
+			return err
+		}
+		a.objects = append(a.objects, obj)
+	}
+	return nil
+}
+
+func (a *Asset) clearAllObjects() {
+	a.objects = nil
 }
 
 func (a *Asset) setOwner(owner metav1.Object, obj runtime.Object, s *runtime.Scheme) error {
@@ -171,7 +201,6 @@ func (a *Asset) createOrUpdate(ctx context.Context, c client.Client, o metav1.Ob
 		}
 
 	}
-
 	return nil
 }
 
@@ -212,6 +241,14 @@ func (a *Asset) waitUntilReady(ctx context.Context, apiReader client.Reader) err
 			return err
 		}
 	}
-
 	return nil
+}
+
+func getConfigMapData(ctx context.Context, c client.Client, cmName, ns string) (corev1.ConfigMap, error) {
+	configMap := corev1.ConfigMap{}
+	err := c.Get(ctx, types.NamespacedName{Name: cmName, Namespace: ns}, &configMap)
+	if err != nil {
+		return corev1.ConfigMap{}, err
+	}
+	return configMap, nil
 }

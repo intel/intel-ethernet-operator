@@ -8,39 +8,47 @@ import (
 )
 
 type DeviceSelector struct {
+	// VendorId of devices to be selected. If value is not set, then CLV cards with any VendorId are selected
 	VendorID string `json:"vendorId,omitempty"`
+	// DeviceId of devices to be selected. If value is not set, then CLV cards with any DeviceId are selected
 	DeviceID string `json:"deviceId,omitempty"`
 	// +kubebuilder:validation:Pattern=`^[a-fA-F0-9]{4}:[a-fA-F0-9]{2}:[01][a-fA-F0-9]\.[0-7]$`
+	// PciAdress of devices to be selected. If value is not set, then CLV cards with any PciAddress are selected
 	PCIAddress string `json:"pciAddress,omitempty"`
-	Driver     string `json:"driver,omitempty"`
 }
 
 type DeviceConfig struct {
-	// DDP package to be applied
+	// Path to .zip DDP package to be applied
 	// +kubebuilder:validation:Pattern=[a-zA-Z0-9\.\-\/]+
 	DDPURL string `json:"ddpURL,omitempty"`
+	// MD5 checksum of .zip DDP package
 	// +kubebuilder:validation:Pattern=`^[a-fA-F0-9]{32}$`
 	DDPChecksum string `json:"ddpChecksum,omitempty"`
 
-	// Firmware (NVMUpdate package) to be applied
+	// Path to .tar.gz Firmware (NVMUpdate package) to be applied
 	// +kubebuilder:validation:Pattern=[a-zA-Z0-9\.\-\/]+
 	FWURL string `json:"fwURL,omitempty"`
 	// +kubebuilder:validation:Pattern=`^[a-fA-F0-9]{32}$`
+	// MD5 checksum of .tar.gz Firmware
 	FWChecksum string `json:"fwChecksum,omitempty"`
 }
 
 // EthernetClusterConfigSpec defines the desired state of EthernetClusterConfig
 type EthernetClusterConfigSpec struct {
-	// Select the nodes
+	// Selector for nodes. If value is not set, then configuration is applied to all nodes with CLV cards in cluster
 	NodeSelector map[string]string `json:"nodeSelectors,omitempty"`
-	// Select the devices on nodes
+	// Selector for devices on nodes. If value is not set, then configuration is applied to all CLV cards on selected nodes
 	DeviceSelector DeviceSelector `json:"deviceSelector,omitempty"`
-
+	// Contains configuration which will be applied to selected devices
 	DeviceConfig DeviceConfig `json:"deviceConfig"`
 
-	Priority  int  `json:"priority,omitempty"`
+	// Higher priority policies can override lower ones.
+	//If several ClusterConfigs have same Priority, then operator will apply ClusterConfig with highest CreationTimestamp (newest one)
+	Priority int `json:"priority,omitempty"`
+	// Skips drain process when true; default false. Should be true if operator is running on SNO
 	DrainSkip bool `json:"drainSkip,omitempty"`
-	// Force reboot after DDP update. Recommended for clusters, on which ControlPlane is running on E810 cards.
+	// Force reboot after DDP update.
+	// Recommended for clusters, on which ControlPlane is running on E810 cards or if there are some application that are relying on ICE driver.
 	ForceReboot bool `json:"forceReboot,omitempty"`
 }
 
