@@ -56,7 +56,6 @@ func init() {
 
 // ClusterFlowRules struct for flow rules creation and validation
 type ClusterFlowRule struct {
-	// PortId  uint32               `json:"portId,omitempty"`
 	Attr    *FlowAttr            `json:"attr,omitempty"`
 	Pattern []*FlowItem          `json:"pattern,omitempty"`
 	Action  []*ClusterFlowAction `json:"action,omitempty"`

@@ -8,6 +8,7 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"strings"
 
 	"github.com/go-logr/logr"
@@ -17,6 +18,11 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/event"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -30,8 +36,11 @@ type ClusterFlowConfigReconciler struct {
 	client.Client
 	Log    logr.Logger
 	Scheme *runtime.Scheme
-	// one ClusterFlowConfig CR can influence on several NodeFlowConfigs, by adding one or more rules to new/existing instance
-	// will hold map[ClusterFlowConfig name] map[node where NodeFlowConfig was created][]hash to rules that were created
+	// one ClusterFlowConfig CR can influence on several NodeFlowConfigs, by adding one or more rules to new/existing instance of NodeFlowConfig
+	// above depends on the POD selector labels defined within ClusterFlowConfig
+	// This map is also usefull when ClusterFlowConfig is deleted. In normal case controller only would know the namespace and name of CR,
+	// but from this map it can find all NodeFlowConfigs that were affected (have rules defined by deleted ClusterFlowConfig)
+	// Will hold map[ClusterFlowConfig name] map[node where NodeFlowConfig was created][]hash to rules that were created
 	Cluster2NodeRulesHashMap map[types.NamespacedName]map[types.NamespacedName][]string
 }
 
@@ -42,6 +51,10 @@ type ClusterFlowConfigReconciler struct {
 func (r *ClusterFlowConfigReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	cfcLogger := r.Log.WithValues("Reconcile", req.NamespacedName)
 	cfcLogger.Info("Reconciling ClusterFlowConfig")
+	if r.Cluster2NodeRulesHashMap == nil {
+		r.Cluster2NodeRulesHashMap = make(map[types.NamespacedName]map[types.NamespacedName][]string)
+	}
+
 	if r.Cluster2NodeRulesHashMap == nil {
 		r.Cluster2NodeRulesHashMap = make(map[types.NamespacedName]map[types.NamespacedName][]string)
 	}
@@ -66,9 +79,9 @@ func (r *ClusterFlowConfigReconciler) Reconcile(ctx context.Context, req ctrl.Re
 		return ctrl.Result{}, err
 	}
 
-	err = r.syncClusterConfigForNodes(ctx, instance)
+	err = r.syncClusterConfigForNodes(ctx, instance, req)
 	if err != nil {
-		cfcLogger.Info("failed:", err)
+		cfcLogger.Info("failed:", "error", err)
 		return ctrl.Result{}, err
 	}
 
@@ -123,7 +136,7 @@ func (r *ClusterFlowConfigReconciler) cleanNodeFlowConfig(req ctrl.Request) erro
 	return nil
 }
 
-func (r *ClusterFlowConfigReconciler) syncClusterConfigForNodes(ctx context.Context, instance *flowconfigv1.ClusterFlowConfig) error {
+func (r *ClusterFlowConfigReconciler) syncClusterConfigForNodes(ctx context.Context, instance *flowconfigv1.ClusterFlowConfig, req ctrl.Request) error {
 	cfcLogger := r.Log.WithName("syncClusterConfigForNodes")
 	nodeToNodeFlowConfig := make(map[string]*flowconfigv1.NodeFlowConfig) // placeholder for node name to it's NodeFlowConfig API object
 
@@ -131,6 +144,12 @@ func (r *ClusterFlowConfigReconciler) syncClusterConfigForNodes(ctx context.Cont
 	podList, err := r.getPodsForPodSelector(ctx, instance)
 	if err != nil {
 		return err
+	}
+
+	if len(podList.Items) == 0 {
+		cfcLogger.Info("There is no PODs with labels defined in CR labels selector")
+		// there is no POD with that selector, check if there is NodeFlowConfig connected with it, if yes, remove rules from it
+		return r.cleanNodeFlowConfig(req)
 	}
 
 	// 1.1 Get all ClusterFlowConfigs with same PodSelector as PODs to be able to update correctly rules within NodeFlowConfigs
@@ -296,8 +315,8 @@ func (r *ClusterFlowConfigReconciler) updateNodeFlowConfigSpec(pod *corev1.Pod,
 			newRule := &flowconfigv1.FlowRules{}
 			newRule.Pattern = rule.DeepCopy().Pattern
 			newRule.Attr = rule.Attr
-			// newRule.PortId = portID // Cannot get portID for now; need to get this based on VF ID in the action
-			newRule.PortId = 0 // [TODO] Temporary hard-coded value for testing
+			// set PortId to invalid number, NodeFlowConfig controller based on interface name from POD selector will figure out PortId and fill it in.
+			newRule.PortId = invalidPortId
 
 			actions, err := r.getNodeActionsFromClusterActions(rule.Action, pod)
 			if err != nil {
@@ -443,9 +462,98 @@ func getPodInterfaceNameFromRawExtension(conf *runtime.RawExtension) (string, er
 	return podInterfaceName.NetInterfaceName, nil
 }
 
+func (r *ClusterFlowConfigReconciler) mapPodsToRequests(object client.Object) []reconcile.Request {
+	logger := r.Log.WithName("mapPodsToRequests")
+	reconcileRequests := make([]reconcile.Request, 0)
+
+	pod, ok := object.(*corev1.Pod)
+	if !ok {
+		logger.Info("Object passed to method is not a POD type")
+		return reconcileRequests
+	}
+
+	crList := &flowconfigv1.ClusterFlowConfigList{}
+	if err := r.Client.List(context.Background(), crList); err != nil {
+		if !errors.IsNotFound(err) {
+			logger.Info("unable to fetch custom resources", err)
+		}
+
+		return reconcileRequests
+	}
+
+	// check each instance of ClusterFlowConfig PodSelector against the POD labels
+	// and if labels from ClusterFlowConfig matches to labels in POD, add CR to reconcile request
+	for _, instance := range crList.Items {
+		var counter int
+		for key, valCr := range instance.Spec.PodSelector.MatchLabels {
+			valPod, ok := pod.Labels[key]
+			if !ok {
+				// do not check others - key does not exists
+				break
+			}
+
+			if valPod != valCr {
+				// do not check others - value does not match
+				break
+			}
+			counter++
+		}
+
+		// all labels from POD matches the POD selector defined within ClusterFlowConfig -> trigger reconcile on that CR
+		if len(instance.Spec.PodSelector.MatchLabels) == counter {
+			reconcileRequests = append(reconcileRequests, reconcile.Request{
+				NamespacedName: types.NamespacedName{
+					Name:      instance.Name,
+					Namespace: instance.Namespace,
+				},
+			})
+		}
+	}
+
+	return reconcileRequests
+}
+
+func (r *ClusterFlowConfigReconciler) getPodFilterPredicates() predicate.Predicate {
+	pred := predicate.Funcs{
+		// Create returns true if the Create event should be processed
+		CreateFunc: func(e event.CreateEvent) bool {
+			return true
+		},
+
+		// Delete returns true if the Delete event should be processed
+		DeleteFunc: func(e event.DeleteEvent) bool {
+			return true
+		},
+
+		// Update returns true if the Update event should be processed
+		UpdateFunc: func(e event.UpdateEvent) bool {
+			if newPod, ok := e.ObjectNew.(*corev1.Pod); ok {
+				if oldPod, ok := e.ObjectOld.(*corev1.Pod); ok {
+					// process event only when labels are different
+					return !reflect.DeepEqual(newPod.ObjectMeta.Labels, oldPod.ObjectMeta.Labels)
+				}
+			}
+
+			return true
+		},
+
+		// Generic returns true if the Generic event should be processed
+		GenericFunc: func(e event.GenericEvent) bool {
+			return false
+		},
+	}
+
+	return pred
+}
+
 // SetupWithManager sets up the controller with the Manager.
 func (r *ClusterFlowConfigReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&flowconfigv1.ClusterFlowConfig{}).
+		Watches(
+			&source.Kind{Type: &corev1.Pod{}},
+			handler.EnqueueRequestsFromMapFunc(r.mapPodsToRequests),
+		).
+		WithEventFilter(r.getPodFilterPredicates()).
 		Complete(r)
 }

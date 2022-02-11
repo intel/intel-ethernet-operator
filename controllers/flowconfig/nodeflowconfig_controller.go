@@ -380,7 +380,9 @@ func (r *NodeFlowConfigReconciler) getFlowCreateRequests(fr *flowconfigv1.FlowRu
 		rteFlowCreateRequests.Attr = fAttr
 	}
 
-	// 4 - Get port information - ClusterFlowConfig controller should assing defined value to portId if not specified by user in CR
+	// 4 - Get port information
+	// - ClusterFlowConfig controller will always assing invalid value to portId, so in result NodeFlowConfig is responsible for filling in portID
+	// - if NodeFlowConfig will be created manually, user has option to set portID, controller will not get it from DCF
 	if fr.PortId != invalidPortId {
 		rteFlowCreateRequests.PortId = fr.PortId
 	} else {
