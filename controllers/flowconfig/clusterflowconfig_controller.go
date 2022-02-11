@@ -55,10 +55,6 @@ func (r *ClusterFlowConfigReconciler) Reconcile(ctx context.Context, req ctrl.Re
 		r.Cluster2NodeRulesHashMap = make(map[types.NamespacedName]map[types.NamespacedName][]string)
 	}
 
-	if r.Cluster2NodeRulesHashMap == nil {
-		r.Cluster2NodeRulesHashMap = make(map[types.NamespacedName]map[types.NamespacedName][]string)
-	}
-
 	instance := &flowconfigv1.ClusterFlowConfig{}
 	err := r.Get(ctx, req.NamespacedName, instance)
 	if err != nil {
