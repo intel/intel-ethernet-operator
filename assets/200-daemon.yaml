@@ -134,23 +134,23 @@ data:
                 - name: libmodules
                   mountPath: /lib/modules
               env:
-                {{ if .NO_PROXY }}
+                {{ if ne .NO_PROXY "" }}
                 - name: NO_PROXY
                   value: {{ .NO_PROXY }}
                 - name: no_proxy
-                  value: {{ .NO_PROXY }}
+                  value: {{ .NO_PROXY  }}
                 {{ end }}
-                {{ if .HTTP_PROXY }}
+                {{ if ne .HTTP_PROXY "" }}
                 - name: HTTP_PROXY
                   value: {{ .HTTP_PROXY }}
                 - name: http_proxy
-                  value: {{ .HTTP_PROXY }}
+                  value: {{ .HTTP_PROXY  }}
                 {{ end }}
-                {{ if .HTTPS_PROXY }}
+                {{ if ne .HTTPS_PROXY "" }}
                 - name: HTTPS_PROXY
-                  value: {{ .HTTPS_PROXY }}
+                  value: {{ .HTTPS_PROXY  }}
                 - name: https_proxy
-                  value: {{ .HTTPS_PROXY }}
+                  value: {{ .HTTPS_PROXY  }}
                 {{ end }}
                 - name: ETHERNET_NAMESPACE
                   valueFrom:

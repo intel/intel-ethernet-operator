@@ -14,6 +14,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
+var proxies = []string{"HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY"}
+
 // Manager loads & deploys assets specified in the Asset field
 type Manager struct {
 	Client    client.Client
@@ -45,13 +47,25 @@ func (m *Manager) buildTemplateVars() (map[string]string, error) {
 		}
 	}
 
+	for _, proxy := range proxies {
+		if _, exists := tp[proxy]; !exists {
+			tp[proxy] = ""
+		}
+	}
+
 	return tp, nil
 }
 
 func isProxy(name string) bool {
 	//ignores lowercase proxy settings because our operator only sets/reads uppercase values
 	// and OCP proxy/cluster object sets uppercase proxy
-	return name == "HTTP_PROXY" || name == "HTTPS_PROXY" || name == "NO_PROXY"
+
+	for _, proxy := range proxies {
+		if name == proxy {
+			return true
+		}
+	}
+	return false
 }
 
 // DeployConfigMaps issues an asset load from the path and then deployment
