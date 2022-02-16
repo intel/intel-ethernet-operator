@@ -152,6 +152,12 @@ data:
                 - name: https_proxy
                   value: {{ .HTTPS_PROXY  }}
                 {{ end }}
+                - name: ETHERNET_GENERIC_K8S
+                  valueFrom:
+                    configMapKeyRef:
+                      optional: true
+                      name: operator-configuration
+                      key: isGeneric
                 - name: ETHERNET_NAMESPACE
                   valueFrom:
                     fieldRef:

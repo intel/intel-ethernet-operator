@@ -58,10 +58,10 @@ spec:
         resources:
           limits:
             cpu: 100m
-            memory: 30Mi
+            memory: 200Mi
           requests:
             cpu: 100m
-            memory: 20Mi
+            memory: 200Mi
         env:
         - name: ETHERNET_NODE_LABEL
           value: "ethernet.intel.com/intel-ethernet-present"
@@ -73,5 +73,11 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: metadata.namespace
+        - name: ETHERNET_GENERIC_K8S
+          valueFrom:
+            configMapKeyRef:
+              optional: true
+              name: operator-configuration
+              key: isGeneric
       serviceAccountName: controller-manager
       terminationGracePeriodSeconds: 10

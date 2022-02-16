@@ -6,6 +6,7 @@ package main
 import (
 	"context"
 	"flag"
+	"github.com/otcshare/intel-ethernet-operator/pkg/utils"
 	"os"
 	"time"
 
@@ -126,19 +127,22 @@ func main() {
 		setupLog.Error(err, "unable to get operator deployment")
 		os.Exit(1)
 	}
+	assetsToDeploy := []assets.Asset{
+		{ConfigMapName: "labeler-config", Path: "assets/100-labeler.yaml"},
+		{ConfigMapName: "daemon-config", Path: "assets/200-daemon.yaml", BlockingReadiness: assets.ReadinessPollConfig{Retries: 30, Delay: 20 * time.Second}},
+	}
+	if !utils.IsK8sDeployment() {
+		assetsToDeploy = append(assetsToDeploy, assets.Asset{ConfigMapName: "machine-config", Path: "assets/300-machine-config.yaml"})
+	}
 
 	assetsManager := &assets.Manager{
 		Client:    adHocClient,
 		Namespace: fwddp_manager.NAMESPACE,
 		Log:       ctrl.Log.WithName("manager"),
-		EnvPrefix: "ETHERNET_",
+		EnvPrefix: utils.IeoPrefix,
 		Scheme:    scheme,
 		Owner:     owner,
-		Assets: []assets.Asset{
-			{ConfigMapName: "labeler-config", Path: "assets/100-labeler.yaml"},
-			{ConfigMapName: "daemon-config", Path: "assets/200-daemon.yaml", BlockingReadiness: assets.ReadinessPollConfig{Retries: 30, Delay: 20 * time.Second}},
-			{ConfigMapName: "machine-config", Path: "assets/300-machine-config.yaml"},
-		},
+		Assets:    assetsToDeploy,
 	}
 
 	if err := assetsManager.DeployConfigMaps(context.Background()); err != nil {

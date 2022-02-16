@@ -22,7 +22,8 @@ var (
 	// /var/lib/firmware comes from modified kernel argument, which allows OS to read DDP profile from that path.
 	// This is done because on RHCOS /lib/firmware/* path is read-only
 	// intel/ice/ddp is default path for ICE *.pkg files
-	ddpUpdateFolder = "/host/var/lib/firmware/intel/ice/ddp/"
+	ocpDdpUpdatePath = "/host/var/lib/firmware/intel/ice/ddp/"
+	k8sDdpUpdatePath = "/host/lib/firmware/updates/intel/ice/ddp"
 )
 
 type ddpUpdater struct {
@@ -56,11 +57,11 @@ func (d *ddpUpdater) handleDDPUpdate(pciAddr string, forceReboot bool, ddpPath s
 }
 
 // ddpProfilePath is the path to our extracted DDP profile
-// we copy it to ddpUpdateFolder
+// we copy it to ocpDdpUpdatePath or k8sDdpUpdatePath
 func (d *ddpUpdater) updateDDP(pciAddr, ddpProfilePath string) error {
 	log := d.log.WithName("updateDDP")
 
-	err := os.MkdirAll(ddpUpdateFolder, 0600)
+	err := os.MkdirAll(d.getDdpUpdatePath(), 0600)
 	if err != nil {
 		return err
 	}
@@ -75,7 +76,7 @@ func (d *ddpUpdater) updateDDP(pciAddr, ddpProfilePath string) error {
 		return fmt.Errorf("failed to extract devId")
 	}
 
-	target := filepath.Join(ddpUpdateFolder, "ice-"+devId+".pkg")
+	target := filepath.Join(d.getDdpUpdatePath(), "ice-"+devId+".pkg")
 	log.V(4).Info("Copying", "source", ddpProfilePath, "target", target)
 
 	return utils.CopyFile(ddpProfilePath, target)
@@ -114,8 +115,24 @@ func (d *ddpUpdater) prepareDDP(config ethernetv1.DeviceNodeConfig) (string, err
 	return findDdp(targetPath)
 }
 
+func (d *ddpUpdater) getDdpUpdatePath() string {
+	if utils.IsK8sDeployment() {
+		return k8sDdpUpdatePath
+	}
+	return ocpDdpUpdatePath
+}
+
 func reloadIceService() error {
-	cmd := exec.Command("chroot", "/host", "systemctl", "restart", "oot-ice-driver-load")
+	var cmd *exec.Cmd
+	if utils.IsK8sDeployment() {
+		unloadCmd := exec.Command("chroot", "/host", "modprobe", "-r", "ice")
+		if err := unloadCmd.Run(); err != nil {
+			return fmt.Errorf("failed to unload ice module - %v", err)
+		}
+		cmd = exec.Command("chroot", "/host", "modprobe", "ice")
+	} else {
+		cmd = exec.Command("chroot", "/host", "systemctl", "restart", "oot-ice-driver-load")
+	}
 	return cmd.Run()
 }
 

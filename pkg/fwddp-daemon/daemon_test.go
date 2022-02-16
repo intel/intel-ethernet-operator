@@ -832,7 +832,7 @@ var _ = Describe("DaemonTests", func() {
 			findDdp = func(targetPath string) (string, error) {
 				return tempFile.Name(), nil
 			}
-			ddpUpdateFolder = "/tmp"
+			ocpDdpUpdatePath = "/tmp"
 			reloadIceServiceP = func() error { return nil }
 
 			wasRebootCalled := false
@@ -884,7 +884,7 @@ var _ = Describe("DaemonTests", func() {
 			findDdp = func(targetPath string) (string, error) {
 				return tempFile.Name(), nil
 			}
-			ddpUpdateFolder = "/tmp"
+			ocpDdpUpdatePath = "/tmp"
 
 			wasRebootCalled := false
 

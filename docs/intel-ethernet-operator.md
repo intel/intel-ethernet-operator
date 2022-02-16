@@ -169,23 +169,30 @@ To build the Operator the images must be built from source, in order to build ex
 
 > Note: The arguments are to be replaced with the following:
 >
-> * VERSION is the version to be applied to the bundle ie. `0.0.1`.
-> * IMAGE_REGISTRY is the address of the registry where the build images are to be pushed to ie. `my.private.registry.com`.
-> * TLS_VERIFY defines whether connection to registry need TLS verification, default is `false`.
-
+* VERSION is the version to be applied to the bundle ie. `0.0.1`.
+* IMAGE_REGISTRY is the address of the registry where the build images are to be pushed to ie. `my.private.registry.com`.
+* TLS_VERIFY defines whether connection to registry need TLS verification, default is `false`.
+* TARGET_PLATFORM specifiec platform for which operator will be build. Supported values are `OCP` and `K8S`. If operator is built for other platform than `OCP`, 
+then user has to manually install sriov-network-operator as described [on sriov-network-operator page](https://github.com/k8snetworkplumbingwg/sriov-network-operator). Default is `OCP` 
 ```shell
 # cd intel-ethernet-operator
-# make VERSION=$(VERSION) IMAGE_REGISTRY=$(IMAGE_REGISTRY) TLS_VERIFY=$(TLS_VERIFY) build_all push_all catalog-build catalog-push
+# make VERSION=$(VERSION) IMAGE_REGISTRY=$(IMAGE_REGISTRY) TLS_VERIFY=$(TLS_VERIFY) TARGET_PLATFORM=$(TARGET_PLATFORM) build_all push_all catalog-build catalog-push
 ```
 
 ### Installing the Bundle
-
+If operator is being installed on Kubernetes then run following steps using `kubectl` binary instead of `oc` and running Kubernetes specific steps marked as (KUBERNETES).  
+If operator is being installed on Openshift skip steps marked as (KUBERNETES).  
 Once the operator images are built and accessible inside the cluster the operator is to be installed by running the following:
 
-Create a namespace for the operator:
-
+Create a namespace for the operator:  
 ```shell
 # oc create ns intel-ethernet-operator
+```
+
+(KUBERNETES): Install Operator Lifecycle Manager (OLM) on cluster by downloading [Operator SDK](https://sdk.operatorframework.io/docs/installation/)
+and running
+```shell
+operator-sdk olm install
 ```
 
 Create the following `Catalog Source` `yaml` file:
@@ -213,7 +220,16 @@ Create the `Catalog Source`
 ```shell
 # oc apply -f <filename>
 ```
-
+(KUBERNETES): Create config map that will use kubernetes version of operator
+```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  namespace: intel-ethernet-operator
+  name: operator-configuration
+data:
+  isGeneric: "true"
+```
 Create the following `yaml` files including `Subscription` and `OperatorGroup`:
 
 ```yaml

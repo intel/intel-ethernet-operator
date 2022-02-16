@@ -37,6 +37,12 @@ type SupportedDevice struct {
 const (
 	configFilesizeLimitInBytes = 10485760 //10 MB
 )
+const IeoPrefix = "ETHERNET_"
+
+func IsK8sDeployment() bool {
+	value := os.Getenv(IeoPrefix + "GENERIC_K8S")
+	return strings.ToLower(value) == "true"
+}
 
 func LoadSupportedDevices(cfgPath string, inStruct interface{}) error {
 	file, err := OpenNoLinks(filepath.Clean(cfgPath))

@@ -15,6 +15,7 @@ VERSION ?= 0.0.1
 # Set default K8CLI tool to 'oc' if it's not defined. To change this you can export this in env. e.g., export K8CLI=kubectl
 K8CLI ?= oc
 
+TARGET_PLATFORM ?= OCP
 # Set default IMGTOOL tool to 'podman' if it's not defined. To change this you can export this in env. e.g., export IMGTOOL=docker
 IMGTOOL ?= podman
 
@@ -261,7 +262,14 @@ bundle: manifests kustomize flowconfig-manifests ## Generate bundle manifests an
 	operator-sdk generate kustomize manifests -q
 	cd config/manager && $(KUSTOMIZE) edit set image controller=$(ETHERNET_MANAGER_IMAGE)
 	$(KUSTOMIZE) build config/manifests | envsubst | operator-sdk generate bundle -q --overwrite --version $(VERSION) $(BUNDLE_METADATA_OPTS)
+ifeq ("$(TARGET_PLATFORM)", "OCP")
 	cp config/metadata/bases/dependencies.yaml bundle/metadata/dependencies.yaml
+	yq '.spec.volumes[1].hostPath.path="/var/lib/firmware/intel/ice/ddp"' config/flowconfig-daemon/add_volumes.yaml --yml-output > config/flowconfig-daemon/add_volumes.yaml.tmp
+else
+	rm -f bundle/metadata/dependencies.yaml
+	yq '.spec.volumes[1].hostPath.path="/lib/firmware/updates/intel/ice/ddp"' config/flowconfig-daemon/add_volumes.yaml --yml-output > config/flowconfig-daemon/add_volumes.yaml.tmp
+endif
+	mv config/flowconfig-daemon/add_volumes.yaml.tmp config/flowconfig-daemon/add_volumes.yaml
 	operator-sdk bundle validate ./bundle
 	FOLDER=. COPYRIGHT_FILE=COPYRIGHT ./copyright.sh
 	cat COPYRIGHT bundle.Dockerfile >bundle.tmp
