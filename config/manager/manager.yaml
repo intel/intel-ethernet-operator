@@ -27,6 +27,13 @@ spec:
     spec:
       securityContext:
         runAsNonRoot: true
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              control-plane: controller-manager
       containers:
       - command:
         - /manager
