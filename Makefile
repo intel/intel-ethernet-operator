@@ -264,6 +264,7 @@ bundle: manifests kustomize flowconfig-manifests ## Generate bundle manifests an
 	$(KUSTOMIZE) build config/manifests | envsubst | operator-sdk generate bundle -q --overwrite --version $(VERSION) $(BUNDLE_METADATA_OPTS)
 ifeq ("$(TARGET_PLATFORM)", "OCP")
 	cp config/metadata/bases/dependencies.yaml bundle/metadata/dependencies.yaml
+	# this is Python's yq which could be installed by running `pip3 install yq`. Go version of yq will not work.
 	yq '.spec.volumes[1].hostPath.path="/var/lib/firmware/intel/ice/ddp"' config/flowconfig-daemon/add_volumes.yaml --yml-output > config/flowconfig-daemon/add_volumes.yaml.tmp
 else
 	rm -f bundle/metadata/dependencies.yaml

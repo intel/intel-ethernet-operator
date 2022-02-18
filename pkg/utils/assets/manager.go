@@ -38,7 +38,6 @@ type Manager struct {
 // from cluster such as kernel
 func (m *Manager) buildTemplateVars() (map[string]string, error) {
 	tp := make(map[string]string)
-	tp[m.EnvPrefix+"GENERIC_K8S"] = "false"
 
 	for _, pair := range os.Environ() {
 		kv := strings.Split(pair, "=")

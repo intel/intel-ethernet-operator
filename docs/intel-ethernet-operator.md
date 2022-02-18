@@ -220,16 +220,6 @@ Create the `Catalog Source`
 ```shell
 # oc apply -f <filename>
 ```
-(KUBERNETES): Create config map that will use kubernetes version of operator
-```yaml
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  namespace: intel-ethernet-operator
-  name: operator-configuration
-data:
-  isGeneric: "true"
-```
 Create the following `yaml` files including `Subscription` and `OperatorGroup`:
 
 ```yaml

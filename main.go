@@ -6,7 +6,10 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"github.com/otcshare/intel-ethernet-operator/pkg/utils"
+	"k8s.io/client-go/discovery"
+	"k8s.io/client-go/rest"
 	"os"
 	"time"
 
@@ -127,6 +130,13 @@ func main() {
 		setupLog.Error(err, "unable to get operator deployment")
 		os.Exit(1)
 	}
+
+	err = getClusterType(restConfig)
+	if err != nil {
+		setupLog.Error(err, "unable to determine cluster type")
+		os.Exit(1)
+	}
+
 	assetsToDeploy := []assets.Asset{
 		{ConfigMapName: "labeler-config", Path: "assets/100-labeler.yaml"},
 		{ConfigMapName: "daemon-config", Path: "assets/200-daemon.yaml", BlockingReadiness: assets.ReadinessPollConfig{Retries: 30, Delay: 20 * time.Second}},
@@ -160,4 +170,35 @@ func main() {
 		setupLog.Error(err, "problem running manager")
 		os.Exit(1)
 	}
+}
+
+func getClusterType(restConfig *rest.Config) error {
+	discoveryClient, err := discovery.NewDiscoveryClientForConfig(restConfig)
+	if err != nil {
+		return fmt.Errorf("failed to create discoveryClient - %v", err)
+	}
+
+	apiList, err := discoveryClient.ServerGroups()
+	if err != nil {
+		return fmt.Errorf("issue occurred while fetching ServerGroups - %v", err)
+	}
+
+	for _, v := range apiList.Groups {
+		if v.Name == "route.openshift.io" {
+			setupLog.Info("found 'route.openshift.io' API - operator is running on OpenShift")
+			err := os.Setenv("ETHERNET_GENERIC_K8S", "false")
+			if err != nil {
+				return fmt.Errorf("failed to set ETHERNET_GENERIC_K8S env variable - %v", err)
+			}
+			return nil
+		}
+	}
+
+	setupLog.Info("couldn't find 'route.openshift.io' API - operator is running on Kubernetes")
+	err = os.Setenv("ETHERNET_GENERIC_K8S", "true")
+	if err != nil {
+		return fmt.Errorf("failed to set ETHERNET_GENERIC_K8S env variable - %v", err)
+	}
+
+	return nil
 }
