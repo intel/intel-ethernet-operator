@@ -24,6 +24,7 @@ Copyright (c) 2021 Intel Corporation
   - [Build the Operator from source](#build-the-operator-from-source)
   - [Installing the Bundle](#installing-the-bundle)
   - [Applying custom resources](#applying-custom-resources)
+    - [Webserver for disconnected environment](#webserver-for-disconnected-environment)
     - [Updating Firmware](#updating-firmware)
     - [Updating DDP](#updating-ddp)
     - [Deploy Flow Configuration agent](#deploy-flow-configuration-agent)
@@ -281,6 +282,83 @@ sriov-network-operator-78cf54b79d-ll9nz                       1/1     Running   
 
 Once the operator is successfully deployed, the user interacts with it by creating CRs which will be interpreted by the operator.
 
+#### Webserver for disconnected environment
+
+If cluster is running in disconnected environment, then user has to create local cache (e.g webserver) which will serve required files.
+Cache should be created on machine with access to Internet.  
+Start by creating dedicated folder for webserver.
+```shell
+mkdir webserver
+cd webserver
+```
+Create nginx Dockerfile
+```shell
+echo "
+FROM nginx
+COPY files /usr/share/nginx/html
+" >> Dockerfile
+```
+Create `files` folder
+```
+mkdir files
+cd files
+```
+Download required packages into `files` directory
+```
+curl -OjL https://downloadmirror.intel.com/709692/E810_NVMUpdatePackage_v3_10_Linux.tar.gz
+```
+
+Build image with packages
+```shell
+cd ..
+podman build -t webserver:1.0.0 .
+```
+Push image to registry that is available in disconnected environment (or copy binary image to machine via USB flash driver by using `podman save` and `podman load` commands)
+```shell
+podman push localhost/webserver:1.0.0 $IMAGE_REGISTRY/webserver:1.0.0
+```
+Create Deployment on cluster that will expose packages
+```shell
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ice-cache
+  namespace: default
+spec:
+  selector:
+    matchLabels:
+      run: ice-cache
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        run: ice-cache
+    spec:
+      containers:
+        - name: ice-cache
+          image: $IMAGE_REGISTRY/webserver:1.0.0
+          ports:
+            - containerPort: 80
+```
+
+And Service to make it accessible within cluster
+```shell
+apiVersion: v1
+kind: Service
+metadata:
+  name: ice-cache
+  namespace: default
+  labels:
+    run: ice-cache
+spec:
+  ports:
+  - port: 80
+    protocol: TCP
+  selector:
+    run: ice-cache
+```
+After that package will be available in cluster under following path:   
+```http://ice-cache.default.svc.cluster.local/E810_NVMUpdatePackage_v3_10_Linux.tar.gz```
 #### Updating Firmware
 
 To find the NIC devices belonging to the Intel® E810 NIC run following command, the user can detect the device information of the NICs from the output:
