@@ -5,9 +5,10 @@ package main
 
 import (
 	"flag"
+	configv1 "github.com/openshift/api/config/v1"
+	ethernetv1 "github.com/otcshare/intel-ethernet-operator/apis/ethernet/v1"
 	"os"
 
-	ethernetv1 "github.com/otcshare/intel-ethernet-operator/apis/ethernet/v1"
 	daemon "github.com/otcshare/intel-ethernet-operator/pkg/fwddp-daemon"
 
 	"k8s.io/apimachinery/pkg/runtime"
@@ -27,6 +28,7 @@ var (
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 	utilruntime.Must(ethernetv1.AddToScheme(scheme))
+	utilruntime.Must(configv1.Install(scheme))
 }
 
 func main() {

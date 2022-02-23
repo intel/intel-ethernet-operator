@@ -45,8 +45,6 @@ type EthernetClusterConfigSpec struct {
 	// Higher priority policies can override lower ones.
 	//If several ClusterConfigs have same Priority, then operator will apply ClusterConfig with highest CreationTimestamp (newest one)
 	Priority int `json:"priority,omitempty"`
-	// Skips drain process when true; default false. Should be true if operator is running on SNO
-	DrainSkip bool `json:"drainSkip,omitempty"`
 	// Force reboot after DDP update.
 	// Recommended for clusters, on which ControlPlane is running on E810 cards or if there are some application that are relying on ICE driver.
 	ForceReboot bool `json:"forceReboot,omitempty"`

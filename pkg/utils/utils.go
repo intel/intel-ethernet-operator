@@ -7,6 +7,7 @@ import (
 	"archive/tar"
 	"archive/zip"
 	"compress/gzip"
+	"context"
 	"crypto/md5"
 	"encoding/hex"
 	"encoding/json"
@@ -14,16 +15,20 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"strings"
 	"syscall"
 
 	ethernetv1 "github.com/otcshare/intel-ethernet-operator/apis/ethernet/v1"
 
 	"github.com/go-logr/logr"
+	configv1 "github.com/openshift/api/config/v1"
 )
 
 type SupportedDevices map[string]SupportedDevice
@@ -39,9 +44,36 @@ const (
 )
 const IeoPrefix = "ETHERNET_"
 
+func GetDrainSkip(nodes *corev1.NodeList, client client.Client, log logr.Logger) (bool, error) {
+	if IsK8sDeployment() {
+		if len(nodes.Items) <= 1 {
+			log.Info("found only 0 or 1 node(s) with CLV label in cluster - operator is running on SNO")
+			return true, nil
+		}
+		log.Info("found several nodes with CLV label in cluster - operator is running on Cluster deployment", "nodes", len(nodes.Items))
+		return false, nil
+	}
+	return IsOpenshiftSno(client, log)
+}
+
 func IsK8sDeployment() bool {
 	value := os.Getenv(IeoPrefix + "GENERIC_K8S")
 	return strings.ToLower(value) == "true"
+}
+
+func IsOpenshiftSno(c client.Client, log logr.Logger) (bool, error) {
+	infra := &configv1.Infrastructure{}
+
+	defaultInfraName := "cluster"
+	err := c.Get(context.TODO(), types.NamespacedName{Name: defaultInfraName}, infra)
+	if err != nil {
+		return false, err
+	}
+	if infra == nil {
+		return false, fmt.Errorf("getting resource Infrastructure (name: %s) succeeded but object was nil", defaultInfraName)
+	}
+	log.Info("OCP cluster infrastructure", "infra", infra.Status.ControlPlaneTopology)
+	return infra.Status.ControlPlaneTopology == configv1.SingleReplicaTopologyMode, nil
 }
 
 func LoadSupportedDevices(cfgPath string, inStruct interface{}) error {

@@ -5,6 +5,7 @@ package flowconfig
 
 import (
 	"fmt"
+	configv1 "github.com/openshift/api/config/v1"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -100,6 +101,9 @@ var _ = BeforeSuite(func() {
 	Expect(cfg).ToNot(BeNil())
 
 	err = flowconfigv1.AddToScheme(scheme.Scheme)
+	Expect(err).NotTo(HaveOccurred())
+
+	err = configv1.Install(scheme.Scheme)
 	Expect(err).NotTo(HaveOccurred())
 
 	// +kubebuilder:scaffold:scheme

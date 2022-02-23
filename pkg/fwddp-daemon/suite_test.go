@@ -4,6 +4,8 @@
 package daemon
 
 import (
+	configv1 "github.com/openshift/api/config/v1"
+	ethernetv1 "github.com/otcshare/intel-ethernet-operator/apis/ethernet/v1"
 	"os"
 	"path/filepath"
 	"testing"
@@ -19,8 +21,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/envtest/printer"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
-
-	ethernetv1 "github.com/otcshare/intel-ethernet-operator/apis/ethernet/v1"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -54,6 +54,9 @@ var _ = BeforeSuite(func() {
 	Expect(config).ToNot(BeNil())
 
 	err = ethernetv1.AddToScheme(scheme.Scheme)
+	Expect(err).NotTo(HaveOccurred())
+
+	err = configv1.Install(scheme.Scheme)
 	Expect(err).NotTo(HaveOccurred())
 
 	// +kubebuilder:scaffold:scheme

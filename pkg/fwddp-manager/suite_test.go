@@ -4,8 +4,11 @@
 package fwddp_manager
 
 import (
+	"github.com/go-logr/logr"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	configv1 "github.com/openshift/api/config/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"path/filepath"
@@ -52,7 +55,13 @@ var _ = BeforeSuite(func() {
 	err = ethernetv1.AddToScheme(scheme.Scheme)
 	Expect(err).NotTo(HaveOccurred())
 
+	err = configv1.Install(scheme.Scheme)
+	Expect(err).NotTo(HaveOccurred())
 	//+kubebuilder:scaffold:scheme
+
+	getDrainSkip = func(nodes *corev1.NodeList, client client.Client, log logr.Logger) (bool, error) {
+		return true, nil
+	}
 
 	k8sClient, err = client.New(cfg, client.Options{Scheme: scheme.Scheme})
 	Expect(err).NotTo(HaveOccurred())

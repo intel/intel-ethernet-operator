@@ -283,6 +283,10 @@ var _ = Describe("Utils", func() {
 				})
 			Expect(err).ToNot(HaveOccurred())
 
+			for idx := range filenames {
+				filenames[idx] = strings.ReplaceAll(filenames[idx], "./", "")
+				untaredFilenames[idx] = strings.ReplaceAll(untaredFilenames[idx], "./", "")
+			}
 			sort.Strings(filenames)
 			sort.Strings(untaredFilenames)
 
@@ -534,7 +538,7 @@ func testTar() (string, []string, error) {
 			header, err := tar.FileInfoHeader(info, info.Name())
 			Expect(err).ToNot(HaveOccurred())
 
-			header.Name = filepath.Join(tmpdir, strings.TrimPrefix(path, tmpdir))
+			header.Name = filepath.Join(tmpdir, strings.TrimPrefix(strings.ReplaceAll(path, "./", ""), strings.ReplaceAll(tmpdir, "./", "")))
 			err = tw.WriteHeader(header)
 			Expect(err).ToNot(HaveOccurred())
 
