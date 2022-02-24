@@ -45,9 +45,6 @@ type EthernetClusterConfigSpec struct {
 	// Higher priority policies can override lower ones.
 	//If several ClusterConfigs have same Priority, then operator will apply ClusterConfig with highest CreationTimestamp (newest one)
 	Priority int `json:"priority,omitempty"`
-	// Force reboot after DDP update.
-	// Recommended for clusters, on which ControlPlane is running on E810 cards or if there are some application that are relying on ICE driver.
-	ForceReboot bool `json:"forceReboot,omitempty"`
 }
 
 // EthernetClusterConfigStatus defines the observed state of EthernetClusterConfig

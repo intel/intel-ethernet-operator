@@ -269,7 +269,7 @@ func (r *NodeConfigReconciler) configureNode(updateQueue deviceUpdateQueue, node
 
 	drainFunc := func(ctx context.Context) bool {
 		fwReboot := false
-		rebootRequired = nodeConfig.Spec.ForceReboot
+		ddpReboot := false
 
 		for pciAddr, artifacts := range updateQueue {
 			fwReboot, nodeActionErr = r.fwUpdater.handleFWUpdate(pciAddr, artifacts.fwPath)
@@ -277,12 +277,12 @@ func (r *NodeConfigReconciler) configureNode(updateQueue deviceUpdateQueue, node
 				return true
 			}
 
-			rebootRequired = rebootRequired || fwReboot
-
-			nodeActionErr = r.ddpUpdater.handleDDPUpdate(pciAddr, nodeConfig.Spec.ForceReboot, artifacts.ddpPath)
+			ddpReboot, nodeActionErr = r.ddpUpdater.handleDDPUpdate(pciAddr, artifacts.ddpPath)
 			if nodeActionErr != nil {
 				return true
 			}
+
+			rebootRequired = fwReboot || ddpReboot
 		}
 
 		if rebootRequired {

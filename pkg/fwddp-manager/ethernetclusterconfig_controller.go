@@ -195,7 +195,6 @@ func (r *EthernetClusterConfigReconciler) synchronizeNodeConfigSpec(ncc NodeConf
 		dnc.DeviceConfig = cc.Spec.DeviceConfig
 		newNodeConfig.Spec.Config = append(newNodeConfig.Spec.Config, dnc)
 		newNodeConfig.Spec.DrainSkip = newNodeConfig.Spec.DrainSkip || drainSkip
-		newNodeConfig.Spec.ForceReboot = newNodeConfig.Spec.ForceReboot || cc.Spec.ForceReboot
 	}
 
 	if !equality.Semantic.DeepDerivative(newNodeConfig.Spec, currentNodeConfig.Spec) {

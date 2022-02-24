@@ -120,7 +120,6 @@ var _ = Describe("DaemonTests", func() {
 		}
 
 		artifactsFolder = "./workdir/nvmupdate/"
-		reloadIceServiceP = reloadIceService
 	})
 
 	var _ = Context("Reconciler", func() {
@@ -814,63 +813,11 @@ var _ = Describe("DaemonTests", func() {
 			Expect(nodeConfigs.Items[0].Status.Conditions[0].Message).To(ContainSubstring("expected to find exactly 1 file ending with '.pkg', but found 0"))
 		})
 
-		var _ = It("will try to update DDP successfully without rebooting", func() {
+		var _ = It("will force reboot node on successful DDP update", func() {
 			Expect(k8sClient.Create(context.TODO(), &data.Node)).To(Succeed())
 
 			data.NodeConfig.Spec.Config[0].DeviceConfig.FWURL = ""
 			data.NodeConfig.Spec.Config[0].DeviceConfig.DDPURL = "http://testddpurl"
-			Expect(k8sClient.Create(context.TODO(), &data.NodeConfig)).To(Succeed())
-
-			data.Inventory[0].PCIAddress = "0000:00:00.1"
-
-			Expect(initReconciler(reconciler, data.NodeConfig.Name, data.NodeConfig.Namespace)).To(Succeed())
-
-			tempFile, err := ioutil.TempFile("/tmp", "daemontest")
-			Expect(err).To(Succeed())
-			defer tempFile.Close()
-
-			findDdp = func(targetPath string) (string, error) {
-				return tempFile.Name(), nil
-			}
-			ocpDdpUpdatePath = "/tmp"
-			reloadIceServiceP = func() error { return nil }
-
-			wasRebootCalled := false
-
-			execCmd = func(args []string, log logr.Logger) (string, error) {
-				for _, part := range args {
-					if part == "ethernet-daemon-reboot" {
-						wasRebootCalled = true
-					}
-					if strings.Contains(part, "Device Serial") {
-						return "devId\n", nil
-					}
-				}
-				return "", nil
-			}
-
-			_, err = reconciler.Reconcile(context.TODO(), ctrl.Request{NamespacedName: types.NamespacedName{
-				Namespace: data.NodeConfig.Namespace,
-				Name:      data.NodeConfig.Name,
-			}})
-			Expect(err).ToNot(HaveOccurred())
-
-			Expect(wasRebootCalled).To(Equal(false))
-
-			nodeConfigs := &ethernetv1.EthernetNodeConfigList{}
-			Expect(k8sClient.List(context.TODO(), nodeConfigs)).To(Succeed())
-			Expect(nodeConfigs.Items).To(HaveLen(1))
-			Expect(nodeConfigs.Items[0].Status.Conditions).To(HaveLen(1))
-			Expect(nodeConfigs.Items[0].Status.Conditions[0].Reason).To(Equal(string(UpdateSucceeded)))
-			Expect(nodeConfigs.Items[0].Status.Conditions[0].Message).To(Equal("Updated successfully"))
-		})
-
-		var _ = It("will try to force reboot node on successful DDP update", func() {
-			Expect(k8sClient.Create(context.TODO(), &data.Node)).To(Succeed())
-
-			data.NodeConfig.Spec.Config[0].DeviceConfig.FWURL = ""
-			data.NodeConfig.Spec.Config[0].DeviceConfig.DDPURL = "http://testddpurl"
-			data.NodeConfig.Spec.ForceReboot = true
 			Expect(k8sClient.Create(context.TODO(), &data.NodeConfig)).To(Succeed())
 
 			data.Inventory[0].PCIAddress = "0000:00:00.1"

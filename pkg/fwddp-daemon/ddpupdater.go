@@ -6,7 +6,6 @@ package daemon
 import (
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -16,8 +15,7 @@ import (
 )
 
 var (
-	findDdp           = findDdpProfile
-	reloadIceServiceP = reloadIceService
+	findDdp = findDdpProfile
 	// /host comes from mounted folder in OCP
 	// /var/lib/firmware comes from modified kernel argument, which allows OS to read DDP profile from that path.
 	// This is done because on RHCOS /lib/firmware/* path is read-only
@@ -30,30 +28,18 @@ type ddpUpdater struct {
 	log logr.Logger
 }
 
-func (d *ddpUpdater) handleDDPUpdate(pciAddr string, forceReboot bool, ddpPath string) error {
+func (d *ddpUpdater) handleDDPUpdate(pciAddr string, ddpPath string) (bool, error) {
 	log := d.log.WithName("handleDDPUpdate")
 	if ddpPath == "" {
-		return nil
+		return false, nil
 	}
 
 	err := d.updateDDP(pciAddr, ddpPath)
 	if err != nil {
 		log.Error(err, "Failed to update DDP", "device", pciAddr)
-		return err
+		return false, err
 	}
-
-	// Recommended for clusters, on which ControlPlane is running on E810 cards.
-	if forceReboot {
-		return nil
-	}
-
-	err = reloadIceServiceP()
-	if err != nil {
-		log.Error(err, "Failed to reload ICE service")
-		return err
-	}
-
-	return nil
+	return true, nil
 }
 
 // ddpProfilePath is the path to our extracted DDP profile
@@ -120,20 +106,6 @@ func (d *ddpUpdater) getDdpUpdatePath() string {
 		return k8sDdpUpdatePath
 	}
 	return ocpDdpUpdatePath
-}
-
-func reloadIceService() error {
-	var cmd *exec.Cmd
-	if utils.IsK8sDeployment() {
-		unloadCmd := exec.Command("chroot", "/host", "modprobe", "-r", "ice")
-		if err := unloadCmd.Run(); err != nil {
-			return fmt.Errorf("failed to unload ice module - %v", err)
-		}
-		cmd = exec.Command("chroot", "/host", "modprobe", "ice")
-	} else {
-		cmd = exec.Command("chroot", "/host", "systemctl", "restart", "oot-ice-driver-load")
-	}
-	return cmd.Run()
 }
 
 func findDdpProfile(targetPath string) (string, error) {

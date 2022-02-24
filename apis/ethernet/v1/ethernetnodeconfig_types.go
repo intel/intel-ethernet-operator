@@ -21,9 +21,6 @@ type EthernetNodeConfigSpec struct {
 	Config []DeviceNodeConfig `json:"config,omitempty"`
 	// Skips drain process when true; default false. Should be true if operator is running on SNO
 	DrainSkip bool `json:"drainSkip,omitempty"`
-	// Force reboot after DDP update.
-	// Recommended for clusters, on which ControlPlane is running on E810 cards or if there are some application that are relying on ICE driver.
-	ForceReboot bool `json:"forceReboot,omitempty"`
 }
 
 type FirmwareInfo struct {
