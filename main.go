@@ -7,11 +7,12 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"os"
+	"time"
+
 	"github.com/otcshare/intel-ethernet-operator/pkg/utils"
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/rest"
-	"os"
-	"time"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
@@ -67,6 +68,13 @@ func main() {
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 
 	restConfig := ctrl.GetConfigOrDie()
+
+	err := setClusterType(restConfig)
+	if err != nil {
+		setupLog.Error(err, "unable to determine cluster type")
+		os.Exit(1)
+	}
+
 	mgr, err := ctrl.NewManager(restConfig, ctrl.Options{
 		Scheme:                 scheme,
 		MetricsBindAddress:     metricsAddr,
@@ -133,12 +141,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	err = getClusterType(restConfig)
-	if err != nil {
-		setupLog.Error(err, "unable to determine cluster type")
-		os.Exit(1)
-	}
-
 	assetsToDeploy := []assets.Asset{
 		{ConfigMapName: "labeler-config", Path: "assets/100-labeler.yaml"},
 		{ConfigMapName: "daemon-config", Path: "assets/200-daemon.yaml", BlockingReadiness: assets.ReadinessPollConfig{Retries: 30, Delay: 20 * time.Second}},
@@ -174,7 +176,7 @@ func main() {
 	}
 }
 
-func getClusterType(restConfig *rest.Config) error {
+func setClusterType(restConfig *rest.Config) error {
 	discoveryClient, err := discovery.NewDiscoveryClientForConfig(restConfig)
 	if err != nil {
 		return fmt.Errorf("failed to create discoveryClient - %v", err)
