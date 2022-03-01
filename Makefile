@@ -264,19 +264,14 @@ bundle: manifests kustomize flowconfig-manifests ## Generate bundle manifests an
 	$(KUSTOMIZE) build config/manifests | envsubst | operator-sdk generate bundle -q --overwrite --version $(VERSION) $(BUNDLE_METADATA_OPTS)
 ifeq ("$(TARGET_PLATFORM)", "OCP")
 	cp config/metadata/bases/dependencies.yaml bundle/metadata/dependencies.yaml
-	# this is Python's yq which could be installed by running `pip3 install yq`. Go version of yq will not work.
-	yq '.spec.volumes[1].hostPath.path="/var/lib/firmware/intel/ice/ddp"' config/flowconfig-daemon/add_volumes.yaml --yml-output > config/flowconfig-daemon/add_volumes.yaml.tmp
 else
 	rm -f bundle/metadata/dependencies.yaml
-	yq '.spec.volumes[1].hostPath.path="/lib/firmware/updates/intel/ice/ddp"' config/flowconfig-daemon/add_volumes.yaml --yml-output > config/flowconfig-daemon/add_volumes.yaml.tmp
 endif
-	mv config/flowconfig-daemon/add_volumes.yaml.tmp config/flowconfig-daemon/add_volumes.yaml
 	operator-sdk bundle validate ./bundle
 	FOLDER=. COPYRIGHT_FILE=COPYRIGHT ./copyright.sh
 	cat COPYRIGHT bundle.Dockerfile >bundle.tmp
 	printf "\nCOPY COPYRIGHT /licenses/LICENSE\n" >> bundle.tmp
 	mv bundle.tmp bundle.Dockerfile
-
 .PHONY: bundle-build
 bundle-build: bundle ## Build the bundle image.
 	$(IMGTOOL) build -f bundle.Dockerfile -t $(BUNDLE_IMG) ${DOCKERARGS} .

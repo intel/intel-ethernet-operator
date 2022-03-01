@@ -1,7 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 # Copyright (c) 2021 Intel Corporation
 
-
 apiVersion: apps/v1
 kind: Pod
 metadata:
@@ -9,10 +8,7 @@ metadata:
   namespace: system
 spec:
   volumes:
-  - name: hugepage
-    emptyDir:
-      medium: HugePages
-  # ddp package directory is needed by the dpdk ice driver
-  - name: iceddp
-    hostPath:
-      path: /var/lib/firmware/intel/ice/ddp
+    - name: hugepage
+      emptyDir:
+        medium: HugePages
+

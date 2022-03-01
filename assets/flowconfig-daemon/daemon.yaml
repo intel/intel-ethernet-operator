@@ -71,6 +71,3 @@ spec:
   - emptyDir:
       medium: HugePages
     name: hugepage
-  - hostPath:
-      path: /var/lib/firmware/intel/ice/ddp
-    name: iceddp

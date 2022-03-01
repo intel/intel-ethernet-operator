@@ -60,3 +60,4 @@ spec:
         memory: 100Mi
   serviceAccountName: intel-ethernet-operator-controller-manager
   terminationGracePeriodSeconds: 10
+  
