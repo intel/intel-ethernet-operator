@@ -74,6 +74,13 @@ FCDAEMON_IMAGE_TAG_VERSION = $(FCDAEMON_NAME):$(VERSION)
 FCDAEMON_IMG?=$(FCDAEMON_IMAGE_TAG_VERSION)
 FCDAEMON_DOCKERFILE = images/Dockerfile.FlowConfigDaemon
 
+UFT_IMAGE ?= dcf-tool:v21.11
+ifneq (, $(IMAGE_REGISTRY))
+UFT_IMAGE_URL = $(IMAGE_REGISTRY)/$(UFT_IMAGE)
+else
+UFT_IMAGE_URL = $(UFT_IMAGE)
+endif
+
 # Produce CRDs that work back to Kubernetes 1.11 (no version conversion)
 CRD_OPTIONS ?= "crd:trivialVersions=true,preserveUnknownFields=false"
 
@@ -133,7 +140,8 @@ manifests: controller-gen ## Generate WebhookConfiguration, ClusterRole and Cust
 # Generate flowconfig-daemon deployment assets
 .PHONY: flowconfig-manifests
 flowconfig-manifests: kustomize
-	cd config/flowconfig-daemon && $(KUSTOMIZE) edit set image daemon-image=${FCDAEMON_IMG}
+	cd config/flowconfig-daemon && $(KUSTOMIZE) edit set image daemon-image=${FCDAEMON_IMG} && $(KUSTOMIZE) edit set image dcf-tool=${UFT_IMAGE_URL}
+	mkdir -p assets/flowconfig-daemon
 	$(KUSTOMIZE) build config/flowconfig-daemon -o assets/flowconfig-daemon/daemon.yaml
 	FOLDER=. COPYRIGHT_FILE=COPYRIGHT ./copyright.sh
 
@@ -167,7 +175,7 @@ rm -rf $$TMP_DIR ;\
 }
 endef
 
-test: manifests generate fmt vet envtest ## Run tests.
+test: manifests flowconfig-manifests generate fmt vet envtest ## Run tests.
 	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path)" ETHERNET_NAMESPACE=default go test ./... -coverprofile cover.out
 
 test_daemon: manifests generate fmt vet envtest ## Run tests only for the fwddp_daemon.
@@ -182,7 +190,7 @@ flowconfig-daemon: generate fmt vet
 daemon: generate fmt vet
 	go build -o bin/fwddp-daemon cmd/fwddp-daemon/main.go
 
-run: manifests generate fmt vet ## Run a controller from your host.
+run: manifests flowconfig-manifests generate fmt vet ## Run a controller from your host.
 	go run ./main.go
 
 docker-build: test ## Build docker image with the manager.

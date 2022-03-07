@@ -370,7 +370,7 @@ var _ = Describe("FlowConfigNodeAgentDeployment controller", func() {
 						limitsList := corev1.ResourceList{}
 						limitsList["memory"] = *resource.NewQuantity(209715200, resource.BinarySI)
 						Expect(pod.Spec.Containers[0].Resources.Limits).ToNot(BeNil())
-						Expect(pod.Spec.Containers[0].Resources.Limits).To(HaveLen(4))
+						Expect(pod.Spec.Containers[0].Resources.Limits).To(HaveLen(3))
 						Expect(pod.Spec.Containers[0].Resources.Limits).To(HaveKeyWithValue(corev1.ResourceName("memory"),
 							MatchQuantityObject(*resource.NewQuantity(209715200, resource.BinarySI))))
 						Expect(pod.Spec.Containers[0].Resources.Limits).To(HaveKeyWithValue(corev1.ResourceName("hugepages-2Mi"),
@@ -378,7 +378,7 @@ var _ = Describe("FlowConfigNodeAgentDeployment controller", func() {
 						Expect(pod.Spec.Containers[0].Resources.Limits).To(HaveKeyWithValue(corev1.ResourceName("intel.com/cvl_uft_admin"),
 							MatchQuantityObject(*resource.NewQuantity(1, resource.DecimalSI))))
 						Expect(pod.Spec.Containers[0].Resources.Requests).ToNot(BeNil())
-						Expect(pod.Spec.Containers[0].Resources.Requests).To(HaveLen(4))
+						Expect(pod.Spec.Containers[0].Resources.Requests).To(HaveLen(3))
 						Expect(pod.Spec.Containers[0].Resources.Requests).To(HaveKeyWithValue(corev1.ResourceName("memory"),
 							MatchQuantityObject(*resource.NewQuantity(209715200, resource.BinarySI))))
 						Expect(pod.Spec.Containers[0].Resources.Requests).To(HaveKeyWithValue(corev1.ResourceName("hugepages-2Mi"),
