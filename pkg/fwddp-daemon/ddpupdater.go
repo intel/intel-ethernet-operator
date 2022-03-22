@@ -20,7 +20,7 @@ var (
 	// /var/lib/firmware comes from modified kernel argument, which allows OS to read DDP profile from that path.
 	// This is done because on RHCOS /lib/firmware/* path is read-only
 	// intel/ice/ddp is default path for ICE *.pkg files
-	ocpDdpUpdatePath = "/host/var/lib/firmware/intel/ice/ddp/"
+	ocpDdpUpdatePath = "/host/var/lib/firmware/intel/ice/ddp"
 	k8sDdpUpdatePath = "/host/lib/firmware/updates/intel/ice/ddp"
 )
 

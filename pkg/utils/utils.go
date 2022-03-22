@@ -455,3 +455,12 @@ func OpenFileNoLinks(path string, flag int, perm os.FileMode) (*os.File, error) 
 
 	return file, nil
 }
+
+func SetOsEnvIfNotSet(key, value string, logger logr.Logger) error {
+	if osValue := os.Getenv(key); osValue != "" {
+		logger.Info("skipping ENV because it is already set", "key", key, "value", osValue)
+		return nil
+	}
+	logger.Info("setting ENV var", "key", key, "value", value)
+	return os.Setenv(key, value)
+}

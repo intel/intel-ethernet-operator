@@ -190,7 +190,7 @@ func setClusterType(restConfig *rest.Config) error {
 	for _, v := range apiList.Groups {
 		if v.Name == "route.openshift.io" {
 			setupLog.Info("found 'route.openshift.io' API - operator is running on OpenShift")
-			err := os.Setenv("ETHERNET_GENERIC_K8S", "false")
+			err := utils.SetOsEnvIfNotSet("ETHERNET_GENERIC_K8S", "false", setupLog)
 			if err != nil {
 				return fmt.Errorf("failed to set ETHERNET_GENERIC_K8S env variable - %v", err)
 			}
@@ -199,7 +199,7 @@ func setClusterType(restConfig *rest.Config) error {
 	}
 
 	setupLog.Info("couldn't find 'route.openshift.io' API - operator is running on Kubernetes")
-	err = os.Setenv("ETHERNET_GENERIC_K8S", "true")
+	err = utils.SetOsEnvIfNotSet("ETHERNET_GENERIC_K8S", "true", setupLog)
 	if err != nil {
 		return fmt.Errorf("failed to set ETHERNET_GENERIC_K8S env variable - %v", err)
 	}

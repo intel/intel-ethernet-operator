@@ -128,6 +128,7 @@ data:
               volumeMounts:
                 - name: host
                   mountPath: /host
+                  readOnly: true
                 - name: run-volume
                   mountPath: /run
                 - name: config-volume
@@ -136,6 +137,13 @@ data:
                   readOnly: true
                 - name: libmodules
                   mountPath: /lib/modules
+                {{ if isK8s }}
+                - name: k8sddp
+                  mountPath: /host/lib/firmware/updates/intel/ice/ddp/
+                {{ else }}
+                - name: ocpddp
+                  mountPath: /host/var/lib/firmware/intel/ice/ddp/
+                {{ end }}
               env:
                 {{ if ne .NO_PROXY "" }}
                 - name: NO_PROXY
@@ -185,3 +193,12 @@ data:
             - name: libmodules
               hostPath:
                 path: /lib/modules
+            {{ if isK8s }}
+            - name: k8sddp
+              hostPath:
+                path: /lib/firmware/updates/intel/ice/ddp
+            {{ else }}
+            - name: ocpddp
+              hostPath:
+                path: /var/lib/firmware/intel/ice/ddp
+            {{ end }}

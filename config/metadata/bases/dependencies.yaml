@@ -4,4 +4,4 @@ dependencies:
   - type: olm.package
     value:
       packageName: sriov-network-operator
-      version: ">4.9.0-202111041612"
+      version: ">=4.9.0-202203091310"

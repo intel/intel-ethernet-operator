@@ -42,7 +42,7 @@ var (
 	untarFile        = utils.Untar
 	unpackDDPArchive = utils.UnpackDDPArchive
 
-	artifactsFolder  = "/host/tmp/fwddp_artifacts/nvmupdate/"
+	artifactsFolder  = "/run/nvmeupdate/"
 	compatMapPath    = "./devices.json"
 	compatibilityMap *CompatibilityMap
 )
