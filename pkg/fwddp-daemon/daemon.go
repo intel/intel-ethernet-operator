@@ -229,6 +229,13 @@ func (r *NodeConfigReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	condition := meta.FindStatusCondition(nodeConfig.Status.Conditions, UpdateCondition)
 	if condition != nil && condition.Reason == string(UpdatePostUpdateReboot) {
 		log.V(4).Info("Post-update node reboot completed, finishing update...")
+
+		err := r.drainHelper.Uncordon(context.TODO())
+		if err != nil {
+			log.Error(err, "failed to uncordon node")
+			return requeueLater()
+		}
+
 		r.updateCondition(nodeConfig, metav1.ConditionTrue, UpdateSucceeded, "Updated successfully")
 		log.V(2).Info("Reconciled")
 		return doNotRequeue()
