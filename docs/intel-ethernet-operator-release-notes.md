@@ -2,6 +2,7 @@
 SPDX-License-Identifier: Apache-2.0
 Copyright (c) 2021 Intel Corporation
 ```
+
 <!-- omit in toc -->
 # Release Notes
 
@@ -19,11 +20,17 @@ This document provides high-level system features, issues, and limitations infor
 
 # Release history
 
-| Version   | Release Date   | OCP Version(s) compatibility | Verified on OCP         |
+| Version   | Release Date   | Cluster Compatibility        | Verified on OCP         |
 | --------- | ---------------| ---------------------------- | ------------------------|
-| 0.0.1     | January 2021   | 4.9                          | 4.9.7                   |
+| 0.0.1     | January 2022   | OCP 4.9                      | 4.9.7                   |
+| 0.0.2     | April 2022     | BMRA 22.01(K8S v1.22.3)      | BMRA 22.01 (K8S v1.22.3)|
+|           |                | OCP 4.10                     | 4.10.3
 
 # Features for Release
+
+***v0.0.2***
+
+- Operator has been ported to Vanilla Kubernetes
 
 ***v0.0.1***
 
@@ -33,6 +40,15 @@ This document provides high-level system features, issues, and limitations infor
   - The operator handles the traffic flow configuration of Intel® Ethernet Network Adapter E810 Series.
 
 # Changes to Existing Features
+
+***v0.0.2***
+
+- Any update of DDP packages causes node reboot
+- DCF Tool has been updated v21.08 -> v21.11
+- Proxy configuration for FWDDP Daemon app has been added
+- Updated documentation for CRDs (EthernetClusterConfig, EthernetNodeConfig) 
+- Replicas of Controller Manager are now distributed accross a cluster
+- EthernetClusterConfig.DrainSkip flag has been removed, IEO detects cluster type automatically and decides if drain is needed.
 
 ***v0.0.1***
 
@@ -46,7 +62,8 @@ This document provides high-level system features, issues, and limitations infor
 
 # Known Issues and Limitations
 
-- The installation of the Out Of Tree [ICE driver](https://www.intel.com/content/www/us/en/download/19630/29746/) is necessary for correct functionality of the operator. The provision/installation of this driver is out of scope for this operator, the user is required to provide/install the [OOT ICE driver](https://www.intel.com/content/www/us/en/download/19630/29746/intel-network-adapter-driver-for-e810-series-devices-under-linux.html) on the desired platforms.
+- The installation of the Out Of Tree [ICE driver](https://www.intel.com/content/www/us/en/download/19630/29746/) is necessary for correct functionality of the operator. The provision/installation of this driver is out of scope for this operator, the user is required to provide/install the [OOT ICE driver](https://www.intel.com/content/www/us/en/download/19630/29746/intel-network-adapter-driver-for-e810-series-devices-under-linux.html) on the desired platforms. **BMRA distribution comes with required version of ICE driver and no additional steps are required.**
+ 
 - The creation of trusted VFs to be used by the Flow Configuration controller of the operator and the creation of VFs to be used by the applications is out of scope for this operator. The user is required to create necessary VFs.
 
 # Release Content
@@ -64,6 +81,18 @@ This document provides high-level system features, issues, and limitations infor
 
 # Supported Operating Systems
 
+***v0.0.2*** was tested using the following:
+
+- BMRA 22.01 
+- Kubernetes v1.22.3
+- OS: Ubuntu 20.04.3 LTS (Focal Fossa)
+- NVM Package:  v1.37.13.5
+
+- OpenShift: 4.10.3
+- OS: Red Hat Enterprise Linux CoreOS 410.84.202202251620-0 (Ootpa)
+- Kubernetes:  v1.23.3+e419edf
+- NVM Package:  v1.37.13.5
+
 ***v0.0.1*** was tested using the following:
 
 - OpenShift: 4.9.7
@@ -73,8 +102,12 @@ This document provides high-level system features, issues, and limitations infor
 
 # Package Versions
 
-Package:
+***v0.0.2 Packages***
+- Kubernetes: v1.22.2+5e38c72
+- Golang: v1.17.3
+- DCF Tool: v21.11
 
-- Kubernetes:  v1.22.2+5e38c72
+***v0.0.1 Packages***
+- Kubernetes:  v1.22.2+5e38c72|v1.22.3
 - Golang: v1.17.3
 - DCF Tool: v21.08
