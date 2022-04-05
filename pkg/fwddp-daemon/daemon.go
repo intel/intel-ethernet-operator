@@ -401,9 +401,6 @@ func (r *NodeConfigReconciler) rebootNode() error {
 	log := r.log.WithName("rebootNode")
 	// systemd-run command borrowed from openshift/sriov-network-operator
 	_, err := execCmd([]string{"chroot", "--userspec", "0", "/host",
-		"systemd-run",
-		"--unit", "ethernet-daemon-reboot",
-		"--description", "ethernet-daemon reboot",
-		"/bin/sh", "-c", "systemctl stop kubelet.service; reboot"}, log)
+		"sh", "-c", "systemctl stop kubelet.service; systemctl reboot"}, log)
 	return err
 }

@@ -25,8 +25,6 @@ import (
 	"strings"
 	"syscall"
 
-	ethernetv1 "github.com/otcshare/intel-ethernet-operator/apis/ethernet/v1"
-
 	"github.com/go-logr/logr"
 	configv1 "github.com/openshift/api/config/v1"
 )
@@ -405,10 +403,6 @@ func RunExecWithLog(cmd *exec.Cmd, log logr.Logger) error {
 	cmd.Stdout = &LogWriter{Log: log, Stream: "stdout"}
 	cmd.Stderr = &LogWriter{Log: log, Stream: "stderr"}
 	return cmd.Run()
-}
-
-func GetDriverVersion(dev ethernetv1.Device) string {
-	return dev.Driver + "-" + dev.DriverVersion
 }
 
 func isHardLink(path string) (bool, error) {

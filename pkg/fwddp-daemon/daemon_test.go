@@ -311,7 +311,7 @@ var _ = Describe("DaemonTests", func() {
 
 			execCmd = func(args []string, log logr.Logger) (string, error) {
 				for _, part := range args {
-					if part == "ethernet-daemon-reboot" {
+					if strings.Contains(part, "reboot") {
 						wasRebootCalled = true
 					}
 				}
@@ -372,7 +372,7 @@ var _ = Describe("DaemonTests", func() {
 
 			execCmd = func(args []string, log logr.Logger) (string, error) {
 				for _, part := range args {
-					if part == "ethernet-daemon-reboot" {
+					if strings.Contains(part, "reboot") {
 						wasRebootCalled = true
 					}
 				}
@@ -434,7 +434,7 @@ var _ = Describe("DaemonTests", func() {
 
 			execCmd = func(args []string, log logr.Logger) (string, error) {
 				for _, part := range args {
-					if part == "ethernet-daemon-reboot" {
+					if strings.Contains(part, "reboot") {
 						wasRebootCalled = true
 					}
 				}
@@ -837,7 +837,7 @@ var _ = Describe("DaemonTests", func() {
 
 			execCmd = func(args []string, log logr.Logger) (string, error) {
 				for _, part := range args {
-					if part == "ethernet-daemon-reboot" {
+					if strings.Contains(part, "reboot") {
 						wasRebootCalled = true
 					}
 					if strings.Contains(part, "Device Serial") {

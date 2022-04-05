@@ -126,17 +126,26 @@ data:
                 - --zap-log-level=4
               imagePullPolicy: IfNotPresent
               volumeMounts:
-                - name: host
-                  mountPath: /host
-                  readOnly: true
+                - name: run
+                  mountPath: /host/run
                 - name: run-volume
                   mountPath: /run
+                - name: binaries
+                  mountPath: /host/bin/
                 - name: config-volume
                   mountPath: "/devices.json"
                   subPath: devices.json
                   readOnly: true
                 - name: libmodules
                   mountPath: /lib/modules
+                - name: lib
+                  mountPath: /host/usr/lib
+                - name: lib
+                  mountPath: /host/lib
+                - name: lib64
+                  mountPath: /host/usr/lib64
+                - name: lib64
+                  mountPath: /host/lib64
                 {{ if isK8s }}
                 - name: k8sddp
                   mountPath: /host/lib/firmware/updates/intel/ice/ddp/
@@ -182,9 +191,12 @@ data:
                 privileged: true
                 runAsUser: 0
           volumes:
-            - name: host
+            - name: run
               hostPath:
-                path: /
+                path: /run
+            - name: binaries
+              hostPath:
+                path: /usr/bin/
             - name: run-volume
               emptyDir: {}
             - name: config-volume
@@ -202,3 +214,9 @@ data:
               hostPath:
                 path: /var/lib/firmware/intel/ice/ddp
             {{ end }}
+            - name: lib
+              hostPath:
+                path: /usr/lib
+            - name: lib64
+              hostPath:
+                path: /usr/lib64
