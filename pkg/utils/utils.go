@@ -227,6 +227,12 @@ func Untar(srcPath string, dstPath string, log logr.Logger) error {
 
 		nfDst := filepath.Join(dstPath, fh.Name)
 
+		// Check for ZipSlip (Directory traversal)
+		// https://snyk.io/research/zip-slip-vulnerability
+		if !strings.HasPrefix(nfDst, filepath.Clean(dstPath)+string(os.PathSeparator)) {
+			return fmt.Errorf("illegal file path: %s", nfDst)
+		}
+
 		switch fh.Typeflag {
 		case tar.TypeReg:
 			nf, err := OpenFileNoLinks(nfDst, os.O_CREATE|os.O_RDWR, os.FileMode(fh.Mode))
@@ -302,6 +308,12 @@ func Unzip(srcPath, dstPath string, log logr.Logger) error {
 		fi := zipFile.FileInfo()
 		mode := fi.Mode()
 		nfDst := filepath.Join(dstPath, zipFile.Name)
+
+		// Check for ZipSlip (Directory traversal)
+		// https://snyk.io/research/zip-slip-vulnerability
+		if !strings.HasPrefix(nfDst, filepath.Clean(dstPath)+string(os.PathSeparator)) {
+			return fmt.Errorf("illegal file path: %s", nfDst)
+		}
 
 		switch {
 		case mode.IsRegular():
