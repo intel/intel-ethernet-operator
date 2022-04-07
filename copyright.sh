@@ -1,13 +1,13 @@
+#!/bin/bash
+
 # SPDX-License-Identifier: Apache-2.0
 # Copyright (c) 2020-2021 Intel Corporation
 
-#!/bin/bash
-
 FOLDER=${FOLDER:-.}
 COPYRIGHT_FILE=${COPYRIGHT_FILE:-COPYRIGHT}
-copyright=`cat "$COPYRIGHT_FILE"`
+copyright=$(cat "$COPYRIGHT_FILE")
 
-for file in `find ${FOLDER} -name '*.yaml'`
+find ${FOLDER} -name "*.yaml" | while read file
 do
   if ! grep -q "${copyright}" "$file"
   then
