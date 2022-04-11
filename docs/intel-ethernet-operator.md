@@ -20,9 +20,6 @@ Copyright (c) 2021 Intel Corporation
     - [Intel Ethernet Operator - OOT ICE driver update](#intel-ethernet-operator---oot-ice-driver-update)
 - [Technical Requirements and Dependencies](#technical-requirements-and-dependencies)
 - [Deploying the Operator](#deploying-the-operator)
-  - [Installing the dependencies](#installing-the-dependencies)
-  - [Build the Operator from source](#build-the-operator-from-source)
-  - [Installing the Bundle](#installing-the-bundle)
   - [Applying custom resources](#applying-custom-resources)
     - [Webserver for disconnected environment](#webserver-for-disconnected-environment)
     - [Updating Firmware](#updating-firmware)
@@ -41,7 +38,7 @@ Copyright (c) 2021 Intel Corporation
 
 ## Overview
 
-This document provides the instructions for using the Intel Ethernet Operator in Red Hat's OpenShift Container Platform. This operator was developed with aid of the Operator SDK project.
+This document provides the instructions for using the Intel Ethernet Operator on supported Kubernetes clusters (Vanilla K8s installed with Intel Container Experience Kits (CEK) or Red Hat's OpenShift Container Platform). This operator was developed with aid of the Operator SDK project.
 
 ## Intel Ethernet Operator
 
@@ -77,7 +74,7 @@ The CLV-discovery pod is a DaemonSet deployed on each worker node in the cluster
 To get all the nodes containing the supported devices run:
 
 ```shell
-oc get EthernetNodeConfig -A
+kubectl get EthernetNodeConfig -A
 
 NAMESPACE                 NAME       UPDATE
 intel-ethernet-operator   worker-1   InProgress
@@ -87,7 +84,7 @@ intel-ethernet-operator   worker-2   InProgress
 To get the list of supported devices to be found by the discovery pod run:
 
 ```shell
-oc describe configmap supported-clv-devices -n intel-ethernet-operator
+kubectl describe configmap supported-clv-devices -n intel-ethernet-operator
 ```
 
 ### Intel Ethernet Operator - FW/DDP Daemon
@@ -138,149 +135,35 @@ One way of creating and providing this trusted VF and application VFs is to conf
 In OCP environments the SRIOV Network Operator will be deployed as a dependency to Intel Ethernet Operator automatically.
 The configuration and creation of the trusted VFs and application is out of scope of this Operator and is users responsibility.
 
-#### Intel Ethernet Operator - OOT ICE driver update
-
-In order for the FW update and Flow Configuration to be possible the platform needs to provide an [OOT ICE driver](https://www.intel.com/content/www/us/en/download/19630/intel-network-adapter-driver-for-e810-series-devices-under-linux.html). This is required since current implementations of in-tree drivers do not support all required features.
-It is a responsibility of the cluster admin to provide and install this driver and it is out of scope of this Operator at this time. See the [sro-ice-install document](oot-ice-driver/sro-ice-install.md) for sample instructions on how to install the driver using SRO.
-
-## Technical Requirements and Dependencies
-
-The Intel Ethernet Operator on OCP has the following requirements:
-
-- Intel® Ethernet Network Adapter E810
-- [OpenShift 4.9.7](https://docs.openshift.com/container-platform/4.9/release_notes/ocp-4-9-release-notes.html)
-- [Intel® Network Adapter Driver for E810 Series Devices](https://www.intel.com/content/www/us/en/download/19630/intel-network-adapter-driver-for-e810-series-devices-under-linux.html)
-- Node Feature Discovery Operator with basic NFD CR applied
-- SRIOV Network Operator
-- Docker registry
 
 ## Deploying the Operator
 
-The Intel Ethernet Operator can be deployed by building the Bundle image and the Operator images from source. An external registry is necessary to push the images during build.
+Building the operator bundle images will require Go and Operator SDK to be installed.
 
-### Installing the dependencies
+### Installing Go
+You can install Go following the steps [here](https://go.dev/doc/install).
 
-Before building and installing the operator provide and install the OOT Intel ICE driver to the platforms. The driver can be downloaded from [Intel Download Centre](https://www.intel.com/content/www/us/en/download/19630/intel-network-adapter-driver-for-e810-series-devices-under-linux.html).
-
-On OCP deployments the SRIOV Network operator will be deployed automatically as a dependency to Intel Ethernet Operator.
-
-### Build the Operator from source
-
-To build the Operator the images must be built from source, in order to build execute the following steps:
-
-> Note: The arguments are to be replaced with the following:
->
-* VERSION is the version to be applied to the bundle ie. `0.0.1`.
-* IMAGE_REGISTRY is the address of the registry where the build images are to be pushed to ie. `my.private.registry.com`.
-* TLS_VERIFY defines whether connection to registry need TLS verification, default is `false`.
-* TARGET_PLATFORM specifiec platform for which operator will be build. Supported values are `OCP` and `K8S`. If operator is built for other platform than `OCP`, 
-then user has to manually install sriov-network-operator as described [on sriov-network-operator page](https://github.com/k8snetworkplumbingwg/sriov-network-operator). Default is `OCP` 
-```shell
-# cd intel-ethernet-operator
-# make VERSION=$(VERSION) IMAGE_REGISTRY=$(IMAGE_REGISTRY) TLS_VERIFY=$(TLS_VERIFY) TARGET_PLATFORM=$(TARGET_PLATFORM) build_all push_all catalog-build catalog-push
+### Installing Operator SDK
+Please install Operator SDK v1.7.2 following the steps below:
+```
+export ARCH=$(case $(uname -m) in x86_64) echo -n amd64 ;; aarch64) echo -n arm64 ;; *) echo -n $(uname -m) ;; esac)
+export OS=$(uname | awk '{print tolower($0)}')
+export SDK_VERSION=v1.7.2
+export OPERATOR_SDK_DL_URL=https://github.com/operator-framework/operator-sdk/releases/download/${SDK_VERSION}
+curl -LO ${OPERATOR_SDK_DL_URL}/operator-sdk_${OS}_${ARCH}
+chmod +x operator-sdk_${OS}_${ARCH} && sudo mv operator-sdk_${OS}_${ARCH} /usr/local/bin/operator-sdk
 ```
 
-### Installing the Bundle
-If operator is being installed on Kubernetes then run following steps using `kubectl` binary instead of `oc` and running Kubernetes specific steps marked as (KUBERNETES).  
-If operator is being installed on Openshift skip steps marked as (KUBERNETES).  
-Once the operator images are built and accessible inside the cluster the operator is to be installed by running the following:
 
-Create a namespace for the operator:  
-```shell
-# oc create ns intel-ethernet-operator
-```
+Based on target cluster please follow one of the deployment steps from list below.
 
-(KUBERNETES): Install Operator Lifecycle Manager (OLM) on cluster by downloading [Operator SDK](https://sdk.operatorframework.io/docs/installation/)
-and running
-```shell
-operator-sdk olm install
-```
-
-Create the following `Catalog Source` `yaml` file:
-
-> Note: The REGISTRY_ADDRESS and VERSION need to be replaced:
->
-> * VERSION is the version to be applied to the bundle ie. `0.0.1`.
-> * IMAGE_REGISTRY is the address of the registry where the build images are to be pushed to ie. `my.private.registry.com`.
-
-```yaml
-apiVersion: operators.coreos.com/v1alpha1
-kind: CatalogSource
-metadata:
-  name: intel-ethernet-operators
-  namespace: openshift-marketplace
-spec:
-  sourceType: grpc
-  image: <IMAGE_REGISTRY>/intel-ethernet-operator-catalog:<VERSION>
-  publisher: Intel
-  displayName: Intel ethernet operators(Local)
-```
-
-Create the `Catalog Source`
-
-```shell
-# oc apply -f <filename>
-```
-Create the following `yaml` files including `Subscription` and `OperatorGroup`:
-
-```yaml
----
-apiVersion: operators.coreos.com/v1
-kind: OperatorGroup
-metadata:
-  name: intel-ethernet-operator
-  namespace: intel-ethernet-operator
-spec:
-  targetNamespaces:
-    - intel-ethernet-operator
-
----
-
-apiVersion: operators.coreos.com/v1alpha1
-kind: Subscription
-metadata:
-  name: intel-ethernet-subscription
-  namespace: intel-ethernet-operator
-spec:
-  channel: alpha
-  name: intel-ethernet-operator
-  source: intel-ethernet-operators
-  sourceNamespace: openshift-marketplace
-```
-
-Subscribe to and install the operator:
-
-```shell
-# oc apply -f <filename>
-```
-
-Check that the operator is deployed:
-> Note: SRIOV Network Operator pods deployed as a dependency in OCP environments.
-
-```oc get pods -n intel-ethernet-operator
-NAME                                                          READY   STATUS    RESTARTS      AGE
-clv-discovery-db6j7                                           1/1     Running   0             23h
-clv-discovery-fl5n6                                           1/1     Running   0             23h
-clv-discovery-pqhtl                                           1/1     Running   0             23h
-fwddp-daemon-4cmn7                                            1/1     Running   0             23h
-fwddp-daemon-5jjzw                                            1/1     Running   0             23h
-intel-ethernet-operator-controller-manager-75d4449bfb-cx65b   1/1     Running   0             23h
-intel-ethernet-operator-controller-manager-75d4449bfb-dhqv5   1/1     Running   0             23h
-network-resources-injector-g27j2                              1/1     Running   0             23h
-network-resources-injector-kddh4                              1/1     Running   0             23h
-network-resources-injector-vqhqk                              1/1     Running   0             23h
-operator-webhook-5gbz8                                        1/1     Running   0             23h
-operator-webhook-c42n6                                        1/1     Running   0             23h
-operator-webhook-rtt7v                                        1/1     Running   0             23h
-sriov-network-config-daemon-6xdlg                             3/3     Running   0             23h
-sriov-network-config-daemon-gp9xz                             3/3     Running   0             23h
-sriov-network-config-daemon-sqgck                             3/3     Running   0             23h
-sriov-network-operator-78cf54b79d-ll9nz                       1/1     Running   0             45h
-```
-
+- [Deploy on OCP 4.9](deployment/ocp-deployment.md)
+- [Deploy on Vanilla K8s with Intel Container Experience Kits](deployment/k8s-deployment.md)
 ### Applying custom resources
 
 Once the operator is successfully deployed, the user interacts with it by creating CRs which will be interpreted by the operator.
+
+Note: Example code below uses `kubectl` and the client binary. You can substitute `kubectl` with `oc` if you are operating in a OCP cluster.
 
 #### Webserver for disconnected environment
 
@@ -364,7 +247,7 @@ After that package will be available in cluster under following path:
 To find the NIC devices belonging to the Intel® E810 NIC run following command, the user can detect the device information of the NICs from the output:
 
 ```shell
-# oc get enc <nodename> -o jsonpath={.status}
+# kubectl get enc <nodename> -o jsonpath={.status}
 ```
 
 To update the Firmware of the supported device run following steps:
@@ -392,13 +275,13 @@ spec:
 The CR can be applied by running:
 
 ```shell
-# oc apply -f <filename>
+# kubectl apply -f <filename>
 ```
 
 Once the NVM firmware update is complete, the following status is reported:
 
 ```shell
-# oc get enc <nodename> -o jsonpath={.status.conditions}
+# kubectl get enc <nodename> -o jsonpath={.status.conditions}
 [
   {
     "lastTransitionTime": "2021-12-17T15:25:32Z",
@@ -414,7 +297,7 @@ Once the NVM firmware update is complete, the following status is reported:
 The user can observe the change of the cards' NICs firmware:
 
 ```shell
-# oc get enc <nodename> -o jsonpath={.status.devices[0].firmware}
+# kubectl get enc <nodename> -o jsonpath={.status.devices[0].firmware}
 {
   "MAC": "40:a6:b7:67:1f:c0",
   "version": "3.00 0x80008271 1.2992.0"
@@ -450,13 +333,13 @@ spec:
 The CR can be applied by running:
 
 ```shell
-# oc apply -f <filename>
+# kubectl apply -f <filename>
 ```
 
 Once the DDP profile update is complete, the following status is reported:
 
 ```shell
-# oc get enc <nodename> -o jsonpath={.status.conditions}
+# kubectl get enc <nodename> -o jsonpath={.status.conditions}
 [
   {
   "lastTransitionTime": "2021-12-17T15:25:32Z",
@@ -472,7 +355,7 @@ Once the DDP profile update is complete, the following status is reported:
 The user can observe the change of the cards' NICs DDP:
 
 ```shell
-# oc get enc <nodename> -o jsonpath={.status.devices[0].DDP}|jq
+# kubectl get enc <nodename> -o jsonpath={.status.devices[0].DDP}|jq
 {
   "packageName": "ICE COMMS Package",
   "trackId": "0xc0000002",
@@ -489,12 +372,12 @@ To update the Flow Configuration of the supported device a trusted VF for this d
 Once SRIOV Network operator is up and running we can examine the `SriovNetworkNodeStates` to view available Intel E810 Series NICs as shown below:
 
 ```shell
-# oc get sriovnetworknodestates -n intel-ethernet-operator
+# kubectl get sriovnetworknodestates -n intel-ethernet-operator
 NAME              AGE
 worker-01   1d
 
 
-# oc describe sriovnetworknodestates worker-01 -n intel-ethernet-operator
+# kubectl describe sriovnetworknodestates worker-01 -n intel-ethernet-operator
 Name:         worker-01
 Namespace:    intel-ethernet-operator
 Labels:       <none>
@@ -635,7 +518,7 @@ Save the above yaml in file name `sriov-network-policy.yaml` and then apply this
 The CR can be applied by running:
 
 ```shell
-# oc create -f sriov-network-policy.yaml
+# kubectl create -f sriov-network-policy.yaml
 ```
 
 ##### Check node status
@@ -643,7 +526,7 @@ The CR can be applied by running:
 Check node status to confirm that cvl_uft_admin resource pool registered DCF capable VFs of the node
 
 ```shell
-# oc describe node worker-01 -n intel-ethernet-operator | grep -i allocatable -A 20
+# kubectl describe node worker-01 -n intel-ethernet-operator | grep -i allocatable -A 20
 Allocatable:
   bridge.network.kubevirt.io/cni-podman0:  1k
   cpu:                                     108
@@ -666,7 +549,7 @@ Allocatable:
 Next, we will need to create SRIOV network attachment definition for the DCF VF pool as shown below:
 
 ```shell
-cat <<EOF | oc apply -f -
+cat <<EOF | kubectl apply -f -
 apiVersion: sriovnetwork.openshift.io/v1
 kind: SriovNetwork
 metadata:
@@ -686,18 +569,20 @@ EOF
 
 # git clone https://github.com/intel/UFT.git
 
+# git checkout v22.03
+
 # make dcf-image
 
-# docker tag dcf-tool:v21.08 $IMAGE_REGISTRY/dcf-tool:v21.08
+# docker tag dcf-tool:v21.08 $IMAGE_REGISTRY/dcf-tool:v22.03
 
-# docker push $IMAGE_REGISTRY/dcf-tool:v21.08
+# docker push $IMAGE_REGISTRY/dcf-tool:v22.03
 
 ```
 
 ##### Create FlowConfig Node Agent deployment CR
 
 ```shell
-cat <<EOF | oc apply -f -
+cat <<EOF | kubectl apply -f -
 apiVersion: flowconfig.intel.com/v1
 kind: FlowConfigNodeAgentDeployment
 metadata:
@@ -714,7 +599,7 @@ EOF
 ##### Verify that FlowConfig Daemon is running on available nodes:
 
 ```shell
-# oc get pods -n intel-ethernet-operator
+# kubectl get pods -n intel-ethernet-operator
 NAME                                                          READY   STATUS    RESTARTS   AGE
 clv-discovery-kwjkb                                           1/1     Running   0          44h
 clv-discovery-tpqzb                                           1/1     Running   0          44h
@@ -723,7 +608,7 @@ fwddp-daemon-m8d4w                                            1/1     Running   
 intel-ethernet-operator-controller-manager-79c4d5bf6d-bjlr5   1/1     Running   0          44h
 intel-ethernet-operator-controller-manager-79c4d5bf6d-txj5q   1/1     Running   0          44h
 
-# oc logs -n intel-ethernet-operator flowconfig-daemon-worker-01 -c uft
+# kubectl logs -n intel-ethernet-operator flowconfig-daemon-worker-01 -c uft
 Generating server_conf.yaml file...
 Done!
 server :
@@ -761,7 +646,7 @@ With trusted VFs and application VFs ready to be configured, program the Flow Co
 Create a sample Node specific NodeFlowConfig CR named same as a target node with empty spec:
 
 ```shell
-cat <<EOF | oc apply -f -
+cat <<EOF | kubectl apply -f -
 apiVersion: flowconfig.intel.com/v1
 kind: NodeFlowConfig
 metadata:
@@ -774,7 +659,7 @@ EOF
 Check status of CR:
 
 ```shell
-# oc describe nodeflowconfig worker-01
+# kubectl describe nodeflowconfig worker-01
 
 Name:         worker-01
 Namespace:    intel-ethernet-operator
@@ -800,7 +685,7 @@ Please see the [NodeFlowConfig Spec](flowconfig-daemon/creating-rules.md) for de
 We can update the Node Flow configuration with a sample rule for a target port as shown below:
 
 ```shell
-cat <<EOF | oc apply -f -
+cat <<EOF | kubectl apply -f -
 apiVersion: flowconfig.intel.com/v1
 kind: NodeFlowConfig
 metadata:
@@ -830,7 +715,7 @@ EOF
 Validate that Flow Rules are applied by the controller from UFT logs.
 
 ```shell
-oc logs flowconfig-daemon-worker uft
+kubectl logs flowconfig-daemon-worker uft
 Generating server_conf.yaml file...
 Done!
 server :

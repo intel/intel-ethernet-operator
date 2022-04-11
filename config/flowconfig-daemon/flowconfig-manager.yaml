@@ -11,7 +11,7 @@ metadata:
 spec:
   containers:
   - name: uft
-    image: dcf-tool:v21.08
+    image: dcf-tool:v22.03
     securityContext:
       allowPrivilegeEscalation: true
       privileged: true

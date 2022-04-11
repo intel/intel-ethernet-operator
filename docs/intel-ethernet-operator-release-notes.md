@@ -44,7 +44,7 @@ This document provides high-level system features, issues, and limitations infor
 ***v0.0.2***
 
 - Any update of DDP packages causes node reboot
-- DCF Tool has been updated v21.08 -> v21.11
+- DCF Tool has been updated v21.08 -> v22.03
 - Proxy configuration for FWDDP Daemon app has been added
 - Updated documentation for CRDs (EthernetClusterConfig, EthernetNodeConfig) 
 - Replicas of Controller Manager are now distributed accross a cluster
@@ -55,6 +55,9 @@ This document provides high-level system features, issues, and limitations infor
 - There are no unsupported or discontinued features relevant to this release.
 
 # Fixed Issues
+
+***v0.0.2***
+- fixed DCF tool image registry URL reference issue. The DCF tool registry URL will be read from `IMAGE_REGISTRY` env variable during operator image build
 
 ***v0.0.1***
 
