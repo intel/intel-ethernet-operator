@@ -127,7 +127,7 @@ The Intel Ethernet Operator has a number of prerequisites that must be met in or
 
 #### Intel Ethernet Operator - SRIOV
 
-In order for the Flow Configuration feature to be able to configure the flow configuration of the NICs traffic the configuration must happen using a trusted VF from each PF in the NIC. Usually it is the VF0 of a PF that has the trust mode set to `on` and bound to `vfio-pci` driver. This VF pool needs to be created by the user and be allocatable as a K8s resource. This VF pool will be used exclusively by the UFT container and no application container.
+In order for the Flow Configuration feature to be able to configure the flow configuration of the NICs traffic the configuration must happen using a trusted Virtual Function (VF) from each Physical Function (PF) in the NIC. Usually it is the VF0 of a PF that has the trust mode set to `on` and bound to `vfio-pci` driver. This VF pool needs to be created by the user and be allocatable as a K8s resource. This VF pool will be used exclusively by the UFT container and no application container.
 
 For user applications additional VF pools should be created separately as needed.
 
@@ -363,9 +363,13 @@ The user can observe the change of the cards' NICs DDP:
 }
 ```
 
-#### Deploy Flow Configuration agent
+#### Deploying Flow Configuration Agent
 
-To update the Flow Configuration of the supported device a trusted VF for this device needs to be created first. Once the trusted VF is created the VFs to be used by the applications and to be programmed with appropriate config also need to be created. Once these are in place the Operator can configure the Flow Configuration.
+The Flow Configuration Agent Pod runs Unified Flow Tool (UFT) to configure Flow rules for a PF. UFT requires that trust mode is enabled for the first VF (VF0) of a PF so that it has the capability of creating/modifying flow rules for that PF. This VF also needs to be bound to `vfio-pci` driver. The SRIOV VFs pools are K8s extended resources that are exposed via SRIOV Network Operator. 
+
+The VF pool consists of VF0 from all available Intel E810 series NICs PF which, in this context, we call the **Admin VF pool**. The **Admin VF pool** is associated with a NetworkAttachmentDefinition that enables these VFs trust mode 'on'. The SRIOV Network Operator can be used to create the **Admin VF pool** and the **NetworkAttachmentDefinition** needed by UFT. You can find more information on creating VF pools with SRIOV Network Operator [here](https://docs.openshift.com/container-platform/4.10/networking/hardware_networks/configuring-sriov-device.html) and creating NetworkAttachmentDefinition [here](https://docs.openshift.com/container-platform/4.10/networking/hardware_networks/configuring-sriov-net-attach.html).
+
+The following steps will guide you through how to create the **Admin VF pool** and the **NetworkAttachmentDefinition**  needed for Flow Configuration Agent Pod.
 
 ##### Creating Trusted VF using SRIOV Network Operator
 
@@ -454,7 +458,9 @@ Events:             <none>
 
 By looking at the sriovnetworknodestates status we can find the NIC information such as PCI address and Interface names to define `SriovNetworkNodePolicy` to create required VF pools.
 
-For example, the following three `SriovNetworkNodePolicy` CRs will create a trusted VF pool name with resourceName `cvl_uft_admin` along with two additional VF pools for application:
+For example, the following three `SriovNetworkNodePolicy` CRs will create a trusted VF pool name with resourceName `cvl_uft_admin` along with two additional VF pools for application.
+
+> Please note that, the "uft-admin-policy" SriovNetworkNodePolicy below uses `pfNames:` with VF index range selectors to target VF0 only of Intel E810 series NIC. More information on using VF partitioning can be found [here](https://docs.openshift.com/container-platform/4.10/networking/hardware_networks/configuring-sriov-device.html#nw-sriov-nic-partitioning_configuring-sriov-device). 
 
 ```yaml
 apiVersion: sriovnetwork.openshift.io/v1
@@ -579,7 +585,8 @@ EOF
 
 ```
 
-##### Create FlowConfig Node Agent deployment CR
+##### Creating FlowConfig Node Agent Deployment CR
+> Note: The Admin VF pool prefix in `DCFVfPoolName` should match how it is shown on node description in [Check node status](#check-node-status) section.
 
 ```shell
 cat <<EOF | kubectl apply -f -
@@ -596,7 +603,7 @@ spec:
 EOF
 ```
 
-##### Verify that FlowConfig Daemon is running on available nodes:
+##### Verifying that FlowConfig Daemon is running on available nodes:
 
 ```shell
 # kubectl get pods -n intel-ethernet-operator
