@@ -28,3 +28,6 @@ testbin/*
 config/crd/bases/
 bundle/
 bundle.Dockerfile
+
+# ignore kustomize generated files
+assets/flowconfig-daemon/daemon.yaml

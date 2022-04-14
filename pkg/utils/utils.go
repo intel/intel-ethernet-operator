@@ -7,6 +7,7 @@ import (
 	"archive/tar"
 	"archive/zip"
 	"compress/gzip"
+	"context"
 	"crypto/md5"
 	"encoding/hex"
 	"encoding/json"
@@ -14,16 +15,18 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"strings"
 	"syscall"
 
-	ethernetv1 "github.com/otcshare/intel-ethernet-operator/apis/ethernet/v1"
-
 	"github.com/go-logr/logr"
+	configv1 "github.com/openshift/api/config/v1"
 )
 
 type SupportedDevices map[string]SupportedDevice
@@ -37,6 +40,39 @@ type SupportedDevice struct {
 const (
 	configFilesizeLimitInBytes = 10485760 //10 MB
 )
+const IeoPrefix = "ETHERNET_"
+
+func GetDrainSkip(nodes *corev1.NodeList, client client.Client, log logr.Logger) (bool, error) {
+	if IsK8sDeployment() {
+		if len(nodes.Items) <= 1 {
+			log.Info("found only 0 or 1 node(s) with CLV label in cluster - operator is running on SNO")
+			return true, nil
+		}
+		log.Info("found several nodes with CLV label in cluster - operator is running on Cluster deployment", "nodes", len(nodes.Items))
+		return false, nil
+	}
+	return IsOpenshiftSno(client, log)
+}
+
+func IsK8sDeployment() bool {
+	value := os.Getenv(IeoPrefix + "GENERIC_K8S")
+	return strings.ToLower(value) == "true"
+}
+
+func IsOpenshiftSno(c client.Client, log logr.Logger) (bool, error) {
+	infra := &configv1.Infrastructure{}
+
+	defaultInfraName := "cluster"
+	err := c.Get(context.TODO(), types.NamespacedName{Name: defaultInfraName}, infra)
+	if err != nil {
+		return false, err
+	}
+	if infra == nil {
+		return false, fmt.Errorf("getting resource Infrastructure (name: %s) succeeded but object was nil", defaultInfraName)
+	}
+	log.Info("OCP cluster infrastructure", "infra", infra.Status.ControlPlaneTopology)
+	return infra.Status.ControlPlaneTopology == configv1.SingleReplicaTopologyMode, nil
+}
 
 func LoadSupportedDevices(cfgPath string, inStruct interface{}) error {
 	file, err := OpenNoLinks(filepath.Clean(cfgPath))
@@ -191,6 +227,12 @@ func Untar(srcPath string, dstPath string, log logr.Logger) error {
 
 		nfDst := filepath.Join(dstPath, fh.Name)
 
+		// Check for ZipSlip (Directory traversal)
+		// https://snyk.io/research/zip-slip-vulnerability
+		if !strings.HasPrefix(nfDst, filepath.Clean(dstPath)+string(os.PathSeparator)) {
+			return fmt.Errorf("illegal file path: %s", nfDst)
+		}
+
 		switch fh.Typeflag {
 		case tar.TypeReg:
 			nf, err := OpenFileNoLinks(nfDst, os.O_CREATE|os.O_RDWR, os.FileMode(fh.Mode))
@@ -266,6 +308,12 @@ func Unzip(srcPath, dstPath string, log logr.Logger) error {
 		fi := zipFile.FileInfo()
 		mode := fi.Mode()
 		nfDst := filepath.Join(dstPath, zipFile.Name)
+
+		// Check for ZipSlip (Directory traversal)
+		// https://snyk.io/research/zip-slip-vulnerability
+		if !strings.HasPrefix(nfDst, filepath.Clean(dstPath)+string(os.PathSeparator)) {
+			return fmt.Errorf("illegal file path: %s", nfDst)
+		}
 
 		switch {
 		case mode.IsRegular():
@@ -369,10 +417,6 @@ func RunExecWithLog(cmd *exec.Cmd, log logr.Logger) error {
 	return cmd.Run()
 }
 
-func GetDriverVersion(dev ethernetv1.Device) string {
-	return dev.Driver + "-" + dev.DriverVersion
-}
-
 func isHardLink(path string) (bool, error) {
 	var stat syscall.Stat_t
 
@@ -416,4 +460,13 @@ func OpenFileNoLinks(path string, flag int, perm os.FileMode) (*os.File, error) 
 	}
 
 	return file, nil
+}
+
+func SetOsEnvIfNotSet(key, value string, logger logr.Logger) error {
+	if osValue := os.Getenv(key); osValue != "" {
+		logger.Info("skipping ENV because it is already set", "key", key, "value", osValue)
+		return nil
+	}
+	logger.Info("setting ENV var", "key", key, "value", value)
+	return os.Setenv(key, value)
 }

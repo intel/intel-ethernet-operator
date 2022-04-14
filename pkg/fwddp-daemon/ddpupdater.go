@@ -6,7 +6,6 @@ package daemon
 import (
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -16,51 +15,39 @@ import (
 )
 
 var (
-	findDdp           = findDdpProfile
-	reloadIceServiceP = reloadIceService
+	findDdp = findDdpProfile
 	// /host comes from mounted folder in OCP
 	// /var/lib/firmware comes from modified kernel argument, which allows OS to read DDP profile from that path.
 	// This is done because on RHCOS /lib/firmware/* path is read-only
 	// intel/ice/ddp is default path for ICE *.pkg files
-	ddpUpdateFolder = "/host/var/lib/firmware/intel/ice/ddp/"
+	ocpDdpUpdatePath = "/host/var/lib/firmware/intel/ice/ddp"
+	k8sDdpUpdatePath = "/host/lib/firmware/updates/intel/ice/ddp"
 )
 
 type ddpUpdater struct {
 	log logr.Logger
 }
 
-func (d *ddpUpdater) handleDDPUpdate(pciAddr string, forceReboot bool, ddpPath string) error {
+func (d *ddpUpdater) handleDDPUpdate(pciAddr string, ddpPath string) (bool, error) {
 	log := d.log.WithName("handleDDPUpdate")
 	if ddpPath == "" {
-		return nil
+		return false, nil
 	}
 
 	err := d.updateDDP(pciAddr, ddpPath)
 	if err != nil {
 		log.Error(err, "Failed to update DDP", "device", pciAddr)
-		return err
+		return false, err
 	}
-
-	// Recommended for clusters, on which ControlPlane is running on E810 cards.
-	if forceReboot {
-		return nil
-	}
-
-	err = reloadIceServiceP()
-	if err != nil {
-		log.Error(err, "Failed to reload ICE service")
-		return err
-	}
-
-	return nil
+	return true, nil
 }
 
 // ddpProfilePath is the path to our extracted DDP profile
-// we copy it to ddpUpdateFolder
+// we copy it to ocpDdpUpdatePath or k8sDdpUpdatePath
 func (d *ddpUpdater) updateDDP(pciAddr, ddpProfilePath string) error {
 	log := d.log.WithName("updateDDP")
 
-	err := os.MkdirAll(ddpUpdateFolder, 0600)
+	err := os.MkdirAll(d.getDdpUpdatePath(), 0600)
 	if err != nil {
 		return err
 	}
@@ -75,7 +62,7 @@ func (d *ddpUpdater) updateDDP(pciAddr, ddpProfilePath string) error {
 		return fmt.Errorf("failed to extract devId")
 	}
 
-	target := filepath.Join(ddpUpdateFolder, "ice-"+devId+".pkg")
+	target := filepath.Join(d.getDdpUpdatePath(), "ice-"+devId+".pkg")
 	log.V(4).Info("Copying", "source", ddpProfilePath, "target", target)
 
 	return utils.CopyFile(ddpProfilePath, target)
@@ -114,9 +101,11 @@ func (d *ddpUpdater) prepareDDP(config ethernetv1.DeviceNodeConfig) (string, err
 	return findDdp(targetPath)
 }
 
-func reloadIceService() error {
-	cmd := exec.Command("chroot", "/host", "systemctl", "restart", "oot-ice-driver-load")
-	return cmd.Run()
+func (d *ddpUpdater) getDdpUpdatePath() string {
+	if utils.IsK8sDeployment() {
+		return k8sDdpUpdatePath
+	}
+	return ocpDdpUpdatePath
 }
 
 func findDdpProfile(targetPath string) (string, error) {

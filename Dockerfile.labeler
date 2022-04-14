@@ -26,9 +26,9 @@ devices as set in the config file (typically Intel Ethernet E810)" \
     description="The container detects the relevant PCI devices, labels the nodes that contain them \
 and removes the label for the nodes that do not."
 
-RUN mkdir -p /usr/share/misc/ && \
-    cd /usr/share/misc/ && \
-    curl https://pci-ids.ucw.cz/v2.2/pci.ids.gz -o pci.ids.gz && \
+WORKDIR /usr/share/misc/
+
+RUN curl https://pci-ids.ucw.cz/v2.2/pci.ids.gz -o pci.ids.gz && \
     gunzip pci.ids.gz
 
 USER 1001

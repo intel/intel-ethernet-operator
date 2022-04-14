@@ -11,7 +11,7 @@ metadata:
 spec:
   containers:
   - name: uft
-    image: dcf-tool:v21.08
+    image: dcf-tool:v22.03
     securityContext:
       allowPrivilegeEscalation: true
       privileged: true
@@ -54,9 +54,10 @@ spec:
     resources:
       limits:
         cpu: 100m
-        memory: 30Mi
+        memory: 100Mi
       requests:
         cpu: 100m
-        memory: 20Mi
+        memory: 100Mi
   serviceAccountName: intel-ethernet-operator-controller-manager
   terminationGracePeriodSeconds: 10
+  

@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"github.com/go-logr/logr"
+	"github.com/otcshare/intel-ethernet-operator/pkg/utils"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -80,7 +81,7 @@ func (a *Asset) loadFromFile() error {
 		return err
 	}
 
-	t, err := template.New("asset").Option("missingkey=error").Parse(string(content))
+	t, err := template.New("asset").Funcs(map[string]interface{}{"isK8s": utils.IsK8sDeployment}).Option("missingkey=error").Parse(string(content))
 	if err != nil {
 		return err
 	}

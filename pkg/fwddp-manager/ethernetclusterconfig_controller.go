@@ -5,6 +5,7 @@ package fwddp_manager
 
 import (
 	"context"
+	"github.com/otcshare/intel-ethernet-operator/pkg/utils"
 	"os"
 
 	"github.com/go-logr/logr"
@@ -18,6 +19,8 @@ import (
 
 	ethernetv1 "github.com/otcshare/intel-ethernet-operator/apis/ethernet/v1"
 )
+
+var getDrainSkip = utils.GetDrainSkip
 
 // EthernetClusterConfigReconciler reconciles a EthernetClusterConfig object
 type EthernetClusterConfigReconciler struct {
@@ -37,6 +40,7 @@ var NAMESPACE = os.Getenv("ETHERNET_NAMESPACE")
 //+kubebuilder:rbac:groups="",resources=namespaces;serviceaccounts;configmaps,verbs=*
 //+kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=roles;rolebindings;clusterroles;clusterrolebindings,verbs=*
 //+kubebuilder:rbac:groups=security.openshift.io,resources=securitycontextconstraints,resourceNames=privileged,verbs=use
+//+kubebuilder:rbac:groups=config.openshift.io,resources=infrastructures,verbs=get;list;watch
 
 func (r *EthernetClusterConfigReconciler) Reconcile(_ context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := r.Log.WithValues("ethernetclusterconfig", req.NamespacedName)
@@ -59,6 +63,12 @@ func (r *EthernetClusterConfigReconciler) Reconcile(_ context.Context, req ctrl.
 		return ctrl.Result{}, err
 	}
 
+	drainSkip, err := getDrainSkip(nodes, r.Client, r.Log)
+	if err != nil {
+		log.Error(err, "failed to determine drainSkip value")
+		return ctrl.Result{}, err
+	}
+
 	clusterConfigurationMatcher := createClusterConfigMatcher(r.getOrInitializeEthernetNodeConfig, log)
 	for _, node := range nodes.Items {
 		configurationContext, err := clusterConfigurationMatcher.match(node, clusterConfigs.Items)
@@ -66,7 +76,7 @@ func (r *EthernetClusterConfigReconciler) Reconcile(_ context.Context, req ctrl.
 			log.Error(err, "failed to match EthernetClusterConfig(s) to a node", "node", node.Name)
 			continue
 		}
-		if err := r.synchronizeNodeConfigSpec(configurationContext); err != nil {
+		if err := r.synchronizeNodeConfigSpec(configurationContext, drainSkip); err != nil {
 			log.Error(err, "failed to create/update NodeConfig", "node", node.Name)
 			continue
 		}
@@ -171,7 +181,7 @@ func (r *EthernetClusterConfigReconciler) getOrInitializeEthernetNodeConfig(name
 	return nc, nil
 }
 
-func (r *EthernetClusterConfigReconciler) synchronizeNodeConfigSpec(ncc NodeConfigurationCtx) error {
+func (r *EthernetClusterConfigReconciler) synchronizeNodeConfigSpec(ncc NodeConfigurationCtx, drainSkip bool) error {
 	copyWithEmptySpec := func(nc ethernetv1.EthernetNodeConfig) *ethernetv1.EthernetNodeConfig {
 		newNC := nc.DeepCopy()
 		newNC.Spec = ethernetv1.EthernetNodeConfigSpec{}
@@ -184,8 +194,7 @@ func (r *EthernetClusterConfigReconciler) synchronizeNodeConfigSpec(ncc NodeConf
 		dnc := ethernetv1.DeviceNodeConfig{PCIAddress: pciAddress}
 		dnc.DeviceConfig = cc.Spec.DeviceConfig
 		newNodeConfig.Spec.Config = append(newNodeConfig.Spec.Config, dnc)
-		newNodeConfig.Spec.DrainSkip = newNodeConfig.Spec.DrainSkip || cc.Spec.DrainSkip
-		newNodeConfig.Spec.ForceReboot = newNodeConfig.Spec.ForceReboot || cc.Spec.ForceReboot
+		newNodeConfig.Spec.DrainSkip = newNodeConfig.Spec.DrainSkip || drainSkip
 	}
 
 	if !equality.Semantic.DeepDerivative(newNodeConfig.Spec, currentNodeConfig.Spec) {

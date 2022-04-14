@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2021-2022 Intel Corporation
+
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -123,35 +126,54 @@ data:
                 - --zap-log-level=4
               imagePullPolicy: IfNotPresent
               volumeMounts:
-                - name: host
-                  mountPath: /host
+                - name: run
+                  mountPath: /host/run
                 - name: run-volume
                   mountPath: /run
+                - name: binaries
+                  mountPath: /host/bin/
                 - name: config-volume
                   mountPath: "/devices.json"
                   subPath: devices.json
                   readOnly: true
                 - name: libmodules
                   mountPath: /lib/modules
+                - name: lib
+                  mountPath: /host/usr/lib
+                - name: lib
+                  mountPath: /host/lib
+                - name: lib64
+                  mountPath: /host/usr/lib64
+                - name: lib64
+                  mountPath: /host/lib64
+                {{ if isK8s }}
+                - name: k8sddp
+                  mountPath: /host/lib/firmware/updates/intel/ice/ddp/
+                {{ else }}
+                - name: ocpddp
+                  mountPath: /host/var/lib/firmware/intel/ice/ddp/
+                {{ end }}
               env:
-                {{ if .NO_PROXY }}
+                {{ if ne .NO_PROXY "" }}
                 - name: NO_PROXY
-                  value: {{ .NO_PROXY }}
+                  value: "{{ .NO_PROXY }}"
                 - name: no_proxy
-                  value: {{ .NO_PROXY }}
+                  value: "{{ .NO_PROXY  }}"
                 {{ end }}
-                {{ if .HTTP_PROXY }}
+                {{ if ne .HTTP_PROXY "" }}
                 - name: HTTP_PROXY
-                  value: {{ .HTTP_PROXY }}
+                  value: "{{ .HTTP_PROXY }}"
                 - name: http_proxy
-                  value: {{ .HTTP_PROXY }}
+                  value: "{{ .HTTP_PROXY  }}"
                 {{ end }}
-                {{ if .HTTPS_PROXY }}
+                {{ if ne .HTTPS_PROXY "" }}
                 - name: HTTPS_PROXY
-                  value: {{ .HTTPS_PROXY }}
+                  value: "{{ .HTTPS_PROXY  }}"
                 - name: https_proxy
-                  value: {{ .HTTPS_PROXY }}
+                  value: "{{ .HTTPS_PROXY  }}"
                 {{ end }}
+                - name: ETHERNET_GENERIC_K8S
+                  value: "{{ .ETHERNET_GENERIC_K8S }}"
                 - name: ETHERNET_NAMESPACE
                   valueFrom:
                     fieldRef:
@@ -169,9 +191,12 @@ data:
                 privileged: true
                 runAsUser: 0
           volumes:
-            - name: host
+            - name: run
               hostPath:
-                path: /
+                path: /run
+            - name: binaries
+              hostPath:
+                path: /usr/bin/
             - name: run-volume
               emptyDir: {}
             - name: config-volume
@@ -180,3 +205,18 @@ data:
             - name: libmodules
               hostPath:
                 path: /lib/modules
+            {{ if isK8s }}
+            - name: k8sddp
+              hostPath:
+                path: /lib/firmware/updates/intel/ice/ddp
+            {{ else }}
+            - name: ocpddp
+              hostPath:
+                path: /var/lib/firmware/intel/ice/ddp
+            {{ end }}
+            - name: lib
+              hostPath:
+                path: /usr/lib
+            - name: lib64
+              hostPath:
+                path: /usr/lib64

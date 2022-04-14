@@ -42,7 +42,7 @@ var (
 	untarFile        = utils.Untar
 	unpackDDPArchive = utils.UnpackDDPArchive
 
-	artifactsFolder  = "/host/tmp/fwddp_artifacts/nvmupdate/"
+	artifactsFolder  = "/run/nvmeupdate/"
 	compatMapPath    = "./devices.json"
 	compatibilityMap *CompatibilityMap
 )
@@ -229,6 +229,13 @@ func (r *NodeConfigReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	condition := meta.FindStatusCondition(nodeConfig.Status.Conditions, UpdateCondition)
 	if condition != nil && condition.Reason == string(UpdatePostUpdateReboot) {
 		log.V(4).Info("Post-update node reboot completed, finishing update...")
+
+		err := r.drainHelper.Uncordon(context.TODO())
+		if err != nil {
+			log.Error(err, "failed to uncordon node")
+			return requeueLater()
+		}
+
 		r.updateCondition(nodeConfig, metav1.ConditionTrue, UpdateSucceeded, "Updated successfully")
 		log.V(2).Info("Reconciled")
 		return doNotRequeue()
@@ -269,7 +276,7 @@ func (r *NodeConfigReconciler) configureNode(updateQueue deviceUpdateQueue, node
 
 	drainFunc := func(ctx context.Context) bool {
 		fwReboot := false
-		rebootRequired = nodeConfig.Spec.ForceReboot
+		ddpReboot := false
 
 		for pciAddr, artifacts := range updateQueue {
 			fwReboot, nodeActionErr = r.fwUpdater.handleFWUpdate(pciAddr, artifacts.fwPath)
@@ -277,12 +284,12 @@ func (r *NodeConfigReconciler) configureNode(updateQueue deviceUpdateQueue, node
 				return true
 			}
 
-			rebootRequired = rebootRequired || fwReboot
-
-			nodeActionErr = r.ddpUpdater.handleDDPUpdate(pciAddr, nodeConfig.Spec.ForceReboot, artifacts.ddpPath)
+			ddpReboot, nodeActionErr = r.ddpUpdater.handleDDPUpdate(pciAddr, artifacts.ddpPath)
 			if nodeActionErr != nil {
 				return true
 			}
+
+			rebootRequired = fwReboot || ddpReboot
 		}
 
 		if rebootRequired {
@@ -394,9 +401,6 @@ func (r *NodeConfigReconciler) rebootNode() error {
 	log := r.log.WithName("rebootNode")
 	// systemd-run command borrowed from openshift/sriov-network-operator
 	_, err := execCmd([]string{"chroot", "--userspec", "0", "/host",
-		"systemd-run",
-		"--unit", "ethernet-daemon-reboot",
-		"--description", "ethernet-daemon reboot",
-		"/bin/sh", "-c", "systemctl stop kubelet.service; reboot"}, log)
+		"sh", "-c", "systemctl stop kubelet.service; systemctl reboot"}, log)
 	return err
 }

@@ -96,7 +96,9 @@ var _ = Describe("EthernetControllerTest", func() {
 		}
 
 		reconcile := func() *EthernetClusterConfigReconciler {
+
 			reconciler := EthernetClusterConfigReconciler{k8sClient, log, scheme.Scheme}
+
 			_, err := reconciler.Reconcile(context.TODO(), createDummyReconcileRequest())
 			Expect(err).ToNot(HaveOccurred())
 			return &reconciler

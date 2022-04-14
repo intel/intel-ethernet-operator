@@ -10,15 +10,15 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 	"fmt"
+	"github.com/go-logr/logr"
 	"io"
+	"io/fs"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 	"testing"
-
-	"github.com/go-logr/logr"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -241,7 +241,8 @@ var _ = Describe("Utils", func() {
 	})
 
 	var _ = Describe("Untar", func() {
-		log := ctrl.Log.WithName("EthernetDaemon-test")
+		log := logr.Discard()
+
 		var _ = It("will return error if it's not able to open file", func() {
 			err := Untar("./somesrcfile", "./somedstfile", log)
 			Expect(err).To(HaveOccurred())
@@ -262,31 +263,41 @@ var _ = Describe("Utils", func() {
 			Expect(err).To(HaveOccurred())
 		})
 
-		var _ = It("will exctract valid archive", func() {
-			tarPath, filenames, err := testTar()
-			rootDir := filenames[0]
+		var _ = It("will extract valid archive", func() {
+			workDir, err := ioutil.TempDir("", "untar-test")
 			Expect(err).ToNot(HaveOccurred())
-			err = Untar(tarPath, "./", log)
+			defer os.RemoveAll(workDir)
+
+			dirToBeArchived := "sample-archive"
+			pathOfDirToBeArchived := "testdata/archives/"
+			dirToBeArchivedPath := filepath.Join(pathOfDirToBeArchived, dirToBeArchived)
+
+			tarFilePath := filepath.Join(workDir, "test-archive.tar.gz")
+			createTarArchive(tarFilePath, pathOfDirToBeArchived, dirToBeArchived)
+
+			Expect(Untar(tarFilePath, workDir, log)).ToNot(HaveOccurred())
+
+			_ = filepath.WalkDir(dirToBeArchivedPath, func(path string, d fs.DirEntry, err error) error {
+				Expect(err).ShouldNot(HaveOccurred())
+				actualRelPath, err := filepath.Rel(dirToBeArchivedPath, path)
+				Expect(err).ShouldNot(HaveOccurred())
+				expectedFile := filepath.Join(workDir, dirToBeArchived, actualRelPath)
+				_, err = os.Stat(expectedFile)
+				Expect(err).To(Not(HaveOccurred()), expectedFile, "has not been extracted from tar.gz archive")
+				return nil
+			})
+		})
+
+		var _ = It("will fail when extracting zip-slip vulnerable archive", func() {
+			out, err := ioutil.TempDir("", "zip-slip-tar-out")
 			Expect(err).ToNot(HaveOccurred())
-			Expect(filenames).To(HaveLen(5))
-			defer os.RemoveAll(rootDir)
-			defer os.Remove(tarPath)
+			defer os.Remove(out)
 
-			var untaredFilenames []string
-			err = filepath.Walk(rootDir,
-				func(path string, info os.FileInfo, err error) error {
-					if err != nil {
-						return err
-					}
-					untaredFilenames = append(untaredFilenames, path)
-					return nil
-				})
-			Expect(err).ToNot(HaveOccurred())
-
-			sort.Strings(filenames)
-			sort.Strings(untaredFilenames)
-
-			Expect(filenames).To(Equal(untaredFilenames))
+			Expect(
+				Untar("./testdata/vulnerabilities/zip-slip/zip-slip.tar.gz", out, log),
+			).Should(
+				MatchError(ContainSubstring("illegal file path")),
+			)
 		})
 	})
 
@@ -398,14 +409,26 @@ var _ = Describe("Utils", func() {
 		})
 
 		var _ = It("will return error if input file is not a zip archive", func() {
-			tarPath, filenames, err := testTar()
+			thisIsNotZipArchive, err := ioutil.TempFile("", "temp-file")
 			Expect(err).ToNot(HaveOccurred())
-			defer os.RemoveAll(filenames[0])
-			defer os.Remove(tarPath)
+			defer thisIsNotZipArchive.Close()
+			defer os.Remove(thisIsNotZipArchive.Name())
 
-			err = Unzip(tarPath, os.TempDir(), log)
+			err = Unzip(thisIsNotZipArchive.Name(), os.TempDir(), log)
 			Expect(err).To(HaveOccurred())
 			Expect(err).To(Equal(zip.ErrFormat))
+		})
+
+		var _ = It("will fail when extracting zip-slip vulnerable archive", func() {
+			out, err := ioutil.TempDir("", "zip-slip-zip-out")
+			Expect(err).ToNot(HaveOccurred())
+			defer os.Remove(out)
+
+			Expect(
+				Unzip("./testdata/vulnerabilities/zip-slip/zip-slip.zip", out, log),
+			).Should(
+				MatchError(ContainSubstring("illegal file path")),
+			)
 		})
 	})
 
@@ -473,86 +496,38 @@ var _ = Describe("Utils", func() {
 	})
 })
 
-func testTar() (string, []string, error) {
-	// Generated test directory:
-	// 	testdir
-	// 	|-- testfile1
-	// 	|-- testfile2
-	// 	|-- testdir2
-	// 	    |-- testfile3
-	var filenames []string
-	tarpath := "./test.tar.gz"
+func createTarArchive(tarPath string, pathToArchiveDirectory string, dirToBeArchived string) {
+	tarFile, err := os.Create(tarPath)
+	Expect(err).ToNot(HaveOccurred())
+	defer tarFile.Close()
 
-	tmpdir, err := ioutil.TempDir(".", "testdir")
-	Expect(err).ToNot(HaveOccurred())
-	defer os.RemoveAll(tmpdir)
-	filenames = append(filenames, tmpdir)
+	gzipWriter := gzip.NewWriter(tarFile)
+	defer gzipWriter.Close()
 
-	tmpfile1, err := ioutil.TempFile("./"+tmpdir, "testfile")
-	Expect(err).ToNot(HaveOccurred())
-	_, err = tmpfile1.Write([]byte("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"))
-	Expect(err).ToNot(HaveOccurred())
-	err = tmpfile1.Close()
-	Expect(err).ToNot(HaveOccurred())
-	filenames = append(filenames, tmpfile1.Name())
+	tarWriter := tar.NewWriter(gzipWriter)
+	defer tarWriter.Close()
 
-	tmpfile2, err := ioutil.TempFile("./"+tmpdir, "testfile")
-	Expect(err).ToNot(HaveOccurred())
-	_, err = tmpfile2.Write([]byte("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"))
-	Expect(err).ToNot(HaveOccurred())
-	err = tmpfile2.Close()
-	Expect(err).ToNot(HaveOccurred())
-	filenames = append(filenames, tmpfile2.Name())
+	_ = filepath.WalkDir(filepath.Join(pathToArchiveDirectory, dirToBeArchived), func(path string, d fs.DirEntry, err error) error {
+		Expect(err).ToNot(HaveOccurred())
+		fileInfo, err := d.Info()
+		Expect(err).ToNot(HaveOccurred())
 
-	tmpdir2, err := ioutil.TempDir("./"+tmpdir, "testdir")
-	Expect(err).ToNot(HaveOccurred())
-	filenames = append(filenames, tmpdir2)
+		header, err := tar.FileInfoHeader(fileInfo, fileInfo.Name())
+		header.Name = strings.TrimPrefix(
+			strings.Replace(path, pathToArchiveDirectory, "", -1),
+			string(filepath.Separator),
+		)
+		Expect(err).ToNot(HaveOccurred())
 
-	tmpfile3, err := ioutil.TempFile("./"+tmpdir2, "testfile")
-	Expect(err).ToNot(HaveOccurred())
-	_, err = tmpfile3.Write([]byte("lmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijk"))
-	Expect(err).ToNot(HaveOccurred())
-	err = tmpfile3.Close()
-	Expect(err).ToNot(HaveOccurred())
-	filenames = append(filenames, tmpfile3.Name())
-
-	tarfile, err := os.Create(tarpath)
-	Expect(err).ToNot(HaveOccurred())
-	defer tarfile.Close()
-
-	var fw io.Writer = tarfile
-
-	gzw := gzip.NewWriter(fw)
-	defer gzw.Close()
-
-	tw := tar.NewWriter(gzw)
-	defer tw.Close()
-
-	err = filepath.Walk(tmpdir,
-		func(path string, info os.FileInfo, err error) error {
+		Expect(tarWriter.WriteHeader(header)).ToNot(HaveOccurred())
+		if d.Type().IsRegular() {
+			bytes, err := ioutil.ReadFile(path)
 			Expect(err).ToNot(HaveOccurred())
-			header, err := tar.FileInfoHeader(info, info.Name())
+			_, err = tarWriter.Write(bytes)
 			Expect(err).ToNot(HaveOccurred())
-
-			header.Name = filepath.Join(tmpdir, strings.TrimPrefix(path, tmpdir))
-			err = tw.WriteHeader(header)
-			Expect(err).ToNot(HaveOccurred())
-
-			if info.Mode().IsDir() {
-				return nil
-			}
-
-			f, err := os.Open(path)
-			Expect(err).ToNot(HaveOccurred())
-
-			_, err = io.Copy(tw, f)
-			Expect(err).ToNot(HaveOccurred())
-			f.Close()
-
-			return nil
-		})
-
-	return tarpath, filenames, err
+		}
+		return nil
+	})
 }
 
 func makeZip(name string, filesCreate, filesCopy []string) string {

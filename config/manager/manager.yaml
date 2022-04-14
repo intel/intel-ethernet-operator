@@ -27,6 +27,13 @@ spec:
     spec:
       securityContext:
         runAsNonRoot: true
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              control-plane: controller-manager
       containers:
       - command:
         - /manager
@@ -51,10 +58,10 @@ spec:
         resources:
           limits:
             cpu: 100m
-            memory: 30Mi
+            memory: 200Mi
           requests:
             cpu: 100m
-            memory: 20Mi
+            memory: 200Mi
         env:
         - name: ETHERNET_NODE_LABEL
           value: "ethernet.intel.com/intel-ethernet-present"

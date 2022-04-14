@@ -109,7 +109,7 @@ var _ = Describe("DrainHelper Tests", func() {
 			dh := NewDrainHelper(log, cset, "node", "namespace")
 			Expect(dh).ToNot(BeNil())
 
-			err = dh.uncordon(context.Background())
+			err = dh.Uncordon(context.Background())
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("connection refused"))
 		})
@@ -196,7 +196,7 @@ var _ = Describe("DrainHelper Tests", func() {
 			err = dh.cordonAndDrain(context.Background())
 			Expect(err).ToNot(HaveOccurred())
 
-			err = dh.uncordon(context.Background())
+			err = dh.Uncordon(context.Background())
 			Expect(err).ToNot(HaveOccurred())
 
 			// Cleanup

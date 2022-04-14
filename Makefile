@@ -15,6 +15,7 @@ VERSION ?= 0.0.1
 # Set default K8CLI tool to 'oc' if it's not defined. To change this you can export this in env. e.g., export K8CLI=kubectl
 K8CLI ?= oc
 
+TARGET_PLATFORM ?= OCP
 # Set default IMGTOOL tool to 'podman' if it's not defined. To change this you can export this in env. e.g., export IMGTOOL=docker
 IMGTOOL ?= podman
 
@@ -72,6 +73,13 @@ FCDAEMON_IMAGE_TAG_VERSION = $(FCDAEMON_NAME):$(VERSION)
 # Image URL to use all building/pushing FlowConfigDaemon image targets
 FCDAEMON_IMG?=$(FCDAEMON_IMAGE_TAG_VERSION)
 FCDAEMON_DOCKERFILE = images/Dockerfile.FlowConfigDaemon
+
+UFT_IMAGE ?= dcf-tool:v22.03
+ifneq (, $(IMAGE_REGISTRY))
+UFT_IMAGE_URL = $(IMAGE_REGISTRY)/$(UFT_IMAGE)
+else
+UFT_IMAGE_URL = $(UFT_IMAGE)
+endif
 
 # Produce CRDs that work back to Kubernetes 1.11 (no version conversion)
 CRD_OPTIONS ?= "crd:trivialVersions=true,preserveUnknownFields=false"
@@ -132,7 +140,8 @@ manifests: controller-gen ## Generate WebhookConfiguration, ClusterRole and Cust
 # Generate flowconfig-daemon deployment assets
 .PHONY: flowconfig-manifests
 flowconfig-manifests: kustomize
-	cd config/flowconfig-daemon && $(KUSTOMIZE) edit set image daemon-image=${FCDAEMON_IMG}
+	cd config/flowconfig-daemon && $(KUSTOMIZE) edit set image daemon-image=${FCDAEMON_IMG} && $(KUSTOMIZE) edit set image dcf-tool=${UFT_IMAGE_URL}
+	mkdir -p assets/flowconfig-daemon
 	$(KUSTOMIZE) build config/flowconfig-daemon -o assets/flowconfig-daemon/daemon.yaml
 	FOLDER=. COPYRIGHT_FILE=COPYRIGHT ./copyright.sh
 
@@ -166,7 +175,7 @@ rm -rf $$TMP_DIR ;\
 }
 endef
 
-test: manifests generate fmt vet envtest ## Run tests.
+test: manifests flowconfig-manifests generate fmt vet envtest ## Run tests.
 	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path)" ETHERNET_NAMESPACE=default go test ./... -timeout 30m -coverprofile cover.out
 
 test_daemon: manifests generate fmt vet envtest ## Run tests only for the fwddp_daemon.
@@ -181,7 +190,7 @@ flowconfig-daemon: generate fmt vet
 daemon: generate fmt vet
 	go build -o bin/fwddp-daemon cmd/fwddp-daemon/main.go
 
-run: manifests generate fmt vet ## Run a controller from your host.
+run: manifests flowconfig-manifests generate fmt vet ## Run a controller from your host.
 	go run ./main.go
 
 docker-build: test ## Build docker image with the manager.
@@ -261,13 +270,16 @@ bundle: manifests kustomize flowconfig-manifests ## Generate bundle manifests an
 	operator-sdk generate kustomize manifests -q
 	cd config/manager && $(KUSTOMIZE) edit set image controller=$(ETHERNET_MANAGER_IMAGE)
 	$(KUSTOMIZE) build config/manifests | envsubst | operator-sdk generate bundle -q --overwrite --version $(VERSION) $(BUNDLE_METADATA_OPTS)
+ifeq ("$(TARGET_PLATFORM)", "OCP")
 	cp config/metadata/bases/dependencies.yaml bundle/metadata/dependencies.yaml
+else
+	rm -f bundle/metadata/dependencies.yaml
+endif
 	operator-sdk bundle validate ./bundle
 	FOLDER=. COPYRIGHT_FILE=COPYRIGHT ./copyright.sh
 	cat COPYRIGHT bundle.Dockerfile >bundle.tmp
 	printf "\nCOPY COPYRIGHT /licenses/LICENSE\n" >> bundle.tmp
 	mv bundle.tmp bundle.Dockerfile
-
 .PHONY: bundle-build
 bundle-build: bundle ## Build the bundle image.
 	$(IMGTOOL) build -f bundle.Dockerfile -t $(BUNDLE_IMG) ${DOCKERARGS} .

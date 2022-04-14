@@ -18,7 +18,7 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GO111MODULE=on go build -a -o fwddp_da
 
 FROM registry.access.redhat.com/ubi8:8.5-214
 
-RUN yum install -y ethtool-5.8-5.el8.x86_64 iproute-5.9.0-4.el8.x86_64 kmod-25-17.el8.x86_64 pciutils-3.7.0-1.el8.x86_64
+RUN yum install -y ethtool iproute kmod pciutils && yum clean all
 
 ARG VERSION
 ### Required OpenShift Labels

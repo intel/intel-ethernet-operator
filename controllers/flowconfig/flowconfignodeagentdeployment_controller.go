@@ -29,6 +29,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	flowconfigv1 "github.com/otcshare/intel-ethernet-operator/apis/flowconfig/v1"
+	"github.com/otcshare/intel-ethernet-operator/pkg/utils"
 )
 
 // FlowConfigNodeAgentDeploymentReconciler reconciles a FlowConfigNodeAgentDeployment object
@@ -48,6 +49,9 @@ const (
 	nodeLabel         = "kubernetes.io/hostname"
 	uftContainerName  = "uft"
 	podTemplateFile   = "../../assets/flowconfig-daemon/daemon.yaml"
+	ocpDdpUpdatePath  = "/var/lib/firmware/intel/ice/ddp/"
+	k8sDdpUpdatePath  = "/lib/firmware/updates/intel/ice/ddp"
+	podVolumeName     = "iceddp"
 )
 
 //+kubebuilder:rbac:groups=flowconfig.intel.com,resources=flowconfignodeagentdeployments,verbs=get;list;watch;create;update;patch;delete
@@ -339,7 +343,26 @@ func (r *FlowConfigNodeAgentDeploymentReconciler) getPodTemplate() (*corev1.Pod,
 		return nil, fmt.Errorf("uft container not found in podSpec, pod definition is invalid")
 	}
 
+	if utils.IsK8sDeployment() {
+		pod = r.addDdpVolumes(pod, k8sDdpUpdatePath)
+	} else {
+		pod = r.addDdpVolumes(pod, ocpDdpUpdatePath)
+	}
+
 	return pod, err
+}
+
+func (r *FlowConfigNodeAgentDeploymentReconciler) addDdpVolumes(pod *corev1.Pod, ddpPath string) *corev1.Pod {
+	pod.Spec.Volumes = append(pod.Spec.Volumes, corev1.Volume{
+		Name: podVolumeName,
+		VolumeSource: corev1.VolumeSource{
+			HostPath: &corev1.HostPathVolumeSource{
+				Path: ddpPath,
+			},
+		},
+	})
+
+	return pod
 }
 
 // SetupWithManager sets up the controller with the Manager.

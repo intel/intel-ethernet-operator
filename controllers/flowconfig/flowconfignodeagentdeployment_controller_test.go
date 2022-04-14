@@ -63,11 +63,15 @@ var _ = Describe("FlowConfigNodeAgentDeployment controller", func() {
 	)
 
 	const (
-		namespaceDefault = "default"
-		namespaceIntel   = "intel-ethernet-operator-system"
-		nodeName1        = "k8snode-1"
-		nodeName2        = "k8snode-2"
-		vfPoolName       = "intel.com/cvl_uft_admin"
+		namespaceDefault  = "default"
+		namespaceIntel    = "intel-ethernet-operator-system"
+		nodeName1         = "k8snode-1"
+		nodeName2         = "k8snode-2"
+		vfPoolName        = "intel.com/cvl_uft_admin"
+		clusterTypeEnvKey = "ETHERNET_GENERIC_K8S"
+
+		timeout  = 4 * time.Second
+		interval = 1000 * time.Millisecond
 	)
 
 	createNamespace := func(name string) *corev1.Namespace {
@@ -142,6 +146,15 @@ var _ = Describe("FlowConfigNodeAgentDeployment controller", func() {
 		Expect(isError).To(BeTrue())
 		Expect(value).Should(Equal(int64(amount)))
 		Expect(pod.Annotations).Should(HaveKeyWithValue("k8s.v1.cni.cncf.io/networks", networkString))
+
+		volumes := pod.Spec.Containers[container].VolumeMounts
+		found := false
+		for _, v := range volumes {
+			if v.MountPath == "/lib/firmware/intel/ice/ddp" {
+				found = true
+			}
+		}
+		Expect(found).To(BeTrue())
 
 		for _, check := range checkers {
 			check(pod)
@@ -788,6 +801,72 @@ var _ = Describe("FlowConfigNodeAgentDeployment controller", func() {
 			time.Sleep(2 * time.Second)
 			err = WaitForPodCreation(k8sClient, fmt.Sprintf("flowconfig-daemon-%s", nodeName1), namespaceDefault, timeout, interval)
 			Expect(err).ToNot(BeNil())
+		})
+	})
+
+	Context("Different type of clusters", func() {
+		setClusterTypeEnv := func(envValue string) {
+			err := os.Setenv(clusterTypeEnvKey, envValue)
+			Expect(err).NotTo(HaveOccurred())
+			// Reload Pod template
+			podTemp, err := nodeAgentDeploymentRc.getPodTemplate()
+			Expect(err).Should(BeNil())
+			nodeAgentDeploymentRc.flowConfigPod = podTemp
+		}
+		unsetClusterTypeEnv := func() {
+			err := os.Unsetenv(clusterTypeEnvKey)
+			Expect(err).NotTo(HaveOccurred())
+			// Reload Pod template to default
+			podTemp, err := nodeAgentDeploymentRc.getPodTemplate()
+			Expect(err).Should(BeNil())
+			nodeAgentDeploymentRc.flowConfigPod = podTemp
+		}
+
+		checkHostVolPath := func(envVal, hostDDPpath string) {
+			setClusterTypeEnv(envVal)
+			defer unsetClusterTypeEnv()
+
+			node := createNode(nodeName1, func(node *corev1.Node) {
+				node.Status.Capacity = make(map[corev1.ResourceName]resource.Quantity)
+				node.Status.Capacity[vfPoolName] = *resource.NewQuantity(1, resource.DecimalSI)
+			})
+			defer deleteNode(node)
+
+			Eventually(func() bool {
+				err := k8sClient.Create(context.Background(),
+					getFlowConfigNodeAgentDeployment(namespaceDefault, func(flow *flowconfigv1.FlowConfigNodeAgentDeployment) {
+						flow.Spec.DCFVfPoolName = vfPoolName
+						flow.Spec.NADAnnotation = "flowconfig-daemon-sriov-cvl0-admin"
+					}))
+				return err == nil
+			}, timeout, interval).Should(BeTrue())
+			defer deletePod(fmt.Sprintf("flowconfig-daemon-%s", nodeName1), namespaceDefault)
+			defer deleteFlowConfigNodeAgentDeployment(namespaceDefault)
+
+			verifyExpectedPODDefintion(namespaceDefault, fmt.Sprintf("flowconfig-daemon-%s", nodeName1),
+				nodeName1,
+				"flowconfig-daemon-sriov-cvl0-admin",
+				vfPoolName, 0, 1, func(pod *corev1.Pod) {
+					podVolumes := pod.Spec.Volumes
+					ddpVolExists := false
+					for _, v := range podVolumes {
+						if v.VolumeSource.HostPath != nil && v.VolumeSource.HostPath.Path == hostDDPpath {
+							ddpVolExists = true
+						}
+					}
+					Expect(ddpVolExists).To(BeTrue())
+				})
+		}
+
+		Context("On a vanilla K8s", func() {
+			It("Should have correct DDP volume mount in Pod spec", func() {
+				checkHostVolPath("true", k8sDdpUpdatePath)
+			})
+		})
+		Context("On a OCP cluster", func() {
+			It("Should have correct DDP volume mount in Pod spec", func() {
+				checkHostVolPath("false", ocpDdpUpdatePath)
+			})
 		})
 	})
 

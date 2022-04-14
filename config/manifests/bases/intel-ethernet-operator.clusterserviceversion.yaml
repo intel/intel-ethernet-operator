@@ -7,6 +7,12 @@ metadata:
   annotations:
     alm-examples: '[]'
     capabilities: Basic Install
+    categories: Networking
+    containerImage: #TODO update before release e.g. registry.connect.redhat.com/intel/sriov-fec-operator@sha256:c2c989aa3e9f03558bf207df4524b756c89bc9234194d4f82c2ce77f6dd0b255
+    createdAt: #TODO update before release e.g. 2021-11-30
+    description: The role of the Intel Ethernet Operator is to orchestrate and manage the configuration of the capabilities exposed by the Intel E810 Series network interface cards (NICs).
+    repository: https://github.com/smart-edge-open/intel-ethernet-operator
+    support: Intel Corporation
   name: intel-ethernet-operator.v0.0.0
   namespace: placeholder
 spec:

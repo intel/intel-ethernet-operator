@@ -6,11 +6,11 @@ package drainhelper
 import (
 	"context"
 	"fmt"
-	"github.com/go-logr/logr"
 	"os"
 	"strconv"
 	"time"
 
+	"github.com/go-logr/logr"
 	"github.com/otcshare/intel-ethernet-operator/pkg/utils"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -153,7 +153,7 @@ func (dh *DrainHelper) Run(f func(context.Context) bool, drain bool) error {
 				// always try to uncordon the node
 				// e.g. when cordoning succeeds, but draining fails
 				dh.log.Info("uncordoning node")
-				if err := dh.uncordon(ctx); err != nil {
+				if err := dh.Uncordon(ctx); err != nil {
 					dh.log.Error(err, "uncordon failed")
 					innerErr = err
 				}
@@ -243,7 +243,7 @@ func (dh *DrainHelper) cordonAndDrain(ctx context.Context) error {
 	return nil
 }
 
-func (dh *DrainHelper) uncordon(ctx context.Context) error {
+func (dh *DrainHelper) Uncordon(ctx context.Context) error {
 	node, err := dh.clientSet.CoreV1().Nodes().Get(ctx, dh.nodeName, metav1.GetOptions{})
 	if err != nil {
 		dh.log.Error(err, "failed to get the node object")
