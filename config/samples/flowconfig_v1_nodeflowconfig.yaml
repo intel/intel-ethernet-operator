@@ -1,0 +1,26 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2021 Intel Corporation
+
+apiVersion: flowconfig.intel.com/v1
+kind: NodeFlowConfig
+metadata:
+  name: node01
+  namespace: intel-ethernet-operator-system
+spec:
+  rules:
+    - pattern:
+        - type: RTE_FLOW_ITEM_TYPE_ETH
+        - type: RTE_FLOW_ITEM_TYPE_IPV4
+          spec:
+            hdr:
+              src_addr: 10.56.217.9
+          mask:
+            hdr:
+              src_addr: 255.255.255.255
+        - type: RTE_FLOW_ITEM_TYPE_END
+      action:
+        - type: RTE_FLOW_ACTION_TYPE_DROP
+        - type: RTE_FLOW_ACTION_TYPE_END
+      portId: 0
+      attr:
+        ingress: 1

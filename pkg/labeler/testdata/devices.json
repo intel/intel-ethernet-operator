@@ -1,0 +1,11 @@
+{
+	"E809": {
+		"VendorID": "0001", "Class": "00", "SubClass": "00", "DeviceID": "123"  
+	},
+	"E810": {
+		"VendorID": "8086", "Class": "02", "SubClass": "00", "DeviceID": "1592"  
+	},
+	"E811": {
+		"VendorID": "0002", "Class": "00", "SubClass": "00", "DeviceID": "321"
+	}
+}

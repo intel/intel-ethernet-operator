@@ -1,0 +1,6 @@
+{
+"E810-A": {"VendorID": "0001", "Class": "00", "SubClass": "00", "DeviceID": "123", "Driver": "ice-1.0.0", "Firmware": "2.00", "DDP": ["profile1-1.00", "profile2-2.00"]},
+"E810-B": {"VendorID": "0001", "Class": "00", "SubClass": "00", "DeviceID": "321", "Driver": "ice-1.1.1", "Firmware": "3.00", "DDP": ["profile3-3.00", "profile4-4.00"]},
+"E810-X": {"VendorID": "0001", "Class": "00", "SubClass": "00", "DeviceID": "123", "Driver": "*", "Firmware": "9.99", "DDP": ["profile3-3.00", "profile4-4.00"]},
+"E810-Y": {"VendorID": "0001", "Class": "00", "SubClass": "00", "DeviceID": "123", "Driver": "ice-9.9.9", "Firmware": "*", "DDP": ["profile3-3.00", "profile4-4.00"]}
+}

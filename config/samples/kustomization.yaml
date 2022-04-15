@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2021 Intel Corporation
+
+## Append samples you want in your CSV to this file as resources ##
+resources:
+- ethernet_v1_ethernetclusterconfig.yaml
+- ethernet_v1_ethernetnodeconfig.yaml
+- flowconfig_v1_nodeflowconfig.yaml
+- flowconfig_v1_flowconfignodeagentdeployment.yaml
+#+kubebuilder:scaffold:manifestskustomizesamples

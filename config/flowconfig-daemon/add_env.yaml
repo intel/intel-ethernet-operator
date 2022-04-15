@@ -1,0 +1,22 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2021 Intel Corporation
+
+apiVersion: apps/v1
+kind: Pod
+metadata:
+  name: flowconfig-daemon
+  namespace: system
+  labels:
+    name: flowconfig-daemon
+spec:
+  containers:
+    - name: flowconfig-daemon
+      env:
+        - name: WATCH_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName

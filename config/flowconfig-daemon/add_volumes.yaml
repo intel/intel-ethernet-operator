@@ -1,0 +1,14 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2021 Intel Corporation
+
+apiVersion: apps/v1
+kind: Pod
+metadata:
+  name: flowconfig-daemon
+  namespace: system
+spec:
+  volumes:
+    - name: hugepage
+      emptyDir:
+        medium: HugePages
+

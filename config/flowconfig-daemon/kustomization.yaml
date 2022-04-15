@@ -1,0 +1,16 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2021 Intel Corporation
+
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+# Change this namespace to match with namespace in config/default/kustomization.yaml
+namespace: intel-ethernet-operator-system
+resources:
+- flowconfig-manager.yaml
+
+patchesStrategicMerge:
+- add_volumes.yaml
+images:
+- name: daemon-image
+  newName: intel-ethernet-operator-flowconfig-daemon
+  newTag: 0.0.1

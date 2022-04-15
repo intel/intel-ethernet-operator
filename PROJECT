@@ -1,0 +1,49 @@
+domain: intel.com
+layout:
+- go.kubebuilder.io/v3
+multigroup: true
+plugins:
+  manifests.sdk.operatorframework.io/v2: {}
+  scorecard.sdk.operatorframework.io/v2: {}
+projectName: intel-ethernet-operator
+repo: github.com/otcshare/intel-ethernet-operator
+resources:
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: intel.com
+  group: ethernet
+  kind: EthernetClusterConfig
+  path: github.com/otcshare/intel-ethernet-operator/apis/ethernet/v1
+  version: v1
+- api:
+    crdVersion: v1
+    namespaced: true
+  domain: intel.com
+  group: ethernet
+  kind: EthernetNodeConfig
+  path: github.com/otcshare/intel-ethernet-operator/apis/ethernet/v1
+  version: v1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: intel.com
+  group: flowconfig
+  kind: NodeFlowConfig
+  path: github.com/otcshare/intel-ethernet-operator/apis/flowconfig/v1
+  version: v1
+  webhooks:
+    validation: true
+    webhookVersion: v1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: intel.com
+  group: flowconfig
+  kind: FlowConfigNodeAgentDeployment
+  path: github.com/otcshare/intel-ethernet-operator/apis/flowconfig/v1
+  version: v1
+version: "3"

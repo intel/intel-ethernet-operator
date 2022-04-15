@@ -1,0 +1,27 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2021 Intel Corporation
+
+# permissions for end users to edit ethernetnodeconfigs.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: ethernetnodeconfig-editor-role
+rules:
+- apiGroups:
+  - ethernet.intel.com
+  resources:
+  - ethernetnodeconfigs
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - ethernet.intel.com
+  resources:
+  - ethernetnodeconfigs/status
+  verbs:
+  - get
