@@ -644,7 +644,7 @@ var _ = Describe("DaemonTests", func() {
 			Expect(nodeConfigs.Items[0].Status.Conditions[0].Message).To(ContainSubstring("failed to get MAC for device 0000:00:00.1. Device not found"))
 		})
 
-		var _ = It("if FWUrl is empty then FW update is skipped and status updated to UpdateSucceeded", func() {
+		var _ = It("if FWUrl is empty (empty device config) then FW update is skipped and status updated to NotRequested", func() {
 
 			data.NodeConfig.Spec.Config[0].DeviceConfig.FWURL = ""
 
@@ -674,8 +674,8 @@ var _ = Describe("DaemonTests", func() {
 			Expect(k8sClient.List(context.TODO(), nodeConfigs)).To(Succeed())
 			Expect(nodeConfigs.Items).To(HaveLen(1))
 			Expect(nodeConfigs.Items[0].Status.Conditions).To(HaveLen(1))
-			Expect(nodeConfigs.Items[0].Status.Conditions[0].Reason).To(Equal(string(UpdateSucceeded)))
-			Expect(nodeConfigs.Items[0].Status.Conditions[0].Message).To(Equal("Updated successfully"))
+			Expect(nodeConfigs.Items[0].Status.Conditions[0].Reason).To(Equal(string(UpdateNotRequested)))
+			Expect(nodeConfigs.Items[0].Status.Conditions[0].Message).To(Equal("Inventory up to date"))
 		})
 
 		var _ = It("will fail because of PCIAddress not matching pattern", func() {

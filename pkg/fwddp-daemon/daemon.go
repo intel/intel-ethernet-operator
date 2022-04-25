@@ -241,7 +241,7 @@ func (r *NodeConfigReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		return doNotRequeue()
 	}
 
-	if len(nodeConfig.Spec.Config) == 0 {
+	if len(nodeConfig.Spec.Config) == 0 || r.allDeviceConfigsEmpty(nodeConfig.Spec.Config) {
 		log.V(4).Info("Nothing to do")
 		r.updateCondition(nodeConfig, metav1.ConditionTrue, UpdateNotRequested, "Inventory up to date")
 		return doNotRequeue()
@@ -403,4 +403,13 @@ func (r *NodeConfigReconciler) rebootNode() error {
 	_, err := execCmd([]string{"chroot", "--userspec", "0", "/host",
 		"sh", "-c", "systemctl stop kubelet.service; systemctl reboot"}, log)
 	return err
+}
+
+func (r *NodeConfigReconciler) allDeviceConfigsEmpty(deviceNodeConfigs []ethernetv1.DeviceNodeConfig) bool {
+	for _, config := range deviceNodeConfigs {
+		if config.DeviceConfig != (ethernetv1.DeviceConfig{}) {
+			return false
+		}
+	}
+	return true
 }
