@@ -6,6 +6,7 @@ package utils
 import (
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strings"
 
 	sriovutils "github.com/k8snetworkplumbingwg/sriov-network-device-plugin/pkg/utils"
@@ -96,12 +97,12 @@ func GetEthAnyObj(b []byte) (*any.Any, error) {
 	return anyObj, nil
 }
 
-func GetFlowActionAny(actionType string, b []byte) (*any.Any, error) {
+func GetFlowActionAny(actionType string, b []byte, isCalledByWebhook bool) (*any.Any, error) {
 	actionTypeVal, ok := flowapi.RteFlowActionType_value[actionType]
 	if !ok {
 		// due to the fact that this is action type not defined in proto it has to be handled separately
 		if actionType == flowapi.RTE_FLOW_ACTION_TYPE_VFPCIADDR {
-			return handleActionVfPciAddr(b)
+			return handleActionVfPciAddr(b, isCalledByWebhook)
 		} else {
 			return nil, fmt.Errorf("invalid action type %s", actionType)
 		}
@@ -127,19 +128,35 @@ func GetFlowActionAny(actionType string, b []byte) (*any.Any, error) {
 
 // handleActionVfPciAddr manually extracts PCI address from user defined action message and pass it as a byte buffer
 // to function that creates RTE_FLOW_ACTION_TYPE_VF actionAny object
-func handleActionVfPciAddr(b []byte) (*any.Any, error) {
+func handleActionVfPciAddr(b []byte, isCalledByWebhook bool) (*any.Any, error) {
 	actionObj := flowapi.RteFlowActionVfPciAddr{}
 
 	if err := json.Unmarshal(b, &actionObj); err != nil {
 		return nil, fmt.Errorf("error unmarshalling bytes %s to ptypes.Any: %v", string(b), err)
 	}
 
-	// get VF index from PCI address
-	vfID, err := sriovutils.GetVFID(actionObj.Addr)
-	if err != nil || vfID == -1 {
-		return nil, fmt.Errorf("error unable to get VF ID for PCI: %s, Err: %v", actionObj.Addr, err)
+	// when this method is called not by webhook, convert PCI address into VF index
+	if !isCalledByWebhook {
+		// get VF index from PCI address
+		vfID, err := sriovutils.GetVFID(actionObj.Addr)
+		if err != nil || vfID == -1 {
+			return nil, fmt.Errorf("error unable to get VF ID for PCI: %s, Err: %v", actionObj.Addr, err)
+		}
+
+		// converted VF PCI address into VF index now can be passed once again to get ActionAny object
+		return GetFlowActionAny("RTE_FLOW_ACTION_TYPE_VF", []byte(fmt.Sprintf("{\"id\":%d}", vfID)), isCalledByWebhook)
 	}
 
-	// converted VF PCI address into VF index now can be passed once again to get ActionAny object
-	return GetFlowActionAny("RTE_FLOW_ACTION_TYPE_VF", []byte(fmt.Sprintf("{\"id\":%d}", vfID)))
+	// verify if field addr contains string that represents valid PCI address - check its format
+	re, err := regexp.Compile(`\b([0-9a-fA-F]{4}:[0-9a-fA-F]{2}:[0-9a-fA-F]{2}.\d{1})`)
+	if err != nil {
+		return nil, fmt.Errorf("error unable to compile regExp")
+	}
+
+	if re.MatchString(actionObj.Addr) {
+		// return RTE_FLOW_ACTION_TYPE_VF without converted VF PCI address into VF index, conversion is only possible on worker node where PCI address exists
+		return GetFlowActionAny("RTE_FLOW_ACTION_TYPE_VF", []byte(fmt.Sprintf("{\"id\":%d}", 0)), isCalledByWebhook)
+	}
+
+	return nil, fmt.Errorf("error unable to handle VF PCI address - please verify its correctness")
 }

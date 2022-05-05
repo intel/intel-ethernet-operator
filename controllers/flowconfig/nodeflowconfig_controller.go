@@ -337,7 +337,7 @@ func (r *NodeFlowConfigReconciler) getFlowCreateRequests(fr *flowconfigv1.FlowRu
 
 		rteFlowAction.Type = flowapi.RteFlowActionType(val)
 		if action.Conf != nil {
-			actionAny, err := utils.GetFlowActionAny(action.Type, action.Conf.Raw)
+			actionAny, err := utils.GetFlowActionAny(action.Type, action.Conf.Raw, false)
 			if err != nil {
 				return nil, fmt.Errorf("error getting Spec pattern for flowtype %s : %v", actionAny, err)
 			}

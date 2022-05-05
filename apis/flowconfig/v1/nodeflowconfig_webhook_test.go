@@ -216,7 +216,7 @@ spec:
 		},
 		{
 			name:    "RTE_FLOW_ACTION_TYPE_VFPCIADDR invalid PCI address",
-			wantErr: true,
+			wantErr: false, // webhook does not validate PCI address correctess
 			data:    createVfPciAddrAction("0000:01:11.0"),
 		},
 	}
@@ -277,7 +277,7 @@ func TestValidateRteFlowActionVf(t *testing.T) {
 
 			if action.Conf != nil {
 				var err error
-				rteFlowAction.Conf, err = utils.GetFlowActionAny(action.Type, action.Conf.Raw)
+				rteFlowAction.Conf, err = utils.GetFlowActionAny(action.Type, action.Conf.Raw, false)
 				if err != nil {
 					t.Errorf("error: %s", err)
 				}
@@ -328,7 +328,7 @@ func TestValidateRteFlowActionPciAddr(t *testing.T) {
 
 			if action.Conf != nil {
 				var err error
-				rteFlowAction.Conf, err = utils.GetFlowActionAny(action.Type, action.Conf.Raw)
+				rteFlowAction.Conf, err = utils.GetFlowActionAny(action.Type, action.Conf.Raw, false)
 				if err != nil && !tt.inputError {
 					t.Errorf("error: %s", err)
 				}
@@ -1078,7 +1078,7 @@ func TestValidateRteFlowAction(t *testing.T) {
 			}
 			if action.Conf != nil {
 				var err error
-				rteFlowAction.Conf, err = utils.GetFlowActionAny(action.Type, action.Conf.Raw)
+				rteFlowAction.Conf, err = utils.GetFlowActionAny(action.Type, action.Conf.Raw, false)
 				if err != nil {
 					t.Errorf("error: %s", err)
 				}

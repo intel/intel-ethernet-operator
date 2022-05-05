@@ -305,6 +305,8 @@ func (r *ClusterFlowConfigReconciler) updateNodeFlowConfigSpec(pod *corev1.Pod,
 	// Clear existing rules - configuration is going to be recreated from scratch
 	nodeFlowConfig.Spec.Rules = make([]*flowconfigv1.FlowRules, 0)
 
+	// store all hash for rules that goes into NodeFlowConfig
+	allHashes := make(map[string]bool)
 	for _, clusterConfig := range clusterConfigList.Items {
 		hashes := []string{}
 		for _, rule := range clusterConfig.Spec.Rules {
@@ -322,6 +324,12 @@ func (r *ClusterFlowConfigReconciler) updateNodeFlowConfigSpec(pod *corev1.Pod,
 
 			if key, err := getFlowRulesHash(newRule); err == nil {
 				hashes = append(hashes, key)
+				if _, hashExists := allHashes[key]; hashExists {
+					// avoid duplicated rules - do not append rules that are already added to NodeFlowConfig
+					continue
+				}
+
+				allHashes[key] = true
 			}
 
 			nodeFlowConfig.Spec.Rules = append(nodeFlowConfig.Spec.Rules, newRule)
@@ -525,8 +533,8 @@ func (r *ClusterFlowConfigReconciler) getPodFilterPredicates() predicate.Predica
 		UpdateFunc: func(e event.UpdateEvent) bool {
 			if newPod, ok := e.ObjectNew.(*corev1.Pod); ok {
 				if oldPod, ok := e.ObjectOld.(*corev1.Pod); ok {
-					// process event only when labels are different
-					return !reflect.DeepEqual(newPod.ObjectMeta.Labels, oldPod.ObjectMeta.Labels)
+					// process event only when labels and annotations are different
+					return !reflect.DeepEqual(newPod.ObjectMeta.Labels, oldPod.ObjectMeta.Labels) || !reflect.DeepEqual(newPod.ObjectMeta.Annotations, oldPod.ObjectMeta.Annotations)
 				}
 			}
 

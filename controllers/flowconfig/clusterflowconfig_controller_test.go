@@ -564,6 +564,51 @@ var _ = Describe("Cluster Flow Config Controller tests", func() {
 				}()
 			})
 
+			It("Two ClusterFlowConfig CRs, different name, the same set of rules, expected not duplicated rules in NodeFlowConfig", func() {
+				clusterConfig := getClusterFlowConfig(func(flowConfig *flowconfigv1.ClusterFlowConfig) {
+					flowConfig.ObjectMeta.Namespace = "default"
+					flowConfig.Spec.PodSelector = &metav1.LabelSelector{
+						MatchLabels: map[string]string{
+							"testKey": "testName"},
+					}
+					flowConfig.Spec.Rules = getClusterFlowRules()
+				})
+				defer deleteClusterFlowConfig(clusterConfig.ObjectMeta.Name, clusterConfig.ObjectMeta.Namespace)
+				Expect(k8sClient.Create(context.TODO(), clusterConfig)).ToNot(HaveOccurred())
+
+				object := &flowconfigv1.NodeFlowConfig{}
+				Eventually(func() bool {
+					err := WaitForObjectCreation(k8sClient, NODE_NAME_1, "default", 55*time.Second, 9*time.Second, object)
+					return err == nil
+				}, "1m", "9s").Should(BeTrue())
+				defer func() {
+					By("Delete NodeFlowConfig created by the ClusterFlowConfig controller")
+					Expect(k8sClient.Delete(context.Background(), object)).To(BeNil())
+				}()
+
+				Expect(compareNodeFlowConfigRules(object, NODE_NAME_1, "RTE_FLOW_ITEM_TYPE_ETH", "RTE_FLOW_ITEM_TYPE_END", 0, 1, 3)).To(BeTrue())
+
+				clusterConfig2 := getClusterFlowConfig(func(flowConfig *flowconfigv1.ClusterFlowConfig) {
+					flowConfig.ObjectMeta.Name = "other-name"
+					flowConfig.ObjectMeta.Namespace = "default"
+					flowConfig.Spec.PodSelector = &metav1.LabelSelector{
+						MatchLabels: map[string]string{
+							"testKey": "testName"},
+					}
+					flowConfig.Spec.Rules = getClusterFlowRules()
+				})
+				defer deleteClusterFlowConfig(clusterConfig2.ObjectMeta.Name, clusterConfig2.ObjectMeta.Namespace)
+				Expect(k8sClient.Create(context.TODO(), clusterConfig2)).ToNot(HaveOccurred())
+
+				time.Sleep(10 * time.Second) // wait for the update from controller side
+				Eventually(func() bool {
+					err := WaitForObjectCreation(k8sClient, NODE_NAME_1, "default", 55*time.Second, 9*time.Second, object)
+					return err == nil
+				}, "1m", "9s").Should(BeTrue())
+
+				Expect(compareNodeFlowConfigRules(object, NODE_NAME_1, "RTE_FLOW_ITEM_TYPE_ETH", "RTE_FLOW_ITEM_TYPE_END", 0, 1, 3)).To(BeTrue())
+			})
+
 			It("Two ClusterFlowConfig CR with correct data, two nodes, on both POD with correct labels, creates NodeFlowConfig on both with correct set of rules", func() {
 				node2 := createNode(NODE_NAME_2)
 				defer deleteNode(node2)
@@ -1058,6 +1103,43 @@ var _ = Describe("Cluster Flow Config Controller tests", func() {
 				}, "60s", "6s").Should(BeTrue())
 
 				Expect(len(clusterFlowConfigRc.Cluster2NodeRulesHashMap)).To(Equal(0))
+			})
+
+			It("Add second ClusterFlowConfig, different name, the same set of rules, delete second CR, expected duplicated rules to be not removed from NodeFlowConfig", func() {
+				clusterConfig2 := getClusterFlowConfig(func(flowConfig *flowconfigv1.ClusterFlowConfig) {
+					flowConfig.ObjectMeta.Name = "other-name"
+					flowConfig.ObjectMeta.Namespace = "default"
+					flowConfig.Spec.PodSelector = &metav1.LabelSelector{
+						MatchLabels: map[string]string{
+							"testKey": "testName"},
+					}
+					flowConfig.Spec.Rules = getClusterFlowRules()
+				})
+				defer func() {
+					if clusterConfig2 != nil {
+						deleteClusterFlowConfig(clusterConfig2.ObjectMeta.Name, clusterConfig2.ObjectMeta.Namespace)
+					}
+				}()
+				Expect(k8sClient.Create(context.TODO(), clusterConfig2)).ToNot(HaveOccurred())
+
+				Consistently(func() bool {
+					return compareNodeFlowConfigRules(object, NODE_NAME_1, "RTE_FLOW_ITEM_TYPE_ETH", "RTE_FLOW_ITEM_TYPE_END", 0, 1, 3)
+				}, "35s", "8s").Should(BeTrue())
+
+				By("Delete second ClusterFlowConfig")
+				deleteClusterFlowConfig(clusterConfig.ObjectMeta.Name, clusterConfig.ObjectMeta.Namespace)
+
+				Consistently(func() bool {
+					err := k8sClient.Get(context.TODO(), client.ObjectKey{
+						Namespace: object.ObjectMeta.Namespace,
+						Name:      object.ObjectMeta.Name,
+					}, object)
+					if err != nil {
+						return false
+					}
+
+					return compareNodeFlowConfigRules(object, NODE_NAME_1, "RTE_FLOW_ITEM_TYPE_ETH", "RTE_FLOW_ITEM_TYPE_END", 0, 1, 3)
+				}, "65s", "9s").Should(BeTrue())
 			})
 		})
 
