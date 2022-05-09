@@ -95,7 +95,7 @@ The FW/DDP daemon pod is a DaemonSet deployed as part of the operator. It is dep
 
 Once the operator/daemon detects a change to a CR related to the update of the Intel® E810 NIC firmware, it tries to perform an update. The firmware for the Intel® E810 NICs is expected to be provided by the user in form of a `tar.gz` file. The user is also responsible to verify that the firmware version is compatible with the device. The user is required to place the firmware on an accessible HTTP server and provide an URL for it in the CR. If the file is provided correctly and the firmware is to be updated, the Ethernet Configuration Daemon will update the Intel® E810 NICs with the NVM utility provided.
 
-To update the NVM firmware of the Intel® E810 cards' NICs user must create a CR containing the information about which card should be programmed. The Physical Functions of the NICs will be updated in logical pairs. The user needs to provide the FW URL and checksum (md5) in the CR.
+To update the NVM firmware of the Intel® E810 cards' NICs user must create a CR containing the information about which card should be programmed. The Physical Functions of the NICs will be updated in logical pairs. The user needs to provide the FW URL and checksum (SHA-1) in the CR.
 
 For a sample CR go to [Updating Firmware](#updating-firmware).
 
@@ -252,7 +252,7 @@ To find the NIC devices belonging to the Intel® E810 NIC run following command,
 
 To update the Firmware of the supported device run following steps:
 
->Note: The Physical Functions of the NICs will be updated in logical pairs. The user needs to provide the FW URL and checksum (md5).
+>Note: The Physical Functions of the NICs will be updated in logical pairs. The user needs to provide the FW URL and checksum (SHA-1).
 
 Create a CR `yaml` file:
 
@@ -269,7 +269,7 @@ spec:
     pciAddress: "<pci-address>"
   deviceConfig:
     fwURL: "<URL_to_firmware>"
-    fwChecksum: "<file_checksum_md5_hash>"
+    fwChecksum: "<file_checksum_SHA-1_hash>"
 ```
 
 The CR can be applied by running:
@@ -327,7 +327,7 @@ spec:
     pciAddress: "<pci-address>"
   deviceConfig:
     ddpURL: "<URL_to_DDP>"
-    ddpChecksum: "<file_checksum_md5_hash>"
+    ddpChecksum: "<file_checksum_SHA-1_hash>"
 ```
 
 The CR can be applied by running:
