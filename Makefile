@@ -74,7 +74,7 @@ FCDAEMON_IMAGE_TAG_VERSION = $(FCDAEMON_NAME):$(VERSION)
 FCDAEMON_IMG?=$(FCDAEMON_IMAGE_TAG_VERSION)
 FCDAEMON_DOCKERFILE = images/Dockerfile.FlowConfigDaemon
 
-UFT_IMAGE ?= dcf-tool:v22.03
+UFT_IMAGE ?= uft:v22.03
 ifneq (, $(IMAGE_REGISTRY))
 UFT_IMAGE_URL = $(IMAGE_REGISTRY)/$(UFT_IMAGE)
 else
@@ -241,8 +241,6 @@ uninstall: manifests kustomize ## Uninstall CRDs from the K8s cluster specified 
 deploy: manifests flowconfig-manifests kustomize ## Deploy controller to the K8s cluster specified in ~/.kube/config.
 	cd config/manager && $(KUSTOMIZE) edit set image controller=${ETHERNET_MANAGER_IMAGE}
 	$(KUSTOMIZE) build config/default | envsubst | $(K8CLI) apply -f -
-	$(K8CLI) apply -f config/flowconfig-daemon/add_flowconfigdaemon.yaml
-	$(K8CLI) apply -f config/flowconfig-daemon/sriov_nad.yaml
 
 undeploy: ## Undeploy controller from the K8s cluster specified in ~/.kube/config.
 	$(KUSTOMIZE) build config/default | $(K8CLI) delete -f -

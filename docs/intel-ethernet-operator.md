@@ -579,9 +579,9 @@ EOF
 
 # make dcf-image
 
-# docker tag dcf-tool:v21.08 $IMAGE_REGISTRY/dcf-tool:v22.03
+# docker tag dcf-tool:v21.08 $IMAGE_REGISTRY/uft:v22.03
 
-# docker push $IMAGE_REGISTRY/dcf-tool:v22.03
+# docker push $IMAGE_REGISTRY/uft:v22.03
 
 ```
 
