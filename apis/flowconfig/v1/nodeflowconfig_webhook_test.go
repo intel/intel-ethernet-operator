@@ -5,8 +5,12 @@ package v1
 
 import (
 	"encoding/json"
+	"flag"
+	"os"
+	"strconv"
 	"testing"
 
+	fuzz "github.com/google/gofuzz"
 	sriovutils "github.com/k8snetworkplumbingwg/sriov-network-device-plugin/pkg/utils"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -14,6 +18,16 @@ import (
 
 	"github.com/otcshare/intel-ethernet-operator/pkg/flowconfig/rpc/v1/flow"
 	"github.com/otcshare/intel-ethernet-operator/pkg/flowconfig/utils"
+)
+
+const (
+	// Default fuzz iteration number
+	DEFAULT_FUZZITER = 10
+)
+
+var (
+	// dofuzz is used for holding test cli flag fuzz to indicate to run fuzz tests.
+	dofuzz = flag.Bool("fuzz", false, "Do fuzz testing")
 )
 
 func TestValidate(t *testing.T) {
@@ -1186,4 +1200,47 @@ func TestValidateDelete(t *testing.T) {
 			t.Errorf("NodeFlowConfig.ValidateUpdate() error = %v, wantErr %v", err, false)
 		}
 	})
+}
+
+// TestValidateCreateFuzz runs fuzz test on ValidateCreate() method by fuzzing NodeFlowConfig API object.
+// Set FUZZITER env variable to define how many times the test will fuzz. Default count is 10.
+func TestValidateCreateFuzz(t *testing.T) {
+	// Skip this test if "-fuzz" flag is not set when 'go test ...' is run
+	if !*dofuzz {
+		t.Skip()
+	}
+
+	fuzzIterationStr := os.Getenv("FUZZITER")
+	var fuzzIteration int
+	fuzzIteration, err := strconv.Atoi(fuzzIterationStr)
+	if err != nil || fuzzIteration <= 0 {
+		t.Logf("the FUZZITER env variable is not set or contains invalid value: %+s\n", fuzzIterationStr)
+		fuzzIteration = DEFAULT_FUZZITER // default count
+		t.Logf("using default FUZZITER: %d\n", fuzzIteration)
+	}
+
+	flowConfig := &NodeFlowConfig{}
+	f := fuzz.New().NilChance(0).Funcs(
+		func(e *NodeFlowConfigSpec, c fuzz.Continue) {
+			e.Rules = []*FlowRules{}
+			c.Fuzz(e)
+		},
+		func(e *FlowRules, c fuzz.Continue) {
+			e.Pattern = []*FlowItem{}
+			e.Action = []*FlowAction{}
+			c.Fuzz(e)
+		},
+	)
+	defer func() {
+		if r := recover(); r != nil {
+			t.Errorf("the code resulted in panic. flowconfig:\n %+v\n", flowConfig)
+		}
+	}()
+
+	t.Logf("fuzzing NodeFlowConfig for: %d\n", fuzzIteration)
+	for i := 0; i < fuzzIteration; i++ {
+		f.Fuzz(&flowConfig)
+		_ = flowConfig.ValidateCreate()
+	}
+
 }

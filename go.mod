@@ -5,6 +5,7 @@ go 1.16
 require (
 	github.com/go-logr/logr v1.2.0
 	github.com/golang/protobuf v1.5.2
+	github.com/google/gofuzz v1.2.0
 	github.com/jaypipes/ghw v0.8.0
 	github.com/jaypipes/pcidb v0.6.0
 	github.com/k8snetworkplumbingwg/sriov-network-device-plugin v0.0.0-20211118081735-7488066fa720
