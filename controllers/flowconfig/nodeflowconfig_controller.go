@@ -11,7 +11,6 @@ import (
 	"reflect"
 
 	"github.com/go-logr/logr"
-	resourceUtils "github.com/k8snetworkplumbingwg/sriov-network-device-plugin/pkg/utils"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -22,6 +21,7 @@ import (
 	flowconfigv1 "github.com/otcshare/intel-ethernet-operator/apis/flowconfig/v1"
 	"github.com/otcshare/intel-ethernet-operator/pkg/flowconfig/flowsets"
 	flowapi "github.com/otcshare/intel-ethernet-operator/pkg/flowconfig/rpc/v1/flow"
+	"github.com/otcshare/intel-ethernet-operator/pkg/flowconfig/sriovutils"
 	"github.com/otcshare/intel-ethernet-operator/pkg/flowconfig/utils"
 )
 
@@ -33,6 +33,7 @@ type NodeFlowConfigReconciler struct {
 	nodeName   string
 	flowSets   *flowsets.FlowSets
 	flowClient flowapi.FlowServiceClient
+	sriovUtils sriovutils.SriovUtils
 }
 
 //+kubebuilder:rbac:groups=flowconfig.intel.com,resources=nodeflowconfigs,verbs=get;list;watch;create;update;patch;delete
@@ -41,7 +42,7 @@ type NodeFlowConfigReconciler struct {
 
 // GetNodeFlowConfigReconciler returns an instance of NodeFlowConfigReconciler
 func GetNodeFlowConfigReconciler(k8sClient client.Client, logger logr.Logger, scheme *runtime.Scheme, fs *flowsets.FlowSets,
-	fc flowapi.FlowServiceClient, nodeName string) *NodeFlowConfigReconciler {
+	fc flowapi.FlowServiceClient, nodeName string, sysFs string) *NodeFlowConfigReconciler {
 
 	return &NodeFlowConfigReconciler{
 		Client:     k8sClient,
@@ -50,6 +51,7 @@ func GetNodeFlowConfigReconciler(k8sClient client.Client, logger logr.Logger, sc
 		nodeName:   nodeName,
 		flowSets:   fs,
 		flowClient: fc,
+		sriovUtils: sriovutils.GetSriovUtils(sysFs),
 	}
 }
 
@@ -337,7 +339,7 @@ func (r *NodeFlowConfigReconciler) getFlowCreateRequests(fr *flowconfigv1.FlowRu
 
 		rteFlowAction.Type = flowapi.RteFlowActionType(val)
 		if action.Conf != nil {
-			actionAny, err := utils.GetFlowActionAny(action.Type, action.Conf.Raw, false)
+			actionAny, err := utils.GetFlowActionAny(action.Type, action.Conf.Raw, r.sriovUtils)
 			if err != nil {
 				return nil, fmt.Errorf("error getting Spec pattern for flowtype %s : %v", actionAny, err)
 			}
@@ -402,7 +404,7 @@ func (r *NodeFlowConfigReconciler) getFlowCreateRequests(fr *flowconfigv1.FlowRu
 // - getting the pfName of the trusted VF (DCF)
 // - and compare those names. If matches, we can get portId from DCF.
 func (r *NodeFlowConfigReconciler) getPortIdFromDCFPort(otherVfPciAddress string) (uint32, error) {
-	pfName, err := resourceUtils.GetPfName(otherVfPciAddress)
+	pfName, err := r.sriovUtils.GetPfName(otherVfPciAddress)
 	if err != nil {
 		return invalidPortId, fmt.Errorf("unable to get pfName of VF that handles traffic. Err %v", err)
 	}
@@ -413,7 +415,7 @@ func (r *NodeFlowConfigReconciler) getPortIdFromDCFPort(otherVfPciAddress string
 	}
 
 	for _, dcfPort := range dcfPorts {
-		dcfPfName, err := resourceUtils.GetPfName(dcfPort.PortPci)
+		dcfPfName, err := r.sriovUtils.GetPfName(dcfPort.PortPci)
 		if err != nil {
 			return invalidPortId, fmt.Errorf("unable to get pfName of VF that handles DCF. Err %v", err)
 		}

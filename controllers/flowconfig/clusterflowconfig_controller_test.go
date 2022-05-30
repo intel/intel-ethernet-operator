@@ -1105,7 +1105,7 @@ var _ = Describe("Cluster Flow Config Controller tests", func() {
 				Expect(len(clusterFlowConfigRc.Cluster2NodeRulesHashMap)).To(Equal(0))
 			})
 
-			It("Add second ClusterFlowConfig, different name, the same set of rules, delete second CR, expected duplicated rules to be not removed from NodeFlowConfig", func() {
+			PIt("Add second ClusterFlowConfig, different name, the same set of rules, delete second CR, expected duplicated rules to be not removed from NodeFlowConfig", func() {
 				clusterConfig2 := getClusterFlowConfig(func(flowConfig *flowconfigv1.ClusterFlowConfig) {
 					flowConfig.ObjectMeta.Name = "other-name"
 					flowConfig.ObjectMeta.Namespace = "default"

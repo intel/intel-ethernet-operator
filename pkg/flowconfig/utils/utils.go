@@ -9,8 +9,8 @@ import (
 	"regexp"
 	"strings"
 
-	sriovutils "github.com/k8snetworkplumbingwg/sriov-network-device-plugin/pkg/utils"
 	flowapi "github.com/otcshare/intel-ethernet-operator/pkg/flowconfig/rpc/v1/flow"
+	sutils "github.com/otcshare/intel-ethernet-operator/pkg/flowconfig/sriovutils"
 	"google.golang.org/protobuf/proto"
 	any "google.golang.org/protobuf/types/known/anypb"
 )
@@ -97,12 +97,41 @@ func GetEthAnyObj(b []byte) (*any.Any, error) {
 	return anyObj, nil
 }
 
-func GetFlowActionAny(actionType string, b []byte, isCalledByWebhook bool) (*any.Any, error) {
+func GetFlowActionAnyForWebhook(actionType string, b []byte) (*any.Any, error) {
 	actionTypeVal, ok := flowapi.RteFlowActionType_value[actionType]
 	if !ok {
 		// due to the fact that this is action type not defined in proto it has to be handled separately
 		if actionType == flowapi.RTE_FLOW_ACTION_TYPE_VFPCIADDR {
-			return handleActionVfPciAddr(b, isCalledByWebhook)
+			return handleActionVfPciAddr(b, true, nil)
+		} else {
+			return nil, fmt.Errorf("invalid action type %s", actionType)
+		}
+	}
+
+	actionObj := flowapi.GetFlowActionObj(flowapi.RteFlowActionType(actionTypeVal))
+	if actionObj == nil {
+		// It should not get here
+		return nil, fmt.Errorf("nil object received for action type %s", actionType)
+	}
+
+	if err := json.Unmarshal(b, actionObj); err != nil {
+		return nil, fmt.Errorf("error unmarshalling bytes %s to ptypes.Any: %v", string(b), err)
+	}
+
+	// Marshal into protobuf Any
+	anyObj, err := any.New(actionObj.(proto.Message))
+	if err != nil {
+		return nil, fmt.Errorf("error marshalling into ptypes.Any: %v", err)
+	}
+	return anyObj, nil
+}
+
+func GetFlowActionAny(actionType string, b []byte, sriovutils sutils.SriovUtils) (*any.Any, error) {
+	actionTypeVal, ok := flowapi.RteFlowActionType_value[actionType]
+	if !ok {
+		// due to the fact that this is action type not defined in proto it has to be handled separately
+		if actionType == flowapi.RTE_FLOW_ACTION_TYPE_VFPCIADDR {
+			return handleActionVfPciAddr(b, false, sriovutils)
 		} else {
 			return nil, fmt.Errorf("invalid action type %s", actionType)
 		}
@@ -128,7 +157,7 @@ func GetFlowActionAny(actionType string, b []byte, isCalledByWebhook bool) (*any
 
 // handleActionVfPciAddr manually extracts PCI address from user defined action message and pass it as a byte buffer
 // to function that creates RTE_FLOW_ACTION_TYPE_VF actionAny object
-func handleActionVfPciAddr(b []byte, isCalledByWebhook bool) (*any.Any, error) {
+func handleActionVfPciAddr(b []byte, isCalledByWebhook bool, sriovutils sutils.SriovUtils) (*any.Any, error) {
 	actionObj := flowapi.RteFlowActionVfPciAddr{}
 
 	if err := json.Unmarshal(b, &actionObj); err != nil {
@@ -144,7 +173,7 @@ func handleActionVfPciAddr(b []byte, isCalledByWebhook bool) (*any.Any, error) {
 		}
 
 		// converted VF PCI address into VF index now can be passed once again to get ActionAny object
-		return GetFlowActionAny("RTE_FLOW_ACTION_TYPE_VF", []byte(fmt.Sprintf("{\"id\":%d}", vfID)), isCalledByWebhook)
+		return GetFlowActionAny("RTE_FLOW_ACTION_TYPE_VF", []byte(fmt.Sprintf("{\"id\":%d}", vfID)), sriovutils)
 	}
 
 	// verify if field addr contains string that represents valid PCI address - check its format
@@ -155,7 +184,7 @@ func handleActionVfPciAddr(b []byte, isCalledByWebhook bool) (*any.Any, error) {
 
 	if re.MatchString(actionObj.Addr) {
 		// return RTE_FLOW_ACTION_TYPE_VF without converted VF PCI address into VF index, conversion is only possible on worker node where PCI address exists
-		return GetFlowActionAny("RTE_FLOW_ACTION_TYPE_VF", []byte(fmt.Sprintf("{\"id\":%d}", 0)), isCalledByWebhook)
+		return GetFlowActionAny("RTE_FLOW_ACTION_TYPE_VF", []byte(fmt.Sprintf("{\"id\":%d}", 0)), sriovutils)
 	}
 
 	return nil, fmt.Errorf("error unable to handle VF PCI address - please verify its correctness")

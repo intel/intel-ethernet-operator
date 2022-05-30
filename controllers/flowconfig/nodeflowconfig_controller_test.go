@@ -7,12 +7,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"path"
 	"strings"
 	"time"
 
-	sriovutils "github.com/k8snetworkplumbingwg/sriov-network-device-plugin/pkg/utils"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/otcshare/intel-ethernet-operator/pkg/flowconfig/sriovutils"
 	mock "github.com/stretchr/testify/mock"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -672,7 +673,7 @@ spec:
 					{
 						PortId:   0,
 						PortMode: "dcf",
-						PortPci:  "0000:01.01",
+						PortPci:  "0000:01:08.0",
 					},
 				},
 			}
@@ -717,7 +718,10 @@ spec:
 					"sys/bus/pci/devices/0000:01:00.0/virtfn2": "../0000:01:10.0",
 				},
 			}
-			defer fs.Use()()
+			// defer fs.Use()()
+			tempRoot, tearDown := fs.Use()
+			defer tearDown()
+			nodeFlowConfigRc.sriovUtils = sriovutils.GetSriovUtils(path.Join(tempRoot, "/sys"))
 
 			action := []*flowconfigv1.FlowAction{
 				{
@@ -756,7 +760,9 @@ spec:
 					"sys/bus/pci/devices/0000:01:00.0/virtfn2": "../0000:01:10.0",
 				},
 			}
-			defer fs.Use()()
+			tempRoot, tearDown := fs.Use()
+			defer tearDown()
+			nodeFlowConfigRc.sriovUtils = sriovutils.GetSriovUtils(path.Join(tempRoot, "/sys"))
 
 			action := []*flowconfigv1.FlowAction{
 				{
@@ -828,7 +834,9 @@ spec:
 					"sys/bus/pci/devices/0000:01:00.0/virtfn2": "../0000:01:10.0",
 				},
 			}
-			defer fs.Use()()
+			tempRoot, tearDown := fs.Use()
+			defer tearDown()
+			nodeFlowConfigRc.sriovUtils = sriovutils.GetSriovUtils(path.Join(tempRoot, "/sys"))
 
 			action := []*flowconfigv1.FlowAction{
 				{
@@ -853,18 +861,21 @@ spec:
 		It("DCF ports are not available", func() {
 			fs := &sriovutils.FakeFilesystem{
 				Dirs: []string{
-					"sys/bus/pci/devices/0000:01:10.0/",
 					"sys/bus/pci/devices/0000:01:00.0/",
-					"sys/bus/pci/devices/net/ens1000"},
+					"sys/bus/pci/devices/0000:01:00.0/net/fakePF",
+					"sys/bus/pci/devices/0000:01:10.0/",
+					"sys/bus/pci/devices/0000:01:10.1/",
+				},
 				Symlinks: map[string]string{
+					"sys/bus/pci/devices/0000:01:00.0/virtfn0": "../0000:01:10.0",
+					"sys/bus/pci/devices/0000:01:00.0/virtfn1": "../0000:01:10.1",
 					"sys/bus/pci/devices/0000:01:10.0/physfn":  "../0000:01:00.0",
-					"sys/bus/pci/devices/0000:01:00.0/virtfn0": "../0000:01:08.0",
-					"sys/bus/pci/devices/0000:01:00.0/virtfn1": "../0000:01:09.0",
-					"sys/bus/pci/devices/0000:01:00.0/virtfn2": "../0000:01:10.0",
-					"sys/bus/pci/devices/0000:01:10.0/net":     "../net",
+					"sys/bus/pci/devices/0000:01:10.1/physfn":  "../0000:01:00.0",
 				},
 			}
-			defer fs.Use()()
+			tempRoot, tearDown := fs.Use()
+			defer tearDown()
+			nodeFlowConfigRc.sriovUtils = sriovutils.GetSriovUtils(path.Join(tempRoot, "/sys"))
 
 			mockDCF := &mocks.FlowServiceClient{}
 			nodeFlowConfigRc.flowClient = mockDCF
@@ -874,7 +885,7 @@ spec:
 				{
 					Type: "RTE_FLOW_ACTION_TYPE_VFPCIADDR",
 					Conf: &runtime.RawExtension{
-						Raw: []byte(`{ "addr": "0000:01:10.0" }`),
+						Raw: []byte(`{ "addr": "0000:01:10.1" }`),
 					},
 				},
 			}
@@ -893,18 +904,20 @@ spec:
 		It("unable to get pfName of the VF that is trusted", func() {
 			fs := &sriovutils.FakeFilesystem{
 				Dirs: []string{
-					"sys/bus/pci/devices/0000:01:10.0/",
 					"sys/bus/pci/devices/0000:01:00.0/",
-					"sys/bus/pci/devices/net/ens1000"},
+					"sys/bus/pci/devices/0000:01:00.0/net/fakePF",
+					"sys/bus/pci/devices/0000:01:10.0/",
+				},
 				Symlinks: map[string]string{
 					"sys/bus/pci/devices/0000:01:10.0/physfn":  "../0000:01:00.0",
 					"sys/bus/pci/devices/0000:01:00.0/virtfn0": "../0000:01:08.0",
 					"sys/bus/pci/devices/0000:01:00.0/virtfn1": "../0000:01:09.0",
 					"sys/bus/pci/devices/0000:01:00.0/virtfn2": "../0000:01:10.0",
-					"sys/bus/pci/devices/0000:01:10.0/net":     "../net",
 				},
 			}
-			defer fs.Use()()
+			tempRoot, tearDown := fs.Use()
+			defer tearDown()
+			nodeFlowConfigRc.sriovUtils = sriovutils.GetSriovUtils(path.Join(tempRoot, "/sys"))
 
 			mockDCF := &mocks.FlowServiceClient{}
 			nodeFlowConfigRc.flowClient = mockDCF
@@ -942,24 +955,23 @@ spec:
 		It("pfName that handles traffic is not on a list of DCF ports", func() {
 			fs := &sriovutils.FakeFilesystem{
 				Dirs: []string{
-					"sys/bus/pci/devices/0000:01:10.0/",
 					"sys/bus/pci/devices/0000:01:00.0/",
-					"sys/bus/pci/devices/0000:01:01.0/",
+					"sys/bus/pci/devices/0000:01:00.0/net/fakePF",
+					"sys/bus/pci/devices/0000:01:10.0/",
 					"sys/bus/pci/devices/0000:20:00.0/",
-					"sys/bus/pci/devices/net1/ens1000",
-					"sys/bus/pci/devices/net2/ens2000"},
+					"sys/bus/pci/devices/0000:20:00.0/net/fakePF2",
+					"sys/bus/pci/devices/0000:20:10.0/",
+				},
 				Symlinks: map[string]string{
+					"sys/bus/pci/devices/0000:01:00.0/virtfn0": "../0000:01:10.0",
 					"sys/bus/pci/devices/0000:01:10.0/physfn":  "../0000:01:00.0",
-					"sys/bus/pci/devices/0000:01:00.0/virtfn0": "../0000:01:08.0",
-					"sys/bus/pci/devices/0000:01:00.0/virtfn1": "../0000:01:09.0",
-					"sys/bus/pci/devices/0000:01:00.0/virtfn2": "../0000:01:10.0",
-					"sys/bus/pci/devices/0000:01:10.0/net":     "../net1",
-					"sys/bus/pci/devices/0000:01:01.0/physfn":  "../0000:20:00.0",
-					"sys/bus/pci/devices/0000:20:00.0/virtfn0": "../0000:01:01.0",
-					"sys/bus/pci/devices/0000:01:01.0/net":     "../net2",
+					"sys/bus/pci/devices/0000:20:00.0/virtfn0": "../0000:20:10.0",
+					"sys/bus/pci/devices/0000:20:10.0/physfn":  "../0000:20:00.0",
 				},
 			}
-			defer fs.Use()()
+			tempRoot, tearDown := fs.Use()
+			defer tearDown()
+			nodeFlowConfigRc.sriovUtils = sriovutils.GetSriovUtils(path.Join(tempRoot, "/sys"))
 
 			mockDCF := &mocks.FlowServiceClient{}
 			nodeFlowConfigRc.flowClient = mockDCF
@@ -968,7 +980,7 @@ spec:
 					{
 						PortId:   0,
 						PortMode: "dcf",
-						PortPci:  "0000:01:01.0",
+						PortPci:  "0000:01:10.0",
 					},
 				},
 			}
@@ -978,7 +990,7 @@ spec:
 				{
 					Type: "RTE_FLOW_ACTION_TYPE_VFPCIADDR",
 					Conf: &runtime.RawExtension{
-						Raw: []byte(`{ "addr": "0000:01:10.0" }`),
+						Raw: []byte(`{ "addr": "0000:20:10.0" }`),
 					},
 				},
 			}
@@ -997,20 +1009,21 @@ spec:
 		It("pfName of traffic VF matches pfName of DCF VF - return portId", func() {
 			fs := &sriovutils.FakeFilesystem{
 				Dirs: []string{
-					"sys/bus/pci/devices/0000:01:10.0/",
-					"sys/bus/pci/devices/0000:01:08.0/",
 					"sys/bus/pci/devices/0000:01:00.0/",
-					"sys/bus/pci/devices/net/ens1000"},
+					"sys/bus/pci/devices/0000:01:00.0/net/fakePF",
+					"sys/bus/pci/devices/0000:01:10.0/",
+					"sys/bus/pci/devices/0000:01:10.1/",
+				},
 				Symlinks: map[string]string{
+					"sys/bus/pci/devices/0000:01:00.0/virtfn0": "../0000:01:10.0",
+					"sys/bus/pci/devices/0000:01:00.0/virtfn1": "../0000:01:10.1",
 					"sys/bus/pci/devices/0000:01:10.0/physfn":  "../0000:01:00.0",
-					"sys/bus/pci/devices/0000:01:00.0/virtfn0": "../0000:01:08.0",
-					"sys/bus/pci/devices/0000:01:00.0/virtfn1": "../0000:01:09.0",
-					"sys/bus/pci/devices/0000:01:00.0/virtfn2": "../0000:01:10.0",
-					"sys/bus/pci/devices/0000:01:10.0/net":     "../net",
-					"sys/bus/pci/devices/0000:01:08.0/net":     "../net",
+					"sys/bus/pci/devices/0000:01:10.1/physfn":  "../0000:01:00.0",
 				},
 			}
-			defer fs.Use()()
+			tempRoot, tearDown := fs.Use()
+			defer tearDown()
+			nodeFlowConfigRc.sriovUtils = sriovutils.GetSriovUtils(path.Join(tempRoot, "/sys"))
 
 			mockDCF := &mocks.FlowServiceClient{}
 			nodeFlowConfigRc.flowClient = mockDCF
@@ -1019,7 +1032,7 @@ spec:
 					{
 						PortId:   3,
 						PortMode: "dcf",
-						PortPci:  "0000:01:08.0",
+						PortPci:  "0000:01:10.0",
 					},
 				},
 			}
@@ -1029,7 +1042,7 @@ spec:
 				{
 					Type: "RTE_FLOW_ACTION_TYPE_VFPCIADDR",
 					Conf: &runtime.RawExtension{
-						Raw: []byte(`{ "addr": "0000:01:10.0" }`),
+						Raw: []byte(`{ "addr": "0000:01:10.1" }`),
 					},
 				},
 			}

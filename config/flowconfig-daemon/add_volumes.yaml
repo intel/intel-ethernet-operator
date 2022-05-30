@@ -11,4 +11,7 @@ spec:
     - name: hugepage
       emptyDir:
         medium: HugePages
+    - name: hostsys
+      hostPath:
+        path: /sys
 

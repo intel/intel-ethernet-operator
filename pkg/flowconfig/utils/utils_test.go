@@ -4,9 +4,10 @@
 package utils
 
 import (
+	"path"
 	"testing"
 
-	sriovutils "github.com/k8snetworkplumbingwg/sriov-network-device-plugin/pkg/utils"
+	sutils "github.com/otcshare/intel-ethernet-operator/pkg/flowconfig/sriovutils"
 
 	flowapi "github.com/otcshare/intel-ethernet-operator/pkg/flowconfig/rpc/v1/flow"
 )
@@ -73,7 +74,7 @@ func TestGetFlowActionAny(t *testing.T) {
 		},
 	}
 
-	fs := &sriovutils.FakeFilesystem{
+	fs := &sutils.FakeFilesystem{
 		Dirs: []string{"sys/bus/pci/devices/0000:01:10.0/", "sys/bus/pci/devices/0000:01:00.0/"},
 		Symlinks: map[string]string{"sys/bus/pci/devices/0000:01:10.0/physfn": "../0000:01:00.0",
 			"sys/bus/pci/devices/0000:01:00.0/virtfn0": "../0000:01:08.0",
@@ -81,11 +82,13 @@ func TestGetFlowActionAny(t *testing.T) {
 			"sys/bus/pci/devices/0000:01:00.0/virtfn2": "../0000:01:10.0",
 		},
 	}
-	defer fs.Use()()
+	tempRoot, tearDown := fs.Use()
+	defer tearDown()
+	sriovutils := sutils.GetSriovUtils(path.Join(tempRoot, "/sys"))
 
 	for _, item := range actionData {
 		t.Run(item.name, func(t *testing.T) {
-			any, err := GetFlowActionAny(item.Type, item.Conf, item.isCalledByWebhook)
+			any, err := GetFlowActionAny(item.Type, item.Conf, sriovutils)
 			if err != nil && !item.expectedErr {
 				t.Errorf("%v", err)
 			}

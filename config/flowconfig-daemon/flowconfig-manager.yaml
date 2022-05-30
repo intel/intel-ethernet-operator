@@ -40,6 +40,7 @@ spec:
       readOnly: true
   - command:
     - /flowconfig-daemon
+    args: [ "--set-sysfs", "/host/sys" ]
     image: daemon-image:latest
     name: flowconfig-daemon
     env:
@@ -51,6 +52,10 @@ spec:
         valueFrom:
           fieldRef:
             fieldPath: spec.nodeName
+    volumeMounts:
+    - name: hostsys
+      mountPath: /host/sys
+      readOnly: true
     resources:
       limits:
         cpu: 100m

@@ -54,6 +54,7 @@ var (
 			Name: "node-dummy",
 		},
 	}
+	defaultSysFs = "/sys"
 )
 
 const (
@@ -201,6 +202,7 @@ var _ = BeforeSuite(func() {
 		fs,
 		mockDCF,
 		nodeName,
+		defaultSysFs,
 	)
 
 	err = nodeFlowConfigRc.SetupWithManager(k8sManager)

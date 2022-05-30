@@ -19,6 +19,10 @@ import (
 	flowconfigctlr "github.com/otcshare/intel-ethernet-operator/controllers/flowconfig"
 )
 
+const (
+	defaultSysFs = "/sys"
+)
+
 var (
 	scheme   = runtime.NewScheme()
 	setupLog = ctrl.Log.WithName("setup")
@@ -31,8 +35,10 @@ func init() {
 }
 
 func main() {
+	var sysFs string
 	var metricsAddr string
 	var enableLeaderElection bool
+	flag.StringVar(&sysFs, "set-sysfs", defaultSysFs, "Set alternative sysfs. Default is: /sys")
 	flag.StringVar(&metricsAddr, "metrics-addr", ":8080", "The address the metric endpoint binds to.")
 	flag.Parse()
 
@@ -59,6 +65,7 @@ func main() {
 	fs := flowsets.NewFlowSets()
 	fc := flowconfigctlr.GetDCFClient()
 
+	setupLog.Info("Using", "sysfs", sysFs)
 	flowRc := flowconfigctlr.GetNodeFlowConfigReconciler(
 		mgr.GetClient(),
 		ctrl.Log.WithName("controllers").WithName("NodeAclPolicy"),
@@ -66,6 +73,7 @@ func main() {
 		fs,
 		fc,
 		nodeName,
+		sysFs,
 	)
 
 	if err = flowRc.SetupWithManager(mgr); err != nil {

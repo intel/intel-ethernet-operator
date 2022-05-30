@@ -44,7 +44,7 @@ func (rules *FlowRules) validate() error {
 
 		if action.Conf != nil {
 			var err error
-			rteFlowAction.Conf, err = utils.GetFlowActionAny(action.Type, action.Conf.Raw, true)
+			rteFlowAction.Conf, err = utils.GetFlowActionAnyForWebhook(action.Type, action.Conf.Raw)
 			if err != nil {
 				return fmt.Errorf("error: %s", err)
 			}

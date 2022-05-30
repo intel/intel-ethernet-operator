@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"testing"
 
-	sriovutils "github.com/k8snetworkplumbingwg/sriov-network-device-plugin/pkg/utils"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/yaml"
@@ -221,16 +220,6 @@ spec:
 		},
 	}
 
-	fs := &sriovutils.FakeFilesystem{
-		Dirs: []string{"sys/bus/pci/devices/0000:01:10.0/", "sys/bus/pci/devices/0000:01:00.0/"},
-		Symlinks: map[string]string{"sys/bus/pci/devices/0000:01:10.0/physfn": "../0000:01:00.0",
-			"sys/bus/pci/devices/0000:01:00.0/virtfn0": "../0000:01:08.0",
-			"sys/bus/pci/devices/0000:01:00.0/virtfn1": "../0000:01:09.0",
-			"sys/bus/pci/devices/0000:01:00.0/virtfn2": "../0000:01:10.0",
-		},
-	}
-	defer fs.Use()()
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			config := &NodeFlowConfig{}
@@ -277,7 +266,7 @@ func TestValidateRteFlowActionVf(t *testing.T) {
 
 			if action.Conf != nil {
 				var err error
-				rteFlowAction.Conf, err = utils.GetFlowActionAny(action.Type, action.Conf.Raw, false)
+				rteFlowAction.Conf, err = utils.GetFlowActionAnyForWebhook(action.Type, action.Conf.Raw)
 				if err != nil {
 					t.Errorf("error: %s", err)
 				}
@@ -300,20 +289,10 @@ func TestValidateRteFlowActionPciAddr(t *testing.T) {
 		wantErr    bool
 	}{
 		{name: "valid PCI address", conf: []byte(`{"addr":"0000:01:10.0"}`), inputError: false, wantErr: false},
-		{name: "invalid PCI config", conf: []byte(`{"addr":"0000:01:11.0"}`), inputError: true, wantErr: true},
+		{name: "invalid PCI config", conf: []byte(`{"addr":"0000:01:11."}`), inputError: true, wantErr: true},
 		{name: "invalid config: Lack of addr", conf: []byte(`{"Id":253}`), inputError: true, wantErr: true},
 		{name: "empty config", inputError: false, wantErr: true},
 	}
-
-	fs := &sriovutils.FakeFilesystem{
-		Dirs: []string{"sys/bus/pci/devices/0000:01:10.0/", "sys/bus/pci/devices/0000:01:00.0/"},
-		Symlinks: map[string]string{"sys/bus/pci/devices/0000:01:10.0/physfn": "../0000:01:00.0",
-			"sys/bus/pci/devices/0000:01:00.0/virtfn0": "../0000:01:08.0",
-			"sys/bus/pci/devices/0000:01:00.0/virtfn1": "../0000:01:09.0",
-			"sys/bus/pci/devices/0000:01:00.0/virtfn2": "../0000:01:10.0",
-		},
-	}
-	defer fs.Use()()
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -328,7 +307,7 @@ func TestValidateRteFlowActionPciAddr(t *testing.T) {
 
 			if action.Conf != nil {
 				var err error
-				rteFlowAction.Conf, err = utils.GetFlowActionAny(action.Type, action.Conf.Raw, false)
+				rteFlowAction.Conf, err = utils.GetFlowActionAnyForWebhook(action.Type, action.Conf.Raw)
 				if err != nil && !tt.inputError {
 					t.Errorf("error: %s", err)
 				}
@@ -1078,7 +1057,7 @@ func TestValidateRteFlowAction(t *testing.T) {
 			}
 			if action.Conf != nil {
 				var err error
-				rteFlowAction.Conf, err = utils.GetFlowActionAny(action.Type, action.Conf.Raw, false)
+				rteFlowAction.Conf, err = utils.GetFlowActionAnyForWebhook(action.Type, action.Conf.Raw)
 				if err != nil {
 					t.Errorf("error: %s", err)
 				}
