@@ -63,7 +63,6 @@ const (
 func (r *FlowConfigNodeAgentDeploymentReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	reqLogger := r.Log.WithValues("Reconcile", req.NamespacedName)
 	reqLogger.Info("Reconciling FlowConfigNodeAgentDeployment")
-
 	instance := &flowconfigv1.FlowConfigNodeAgentDeployment{}
 	err := r.Client.Get(context.Background(), req.NamespacedName, instance)
 
@@ -241,19 +240,24 @@ func (r *FlowConfigNodeAgentDeploymentReconciler) getPodResources(pod *corev1.Po
 
 func (r *FlowConfigNodeAgentDeploymentReconciler) getNodeResources(node *corev1.Node, vfPoolName string) int64 {
 	resLogger := r.Log.WithName("getNodeResources")
-	quantity, ok := node.Status.Capacity[corev1.ResourceName(vfPoolName)]
+	resource := corev1.ResourceName(vfPoolName)
 
-	if !ok {
-		resLogger.Info("Error getting number of resources on node")
+	if resource.String() != "" {
+		quantity, ok := node.Status.Capacity[resource]
+
+		if !ok {
+			resLogger.Info("Error getting number of resources on node")
+		}
+
+		numResources, ok := quantity.AsInt64()
+
+		if !ok {
+			resLogger.Info("Error parsing quantity to int64")
+		}
+
+		return numResources
 	}
-
-	numResources, ok := quantity.AsInt64()
-
-	if !ok {
-		resLogger.Info("Error parsing quantity to int64")
-	}
-
-	return numResources
+	return 0
 }
 
 func (r *FlowConfigNodeAgentDeploymentReconciler) mapNodesToRequests(object client.Object) []reconcile.Request {
@@ -284,7 +288,12 @@ func (r *FlowConfigNodeAgentDeploymentReconciler) getNodeFilterPredicates() pred
 	pred := predicate.Funcs{
 		// Create returns true if the Create event should be processed
 		CreateFunc: func(e event.CreateEvent) bool {
-			return true
+			if _, ok := e.Object.(*flowconfigv1.FlowConfigNodeAgentDeployment); ok {
+				return true
+
+			}
+
+			return false
 		},
 
 		// Delete returns true if the Delete event should be processed
@@ -305,15 +314,13 @@ func (r *FlowConfigNodeAgentDeploymentReconciler) getNodeFilterPredicates() pred
 						return true
 					}
 				}
-
-				return false
 			}
-
-			return true
+			return false
 		},
 
 		// Generic returns true if the Generic event should be processed
 		GenericFunc: func(e event.GenericEvent) bool {
+
 			return true
 		},
 	}
