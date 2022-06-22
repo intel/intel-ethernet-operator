@@ -5,6 +5,7 @@ go 1.16
 require (
 	github.com/go-logr/logr v1.2.0
 	github.com/golang/protobuf v1.5.2
+	github.com/google/gofuzz v1.2.0
 	github.com/jaypipes/ghw v0.8.0
 	github.com/jaypipes/pcidb v0.6.0
 	github.com/k8snetworkplumbingwg/network-attachment-definition-client v1.1.1-0.20201119153432-9d213757d22d

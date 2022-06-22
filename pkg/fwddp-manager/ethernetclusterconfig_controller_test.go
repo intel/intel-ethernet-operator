@@ -487,7 +487,7 @@ var _ = Describe("EthernetControllerTest", func() {
 				cc := clusterConfigPrototype.DeepCopy()
 				cc.Name = "foobar"
 
-				// Valid Pattern=`^[a-fA-F0-9]{32}$`
+				// Valid Pattern=`^[a-fA-F0-9]{40}$`
 				cc.Spec.DeviceConfig = ethernetv1.DeviceConfig{
 					FWChecksum: "1234567890123456789012345678901",
 				}
@@ -531,7 +531,7 @@ var _ = Describe("EthernetControllerTest", func() {
 				cc := clusterConfigPrototype.DeepCopy()
 				cc.Name = "foobar"
 
-				// Valid Pattern=`^[a-fA-F0-9]{32}$`
+				// Valid Pattern=`^[a-fA-F0-9]{40}$`
 				cc.Spec.DeviceConfig = ethernetv1.DeviceConfig{
 					DDPChecksum: "1234567890123456789012345678901",
 				}

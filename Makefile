@@ -74,7 +74,7 @@ FCDAEMON_IMAGE_TAG_VERSION = $(FCDAEMON_NAME):$(VERSION)
 FCDAEMON_IMG?=$(FCDAEMON_IMAGE_TAG_VERSION)
 FCDAEMON_DOCKERFILE = images/Dockerfile.FlowConfigDaemon
 
-UFT_IMAGE ?= dcf-tool:v22.03
+UFT_IMAGE ?= uft:v22.03
 ifneq (, $(IMAGE_REGISTRY))
 UFT_IMAGE_URL = $(IMAGE_REGISTRY)/$(UFT_IMAGE)
 else
@@ -184,6 +184,10 @@ test_flowconfig: manifests flowconfig-manifests generate fmt vet envtest ## Run 
 test_daemon: manifests generate fmt vet envtest ## Run tests only for the fwddp_daemon.
 	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path)" ETHERNET_NAMESPACE=default go test pkg/fwddp-daemon -coverprofile cover.out
 
+test_fuzz: manifests generate fmt vet envtest ## Run fuzz tests only. Set FUZZITER= env variable to set number of fuzz iteration. Default is 10 if this var is not set or invalid.
+	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path)" ETHERNET_NAMESPACE=default go test -v ./apis/flowconfig/v1 --fuzz -run TestValidateCreateFuzz -coverprofile cover.out
+
+
 build: generate fmt vet ## Build manager binary.
 	go build -o bin/manager main.go
 
@@ -240,8 +244,6 @@ uninstall: manifests kustomize ## Uninstall CRDs from the K8s cluster specified 
 deploy: manifests flowconfig-manifests kustomize ## Deploy controller to the K8s cluster specified in ~/.kube/config.
 	cd config/manager && $(KUSTOMIZE) edit set image controller=${ETHERNET_MANAGER_IMAGE}
 	$(KUSTOMIZE) build config/default | envsubst | $(K8CLI) apply -f -
-	$(K8CLI) apply -f config/flowconfig-daemon/add_flowconfigdaemon.yaml
-	$(K8CLI) apply -f config/flowconfig-daemon/sriov_nad.yaml
 
 undeploy: ## Undeploy controller from the K8s cluster specified in ~/.kube/config.
 	$(KUSTOMIZE) build config/default | $(K8CLI) delete -f -

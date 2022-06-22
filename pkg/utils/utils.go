@@ -8,7 +8,7 @@ import (
 	"archive/zip"
 	"compress/gzip"
 	"context"
-	"crypto/md5"
+	"crypto/sha1"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -120,12 +120,12 @@ func verifyChecksum(path, expected string) (bool, error) {
 	}
 	f, err := OpenNoLinks(path)
 	if err != nil {
-		return false, errors.New("Failed to open file to calculate md5")
+		return false, errors.New("failed to open file to calculate sha-1")
 	}
 	defer f.Close()
-	h := md5.New()
+	h := sha1.New()
 	if _, err := io.Copy(h, f); err != nil {
-		return false, errors.New("Failed to copy file to calculate md5")
+		return false, errors.New("failed to copy file to calculate sha-1")
 	}
 	if hex.EncodeToString(h.Sum(nil)) != expected {
 		return false, nil
