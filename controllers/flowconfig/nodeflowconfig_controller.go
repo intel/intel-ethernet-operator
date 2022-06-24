@@ -198,8 +198,8 @@ func (r *NodeFlowConfigReconciler) deleteRules(toDelete map[string]*flowsets.Flo
 
 	logger := r.Log.WithName("deleteRules()")
 	for k, fr := range toDelete {
-		delReq := &flowapi.RequestFlowofPort{PortId: 0, FlowId: fr.FlowID}
-		logger.Info("deleting rule", "flow ID:", fr.FlowID)
+		delReq := &flowapi.RequestFlowofPort{PortId: fr.FlowRule.PortId, FlowId: fr.FlowID}
+		logger.Info("deleting rule", "port ID:", fr.FlowRule.PortId, "flow ID:", fr.FlowID)
 		res, err := r.flowClient.Destroy(context.TODO(), delReq)
 		if err != nil {
 			logger.Info("DCF returned error while deleting rules", "flow ID:", fr.FlowID, "ErrorInfo:", res.ErrorInfo)
