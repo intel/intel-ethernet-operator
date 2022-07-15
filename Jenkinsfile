@@ -36,6 +36,8 @@ pipeline {
                         if ! make all; then
                             echo "ERROR: Failed to build the intel-ethernet-operator code"
                             exit 1
+                        else
+                            echo "STEP PASS: Operator built successfully"
                         fi
                     '''
                 }
@@ -51,6 +53,8 @@ pipeline {
                         if ! make test; then
                             echo "ERROR: Failed to run unit tests"
                             exit 1
+                        else
+                            echo "STEP PASS: unit tests run successfully"
                         fi
                         go tool cover -func cover.out
                     '''
@@ -65,6 +69,9 @@ pipeline {
                         DIFFCHECK=$(gofmt)
                         if [ -n "$DIFFCHECK" ]; then
                             echo "WARNING: code style issues found"
+                            exit 1
+                        else
+                            echo "STEP PASS: code style verified successfully"
                         fi
                     '''
                 }
@@ -82,6 +89,8 @@ pipeline {
                         if ! golangci-lint run -c ${WORKSPACE}/.golangci.yml; then
                             echo "ERROR: Go lint check found errors"
                             exit 1
+                        else
+                            echo "STEP PASS: go linter linted successfully"
                         fi
                     '''
                 }
@@ -98,7 +107,10 @@ pipeline {
                         set +x
                         yamllint .
                         if [ $? -ne 0 ]; then
+                            echo "ERROR: YAML lint check found errors"
                             exit 1
+                        else
+                            echo "PASS: yaml linter linted successfully"
                         fi
                     '''
                 }

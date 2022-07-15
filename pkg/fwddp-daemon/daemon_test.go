@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"io/ioutil"
+	"net/http"
 	"os"
 	"os/exec"
 	"path"
@@ -106,7 +107,7 @@ var _ = Describe("DaemonTests", func() {
 		getInventory = func(_ logr.Logger) ([]ethernetv1.Device, error) {
 			return data.Inventory, nil
 		}
-		downloadFile = func(path, url, checksum string) error {
+		downloadFile = func(path, url, checksum string, client *http.Client) error {
 			return nil
 		}
 		untarFile = func(srcPath string, dstPath string, log logr.Logger) error {
@@ -254,7 +255,7 @@ var _ = Describe("DaemonTests", func() {
 			data.Inventory[0].PCIAddress = "0000:00:00.1"
 
 			downloadErr := gerrors.New("unable to download")
-			downloadFile = func(path, url, checksum string) error {
+			downloadFile = func(path, url, checksum string, client *http.Client) error {
 				return downloadErr
 			}
 
@@ -283,7 +284,7 @@ var _ = Describe("DaemonTests", func() {
 
 			data.Inventory[0].PCIAddress = "0000:00:00.1"
 
-			downloadFile = func(localpath, url, checksum string) error {
+			downloadFile = func(localpath, url, checksum string, client *http.Client) error {
 
 				updateDir := path.Join(artifactsFolder, data.Inventory[0].PCIAddress)
 				updatePath := updateResultPath(updateDir)
@@ -345,7 +346,7 @@ var _ = Describe("DaemonTests", func() {
 
 			data.Inventory[0].PCIAddress = "0000:00:00.1"
 
-			downloadFile = func(localpath, url, checksum string) error {
+			downloadFile = func(localpath, url, checksum string, client *http.Client) error {
 
 				updateDir := path.Join(artifactsFolder, data.Inventory[0].PCIAddress)
 				updatePath := updateResultPath(updateDir)
@@ -406,7 +407,7 @@ var _ = Describe("DaemonTests", func() {
 
 			data.Inventory[0].PCIAddress = "0000:00:00.1"
 
-			downloadFile = func(localpath, url, checksum string) error {
+			downloadFile = func(localpath, url, checksum string, client *http.Client) error {
 
 				updateDir := path.Join(artifactsFolder, data.Inventory[0].PCIAddress)
 				updatePath := updateResultPath(updateDir)
@@ -560,7 +561,7 @@ var _ = Describe("DaemonTests", func() {
 				return nil
 			}
 
-			downloadFile = func(localpath, url, checksum string) error {
+			downloadFile = func(localpath, url, checksum string, client *http.Client) error {
 
 				updateDir := path.Join(artifactsFolder, data.Inventory[0].PCIAddress)
 				updatePath := updateResultPath(updateDir)
@@ -735,7 +736,7 @@ var _ = Describe("DaemonTests", func() {
 			data.Inventory[0].PCIAddress = "0000:00:00.1"
 
 			downloadErr := gerrors.New("unable to download DDP")
-			downloadFile = func(path, url, checksum string) error {
+			downloadFile = func(path, url, checksum string, client *http.Client) error {
 				return downloadErr
 			}
 

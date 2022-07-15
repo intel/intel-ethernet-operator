@@ -242,6 +242,26 @@ spec:
 ```
 After that package will be available in cluster under following path:   
 ```http://ice-cache.default.svc.cluster.local/E810_NVMUpdatePackage_v3_10_Linux.tar.gz```
+#### Certificate validation
+To update FW or DDP on CLV card, you have to download corresponding packages for them. For security reasons, you might want to validate certificate that is exposed by server before downloading and this optional step describes how to add trusted certificate.
+
+Those steps must be done when operator is not installed. If operator is installed, you can apply new configuration by manually restarting `fwddp-daemon` pods.
+
+Prepare trusted X509 certificate `certificate.der` that will be added to trusted store. It could be either root CA certificate or intermediate certificate. It must contain `Subject Alternative Name` or `IPAdresses` identical to path from which packages will be downloaded.
+
+```shell
+kubectl create secret generic tls-cert --from-file=tls.crt=certificate.der -n <namespace>
+```
+
+Restart `fwddp-daemon` pods or install operator
+
+Check that certificate is correctly loaded in `fwddp-daemon` pods
+
+```shell
+kubectl logs -n <namespace> pod/fwddp-daemon|grep -i "found certificate - using HTTPS client"
+{"level":"info","logger":"daemon","msg": "found certificate - using HTTPS client"}
+````
+
 #### Updating Firmware
 
 To find the NIC devices belonging to the Intel® E810 NIC run following command, the user can detect the device information of the NICs from the output:

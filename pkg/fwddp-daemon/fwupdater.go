@@ -5,6 +5,7 @@ package daemon
 
 import (
 	"fmt"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -27,7 +28,8 @@ var (
 )
 
 type fwUpdater struct {
-	log logr.Logger
+	log        logr.Logger
+	httpClient *http.Client
 }
 
 func (f *fwUpdater) prepareFirmware(config ethernetv1.DeviceNodeConfig) (string, error) {
@@ -47,7 +49,7 @@ func (f *fwUpdater) prepareFirmware(config ethernetv1.DeviceNodeConfig) (string,
 
 	fullPath := filepath.Join(targetPath, filepath.Base(config.DeviceConfig.FWURL))
 	log.V(4).Info("Downloading", "url", config.DeviceConfig.FWURL, "dstPath", fullPath)
-	err = downloadFile(fullPath, config.DeviceConfig.FWURL, config.DeviceConfig.FWChecksum)
+	err = downloadFile(fullPath, config.DeviceConfig.FWURL, config.DeviceConfig.FWChecksum, f.httpClient)
 	if err != nil {
 		return "", err
 	}
