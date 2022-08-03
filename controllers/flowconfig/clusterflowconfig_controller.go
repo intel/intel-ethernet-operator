@@ -521,7 +521,11 @@ func (r *ClusterFlowConfigReconciler) getPodFilterPredicates() predicate.Predica
 	pred := predicate.Funcs{
 		// Create returns true if the Create event should be processed
 		CreateFunc: func(e event.CreateEvent) bool {
-			return true
+			if _, ok := e.Object.(*flowconfigv1.ClusterFlowConfig); ok {
+				return true
+			}
+
+			return false
 		},
 
 		// Delete returns true if the Delete event should be processed
@@ -531,14 +535,14 @@ func (r *ClusterFlowConfigReconciler) getPodFilterPredicates() predicate.Predica
 
 		// Update returns true if the Update event should be processed
 		UpdateFunc: func(e event.UpdateEvent) bool {
-			if newPod, ok := e.ObjectNew.(*corev1.Pod); ok {
+			if newPod, ok := e.ObjectNew.(*corev1.Pod); ok && newPod.Status.Phase == "Running" {
 				if oldPod, ok := e.ObjectOld.(*corev1.Pod); ok {
 					// process event only when labels and annotations are different
 					return !reflect.DeepEqual(newPod.ObjectMeta.Labels, oldPod.ObjectMeta.Labels) || !reflect.DeepEqual(newPod.ObjectMeta.Annotations, oldPod.ObjectMeta.Annotations)
 				}
 			}
 
-			return true
+			return false
 		},
 
 		// Generic returns true if the Generic event should be processed
