@@ -5,9 +5,11 @@ package daemon
 
 import (
 	"context"
-
+	"crypto/x509"
+	"io/ioutil"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/retry"
+	"net/http"
 
 	"os"
 	"syscall"
@@ -129,12 +131,21 @@ func doNotRequeue() (reconcile.Result, error) {
 	return reconcile.Result{}, nil
 }
 
-func NewNodeConfigReconciler(c client.Client, clientSet *clientset.Clientset, log logr.Logger,
-	nodeName, ns string) (*NodeConfigReconciler, error) {
-
+func NewNodeConfigReconciler(c client.Client, clientSet *clientset.Clientset, log logr.Logger, nodeName, ns string) (*NodeConfigReconciler, error) {
 	err := LoadConfig()
 	if err != nil {
 		return nil, err
+	}
+
+	cert := getTlsCert(log)
+
+	httpClient := http.DefaultClient
+	if cert != nil {
+		log.Info("found certificate - using HTTPS client")
+		httpClient, err = utils.NewSecureHttpsClient(cert)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return &NodeConfigReconciler{
@@ -146,12 +157,29 @@ func NewNodeConfigReconciler(c client.Client, clientSet *clientset.Clientset, lo
 			Name:      nodeName,
 		},
 		ddpUpdater: &ddpUpdater{
-			log: log,
+			log:        log,
+			httpClient: httpClient,
 		},
 		fwUpdater: &fwUpdater{
-			log: log,
+			log:        log,
+			httpClient: httpClient,
 		},
 	}, nil
+}
+
+func getTlsCert(log logr.Logger) *x509.Certificate {
+	derBytes, err := ioutil.ReadFile("/etc/certificate/tls.crt")
+	if err != nil {
+		log.Error(err, "failed to read mounted certificate")
+		return nil
+	}
+
+	cert, err := x509.ParseCertificate(derBytes)
+	if err != nil {
+		log.Error(err, "failed to parse certificate")
+		return nil
+	}
+	return cert
 }
 
 func (r *NodeConfigReconciler) SetupWithManager(mgr ctrl.Manager) error {
@@ -217,10 +245,10 @@ func (r *NodeConfigReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	nodeConfig := &ethernetv1.EthernetNodeConfig{}
 
 	syscall.Umask(0077)
-	if err := r.Client.Get(ctx, req.NamespacedName, nodeConfig); err != nil {
+	if err := r.Get(ctx, req.NamespacedName, nodeConfig); err != nil {
 		if k8serrors.IsNotFound(err) {
 			log.V(4).Info("not found - creating")
-			return requeueNowWithError(r.CreateEmptyNodeConfigIfNeeded(r.Client))
+			return requeueNowWithError(r.CreateEmptyNodeConfigIfNeeded(r))
 		}
 		log.Error(err, "Get() failed")
 		return requeueNowWithError(err)

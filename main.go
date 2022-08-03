@@ -68,11 +68,31 @@ func main() {
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 
 	restConfig := ctrl.GetConfigOrDie()
+	var owner client.Object
 
 	err := setClusterType(restConfig)
 	if err != nil {
 		setupLog.Error(err, "unable to determine cluster type")
 		os.Exit(1)
+	}
+
+	runningInK8s := isRunningInPod()
+	var adHocClient client.Client
+	if adHocClient, err = client.New(restConfig, client.Options{Scheme: scheme}); err != nil {
+		setupLog.Error(err, "failed to create client")
+		os.Exit(1)
+	}
+
+	if runningInK8s {
+		owner = new(appsv1.Deployment)
+		if err := adHocClient.Get(
+			context.Background(),
+			client.ObjectKey{Name: "intel-ethernet-operator-controller-manager", Namespace: fwddp_manager.NAMESPACE},
+			owner,
+		); err != nil {
+			setupLog.Error(err, "unable to get operator deployment")
+			os.Exit(1)
+		}
 	}
 
 	mgr, err := ctrl.NewManager(restConfig, ctrl.Options{
@@ -115,6 +135,7 @@ func main() {
 		Client: mgr.GetClient(),
 		Log:    ctrl.Log.WithName("controllers").WithName("flowconfig").WithName("FlowConfigNodeAgentDeployment"),
 		Scheme: mgr.GetScheme(),
+		Owner:  owner,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "FlowConfigNodeAgentDeployment")
 		os.Exit(1)
@@ -140,48 +161,34 @@ func main() {
 		os.Exit(1)
 	}
 
-	var adHocClient client.Client
-	if adHocClient, err = client.New(restConfig, client.Options{Scheme: scheme}); err != nil {
-		setupLog.Error(err, "failed to create client")
-		os.Exit(1)
-	}
+	if runningInK8s {
+		assetsToDeploy := []assets.Asset{
+			{ConfigMapName: "labeler-config", Path: "assets/100-labeler.yaml"},
+			{ConfigMapName: "daemon-config", Path: "assets/200-daemon.yaml", BlockingReadiness: assets.ReadinessPollConfig{Retries: 30, Delay: 20 * time.Second}},
+		}
+		if !utils.IsK8sDeployment() {
+			assetsToDeploy = append(assetsToDeploy, assets.Asset{ConfigMapName: "machine-config", Path: "assets/300-machine-config.yaml"})
+		}
 
-	owner := new(appsv1.Deployment)
-	if err := adHocClient.Get(
-		context.Background(),
-		client.ObjectKey{Name: "intel-ethernet-operator-controller-manager", Namespace: fwddp_manager.NAMESPACE},
-		owner,
-	); err != nil {
-		setupLog.Error(err, "unable to get operator deployment")
-		os.Exit(1)
-	}
+		assetsManager := &assets.Manager{
+			Client:    adHocClient,
+			Namespace: fwddp_manager.NAMESPACE,
+			Log:       ctrl.Log.WithName("manager"),
+			EnvPrefix: utils.IeoPrefix,
+			Scheme:    scheme,
+			Owner:     owner,
+			Assets:    assetsToDeploy,
+		}
 
-	assetsToDeploy := []assets.Asset{
-		{ConfigMapName: "labeler-config", Path: "assets/100-labeler.yaml"},
-		{ConfigMapName: "daemon-config", Path: "assets/200-daemon.yaml", BlockingReadiness: assets.ReadinessPollConfig{Retries: 30, Delay: 20 * time.Second}},
-	}
-	if !utils.IsK8sDeployment() {
-		assetsToDeploy = append(assetsToDeploy, assets.Asset{ConfigMapName: "machine-config", Path: "assets/300-machine-config.yaml"})
-	}
+		if err := assetsManager.DeployConfigMaps(context.Background()); err != nil {
+			setupLog.Error(err, "failed to deploy the config maps")
+			os.Exit(1)
+		}
 
-	assetsManager := &assets.Manager{
-		Client:    adHocClient,
-		Namespace: fwddp_manager.NAMESPACE,
-		Log:       ctrl.Log.WithName("manager"),
-		EnvPrefix: utils.IeoPrefix,
-		Scheme:    scheme,
-		Owner:     owner,
-		Assets:    assetsToDeploy,
-	}
-
-	if err := assetsManager.DeployConfigMaps(context.Background()); err != nil {
-		setupLog.Error(err, "failed to deploy the config maps")
-		os.Exit(1)
-	}
-
-	if err := assetsManager.LoadFromConfigMapAndDeploy(context.Background()); err != nil {
-		setupLog.Error(err, "failed to deploy the assets")
-		os.Exit(1)
+		if err := assetsManager.LoadFromConfigMapAndDeploy(context.Background()); err != nil {
+			setupLog.Error(err, "failed to deploy the assets")
+			os.Exit(1)
+		}
 	}
 
 	setupLog.Info("starting manager")
@@ -220,4 +227,10 @@ func setClusterType(restConfig *rest.Config) error {
 	}
 
 	return nil
+}
+
+// isRunningInPod checks if we are running in K8s Pod or not. Assumption here is that in Pod env KUBERNETES_SERVICE_HOST env will be set by K8s
+func isRunningInPod() bool {
+	_, keyPresent := os.LookupEnv("KUBERNETES_SERVICE_HOST")
+	return keyPresent
 }

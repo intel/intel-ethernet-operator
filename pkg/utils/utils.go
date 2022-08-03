@@ -9,6 +9,8 @@ import (
 	"compress/gzip"
 	"context"
 	"crypto/sha1"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -134,14 +136,32 @@ func verifyChecksum(path, expected string) (bool, error) {
 	return true, nil
 }
 
-func DownloadFile(path, url, checksum string) error {
+func NewSecureHttpsClient(cert *x509.Certificate) (*http.Client, error) {
+	certPool, err := x509.SystemCertPool()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get syscerts - %v", err)
+	}
+	certPool.AddCert(cert)
+	transport := &http.Transport{
+		TLSClientConfig: &tls.Config{
+			RootCAs:    certPool,
+			ClientAuth: tls.RequireAndVerifyClientCert,
+		},
+	}
+	httpsClient := http.Client{
+		Transport: transport,
+	}
+	return &httpsClient, nil
+}
+
+func DownloadFile(path, url, checksum string, client *http.Client) error {
 	f, err := CreateNoLinks(path)
 	if err != nil {
 		return err
 	}
 	defer f.Close()
 
-	r, err := http.Get(url)
+	r, err := client.Get(url)
 	if err != nil {
 		return fmt.Errorf("unable to download image from: %s err: %s", url, err)
 	}

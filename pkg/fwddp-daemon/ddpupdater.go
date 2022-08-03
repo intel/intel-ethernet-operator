@@ -5,6 +5,7 @@ package daemon
 
 import (
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -25,7 +26,8 @@ var (
 )
 
 type ddpUpdater struct {
-	log logr.Logger
+	log        logr.Logger
+	httpClient *http.Client
 }
 
 func (d *ddpUpdater) handleDDPUpdate(pciAddr string, ddpPath string) (bool, error) {
@@ -85,7 +87,7 @@ func (d *ddpUpdater) prepareDDP(config ethernetv1.DeviceNodeConfig) (string, err
 
 	fullPath := filepath.Join(targetPath, filepath.Base(config.DeviceConfig.DDPURL))
 	log.V(4).Info("Downloading", "url", config.DeviceConfig.DDPURL, "dstPath", fullPath)
-	err = downloadFile(fullPath, config.DeviceConfig.DDPURL, config.DeviceConfig.DDPChecksum)
+	err = downloadFile(fullPath, config.DeviceConfig.DDPURL, config.DeviceConfig.DDPChecksum, d.httpClient)
 	if err != nil {
 		return "", err
 	}

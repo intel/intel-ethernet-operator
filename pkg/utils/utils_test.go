@@ -7,18 +7,26 @@ import (
 	"archive/tar"
 	"archive/zip"
 	"compress/gzip"
+	"crypto/rand"
+	"crypto/rsa"
 	"crypto/sha1"
+	"crypto/x509"
+	"crypto/x509/pkix"
 	"encoding/hex"
 	"fmt"
 	"github.com/go-logr/logr"
 	"io"
 	"io/fs"
 	"io/ioutil"
+	"math/big"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 	"testing"
+	"time"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -185,9 +193,63 @@ var _ = Describe("Utils", func() {
 	})
 
 	var _ = Describe("DownloadFile", func() {
+		server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			_, _ = w.Write([]byte("Hello"))
+		}))
+		defer server.Close()
+
+		secureClient, err := NewSecureHttpsClient(server.Certificate())
+		Expect(err).ToNot(HaveOccurred())
+
+		var _ = It("will return downloaded file if URI and certificate are valid", func() {
+			srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				_, _ = w.Write([]byte("Hello"))
+			}))
+			defer srv.Close()
+
+			clientWithValidCertificate, err := NewSecureHttpsClient(srv.Certificate())
+			Expect(err).ToNot(HaveOccurred())
+
+			err = DownloadFile("/tmp/somefolder", srv.URL, "", clientWithValidCertificate)
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		var _ = It("will return error if URI is valid and certificate isn't", func() {
+			srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				_, _ = w.Write([]byte("Hello"))
+			}))
+			defer srv.Close()
+
+			key, err := rsa.GenerateKey(rand.Reader, 2048)
+			Expect(err).ToNot(HaveOccurred())
+
+			tml := x509.Certificate{
+				NotBefore:    time.Now(),
+				NotAfter:     time.Now().AddDate(5, 0, 0),
+				SerialNumber: big.NewInt(123123),
+				Subject: pkix.Name{
+					CommonName:   "New Name",
+					Organization: []string{"New Org."},
+				},
+				BasicConstraintsValid: true,
+			}
+			certPem, err := x509.CreateCertificate(rand.Reader, &tml, &tml, &key.PublicKey, key)
+			Expect(err).ToNot(HaveOccurred())
+
+			crt, err := x509.ParseCertificates(certPem)
+			Expect(err).ToNot(HaveOccurred())
+
+			clientWithInvalidCertificate, err := NewSecureHttpsClient(crt[0])
+			Expect(err).ToNot(HaveOccurred())
+
+			err = DownloadFile("/tmp/somefolder", srv.URL, "", clientWithInvalidCertificate)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("certificate signed by unknown authority"))
+		})
+
 		var _ = It("will return error if url format is invalid", func() {
 			defer os.Remove("/tmp/somefileanme")
-			err := DownloadFile("/tmp/somefolder", "/tmp/fake", "")
+			err = DownloadFile("/tmp/somefolder", "/tmp/fake", "", secureClient)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("unsupported protocol"))
 		})
@@ -197,7 +259,7 @@ var _ = Describe("Utils", func() {
 			defer os.Remove(tmpfile.Name())
 			Expect(err).ToNot(HaveOccurred())
 
-			err = DownloadFile(tmpfile.Name(), "http://0.0.0.0/tmp/fake", "check")
+			err = DownloadFile(tmpfile.Name(), "http://0.0.0.0/tmp/fake", "check", secureClient)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("unable to download image"))
 		})
@@ -210,7 +272,7 @@ var _ = Describe("Utils", func() {
 			Expect(err).To(BeNil())
 			defer os.Remove(filePath)
 
-			err = DownloadFile(filePath, url, "63effa2530d088a06f071bc5f016f8d4")
+			err = DownloadFile(filePath, url, "63effa2530d088a06f071bc5f016f8d4", secureClient)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("unsupported protocol"))
 		})
@@ -228,13 +290,13 @@ var _ = Describe("Utils", func() {
 			Expect(err).To(BeNil())
 			defer os.Remove(fileWithUrl)
 
-			err = DownloadFile(filePath, url, "63effa2530d088a06f071bc5f016f8d4")
+			err = DownloadFile(filePath, url, "63effa2530d088a06f071bc5f016f8d4", secureClient)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("unsupported protocol"))
 		})
 
 		var _ = It("will return error if filename is invalid", func() {
-			err := DownloadFile("", "/tmp/fake", "bf51ac6aceed5ca4227e640046ad9de4")
+			err := DownloadFile("", "/tmp/fake", "bf51ac6aceed5ca4227e640046ad9de4", secureClient)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("no such file or directory"))
 		})
