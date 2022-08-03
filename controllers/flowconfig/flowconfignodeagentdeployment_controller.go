@@ -37,6 +37,7 @@ type FlowConfigNodeAgentDeploymentReconciler struct {
 	client.Client
 	Log    logr.Logger
 	Scheme *runtime.Scheme
+	Owner  client.Object
 
 	oldDCFVfPoolName  corev1.ResourceName
 	oldNADAnnotation  string
@@ -68,9 +69,18 @@ func (r *FlowConfigNodeAgentDeploymentReconciler) Reconcile(ctx context.Context,
 	err := r.Client.Get(context.Background(), req.NamespacedName, instance)
 
 	if err != nil {
+		if errors.IsNotFound(err) {
+			// Request object not found, could have been deleted after reconcile request.
+			// Owned objects are automatically garbage collected.
+			// Return and don't requeue
+			reqLogger.Info("FlowConfigNodeAgentDeployment instance not found. Ignoring since object must be deleted")
+			return ctrl.Result{}, nil
+		}
 		reqLogger.Info("failed to get FlowConfigNodeAgentDeployment instance, will try to get one after 30 seconds")
 		return ctrl.Result{RequeueAfter: 30 * time.Second}, err
 	}
+	// Set instance owner to controller-manager so that instance gets garbage collected when controller-manager is removed.
+	r.setInstanceOwner(instance)
 
 	if instance.Spec.NADAnnotation == "" {
 		reqLogger.Info("NADAnnotation is not defined, will try to get one after 30 seconds")
@@ -183,12 +193,14 @@ func (r *FlowConfigNodeAgentDeploymentReconciler) CreatePod(templatePod *corev1.
 	uftContainer = r.addResources(uftContainer, vfPoolName, numResources)
 	pod.Spec.Containers[uftContainerIndex] = uftContainer
 
-	if err := controllerutil.SetControllerReference(instance, pod, r.Scheme); err != nil {
+	err := r.setControllerRef(instance, pod)
+
+	if err != nil {
 		podLogger.Info("Failed to set controller reference")
 		return err
 	}
 
-	err := r.Client.Create(context.TODO(), pod)
+	err = r.Client.Create(context.TODO(), pod)
 	if err != nil {
 		podLogger.Info("Failed to create pod")
 		return err
@@ -319,6 +331,29 @@ func (r *FlowConfigNodeAgentDeploymentReconciler) getNodeFilterPredicates() pred
 	}
 
 	return pred
+}
+
+func (r *FlowConfigNodeAgentDeploymentReconciler) setControllerRef(owner, owned client.Object) error {
+	if r.Owner != nil {
+		if err := controllerutil.SetControllerReference(owner, owned, r.Scheme); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// setInstanceOwner sets instance controller-manager deployment as the owner for garbage collection
+func (r *FlowConfigNodeAgentDeploymentReconciler) setInstanceOwner(instance client.Object) {
+	if instance.GetOwnerReferences() == nil {
+		if err := r.setControllerRef(r.Owner, instance); err != nil {
+			r.Log.Info("error setting instance owner to controller-manager deployment", "error", err)
+			return
+		}
+		if err := r.Update(context.Background(), instance); err != nil {
+			r.Log.Info("error updating instance with ownerReference", "error", err)
+		}
+
+	}
 }
 
 func (r *FlowConfigNodeAgentDeploymentReconciler) getPodTemplate() (*corev1.Pod, error) {
