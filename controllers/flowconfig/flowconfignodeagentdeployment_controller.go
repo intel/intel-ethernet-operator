@@ -49,11 +49,12 @@ const (
 	networkAnnotation = "k8s.v1.cni.cncf.io/networks"
 	nodeLabel         = "kubernetes.io/hostname"
 	uftContainerName  = "uft"
-	podTemplateFile   = "../../assets/flowconfig-daemon/daemon.yaml"
 	ocpDdpUpdatePath  = "/var/lib/firmware/intel/ice/ddp/"
 	k8sDdpUpdatePath  = "/lib/firmware/updates/intel/ice/ddp"
 	podVolumeName     = "iceddp"
 )
+
+var podTemplateFile string = "assets/flowconfig-daemon/daemon.yaml"
 
 //+kubebuilder:rbac:groups=flowconfig.intel.com,resources=flowconfignodeagentdeployments,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=flowconfig.intel.com,resources=flowconfignodeagentdeployments/status,verbs=get;update;patch

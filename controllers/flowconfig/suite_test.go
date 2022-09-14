@@ -5,13 +5,14 @@ package flowconfig
 
 import (
 	"fmt"
-	configv1 "github.com/openshift/api/config/v1"
 	"math/rand"
 	"os"
 	"path/filepath"
 	"sync"
 	"testing"
 	"time"
+
+	configv1 "github.com/openshift/api/config/v1"
 
 	"github.com/onsi/gomega/types"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -134,6 +135,9 @@ var _ = BeforeSuite(func() {
 
 	err = nodeFlowConfigRc.SetupWithManager(k8sManager)
 	Expect(err).ToNot(HaveOccurred())
+
+	// Point test to the correct "assets" directory
+	podTemplateFile = "../../assets/flowconfig-daemon/daemon.yaml"
 
 	nodeAgentDeploymentRc = &FlowConfigNodeAgentDeploymentReconciler{
 		Client: k8sManager.GetClient(),
