@@ -302,7 +302,10 @@ func (r *FlowConfigNodeAgentDeploymentReconciler) getNodeFilterPredicates() pred
 		CreateFunc: func(e event.CreateEvent) bool {
 			if _, ok := e.Object.(*flowconfigv1.FlowConfigNodeAgentDeployment); ok {
 				return true
+			}
 
+			if _, ok := e.Object.(*corev1.Node); ok {
+				return true
 			}
 
 			return false
@@ -327,6 +330,14 @@ func (r *FlowConfigNodeAgentDeploymentReconciler) getNodeFilterPredicates() pred
 					}
 				}
 			}
+
+			// When the FlowConfigNodeAgentDeployment CR gets updated
+			if _, ok := e.ObjectNew.(*flowconfigv1.FlowConfigNodeAgentDeployment); ok {
+				if _, ok := e.ObjectOld.(*flowconfigv1.FlowConfigNodeAgentDeployment); ok {
+					return true
+				}
+			}
+
 			return false
 		},
 

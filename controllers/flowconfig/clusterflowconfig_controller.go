@@ -535,10 +535,19 @@ func (r *ClusterFlowConfigReconciler) getPodFilterPredicates() predicate.Predica
 
 		// Update returns true if the Update event should be processed
 		UpdateFunc: func(e event.UpdateEvent) bool {
-			if newPod, ok := e.ObjectNew.(*corev1.Pod); ok && newPod.Status.Phase == "Running" {
+			if newPod, ok := e.ObjectNew.(*corev1.Pod); ok && newPod.Status.Phase == corev1.PodRunning {
 				if oldPod, ok := e.ObjectOld.(*corev1.Pod); ok {
+					if oldPod.Status.Phase == corev1.PodPending {
+						return true
+					}
 					// process event only when labels and annotations are different
 					return !reflect.DeepEqual(newPod.ObjectMeta.Labels, oldPod.ObjectMeta.Labels) || !reflect.DeepEqual(newPod.ObjectMeta.Annotations, oldPod.ObjectMeta.Annotations)
+				}
+			}
+
+			if _, ok := e.ObjectNew.(*flowconfigv1.ClusterFlowConfig); ok {
+				if _, ok := e.ObjectOld.(*flowconfigv1.ClusterFlowConfig); ok {
+					return true
 				}
 			}
 

@@ -740,7 +740,8 @@ var _ = Describe("Cluster Flow Config Controller tests", func() {
 					pod.Spec.NodeName = NODE_NAME_1
 					addPodAnnotations(pod)
 				})
-				Expect(k8sClient.Create(context.TODO(), pod)).ToNot(HaveOccurred())
+				err := deployPodAndUpdatePhase(pod, corev1.PodRunning, 20, 1)
+				Expect(err).ToNot(HaveOccurred())
 
 				clusterConfig = getClusterFlowConfig(func(flowConfig *flowconfigv1.ClusterFlowConfig) {
 					flowConfig.ObjectMeta.Namespace = "default"
@@ -832,11 +833,12 @@ var _ = Describe("Cluster Flow Config Controller tests", func() {
 					pod.Spec.NodeName = NODE_NAME_2
 					addPodAnnotations(pod)
 				})
-				Expect(k8sClient.Create(context.TODO(), pod2)).ToNot(HaveOccurred())
+				err := deployPodAndUpdatePhase(pod2, corev1.PodRunning, 20, 1)
+				Expect(err).ToNot(HaveOccurred())
 				defer deletePod(pod2.ObjectMeta.Name, pod2.ObjectMeta.Namespace)
 
 				object2 := &flowconfigv1.NodeFlowConfig{}
-				err := WaitForObjectCreation(k8sClient, NODE_NAME_2, "default", 55*time.Second, 9*time.Second, object2)
+				err = WaitForObjectCreation(k8sClient, NODE_NAME_2, "default", 55*time.Second, 9*time.Second, object2)
 				defer func() {
 					_ = k8sClient.Delete(context.Background(), object2)
 				}()
@@ -1050,7 +1052,8 @@ var _ = Describe("Cluster Flow Config Controller tests", func() {
 					pod.Spec.NodeName = NODE_NAME_2
 					addPodAnnotations(pod)
 				})
-				Expect(k8sClient.Create(context.TODO(), pod2)).ToNot(HaveOccurred())
+				err := deployPodAndUpdatePhase(pod2, corev1.PodRunning, 20, 1)
+				Expect(err).ToNot(HaveOccurred())
 				defer deletePod(pod2.ObjectMeta.Name, pod2.ObjectMeta.Namespace)
 
 				object2 := &flowconfigv1.NodeFlowConfig{}
@@ -1194,7 +1197,8 @@ var _ = Describe("Cluster Flow Config Controller tests", func() {
 					pod.Spec.NodeName = NODE_NAME_2
 					addPodAnnotations(pod)
 				})
-				Expect(k8sClient.Create(context.TODO(), pod2)).ToNot(HaveOccurred())
+				err := deployPodAndUpdatePhase(pod2, corev1.PodRunning, 20, 1)
+				Expect(err).ToNot(HaveOccurred())
 				defer deletePod(pod2.ObjectMeta.Name, pod2.ObjectMeta.Namespace)
 
 				object2 := &flowconfigv1.NodeFlowConfig{}
@@ -1210,7 +1214,8 @@ var _ = Describe("Cluster Flow Config Controller tests", func() {
 					pod.Spec.NodeName = NODE_NAME_2
 					addPodAnnotations(pod)
 				})
-				Expect(k8sClient.Create(context.TODO(), pod2)).ToNot(HaveOccurred())
+				err := deployPodAndUpdatePhase(pod2, corev1.PodRunning, 20, 1)
+				Expect(err).ToNot(HaveOccurred())
 				defer deletePod(pod2.ObjectMeta.Name, pod2.ObjectMeta.Namespace)
 
 				object2 := &flowconfigv1.NodeFlowConfig{}
@@ -1239,7 +1244,8 @@ var _ = Describe("Cluster Flow Config Controller tests", func() {
 					flowConfig.ObjectMeta.Name = "another-cr"
 					flowConfig.Spec.PodSelector = &metav1.LabelSelector{
 						MatchLabels: map[string]string{
-							"otherKey": "testName"},
+							"otherKey": "testName",
+						},
 					}
 					flowConfig.Spec.Rules = getClusterFlowRules()
 					flowConfig.Spec.Rules[0].Pattern[0].Type = "RTE_FLOW_ITEM_TYPE_VLAN"
@@ -1253,7 +1259,8 @@ var _ = Describe("Cluster Flow Config Controller tests", func() {
 					pod.Spec.NodeName = NODE_NAME_1
 					addPodAnnotations(pod)
 				})
-				Expect(k8sClient.Create(context.TODO(), pod)).ToNot(HaveOccurred())
+				err := deployPodAndUpdatePhase(pod, corev1.PodRunning, 20, 1)
+				Expect(err).ToNot(HaveOccurred())
 
 				clusterConfig = getClusterFlowConfig(func(flowConfig *flowconfigv1.ClusterFlowConfig) {
 					flowConfig.ObjectMeta.Namespace = "default"
@@ -1289,7 +1296,8 @@ var _ = Describe("Cluster Flow Config Controller tests", func() {
 					pod.Spec.NodeName = NODE_NAME_1
 					addPodAnnotations(pod)
 				})
-				Expect(k8sClient.Create(context.TODO(), pod2)).ToNot(HaveOccurred())
+				err := deployPodAndUpdatePhase(pod2, corev1.PodRunning, 20, 1)
+				Expect(err).ToNot(HaveOccurred())
 				defer deletePod(pod2.ObjectMeta.Name, pod2.ObjectMeta.Namespace)
 
 				Eventually(func() bool {

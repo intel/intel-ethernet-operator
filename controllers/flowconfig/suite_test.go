@@ -57,11 +57,6 @@ var (
 	defaultSysFs = "/sys"
 )
 
-const (
-	timeout  = 4 * time.Second
-	interval = 1000 * time.Millisecond
-)
-
 func MatchQuantityObject(expected interface{}) types.GomegaMatcher {
 	return &representQuantityMatcher{
 		expected: expected,
@@ -136,6 +131,28 @@ func createPod(name, ns string, configurers ...func(pod *corev1.Pod)) *corev1.Po
 	}
 
 	return pod
+}
+
+// Deploys pod and sets its phase to the desired value.
+// This function waits until the pod is created before updating it. The timeout and checking interval can be configured (in seconds).
+func deployPodAndUpdatePhase(pod *corev1.Pod, podPhase corev1.PodPhase, checkTimeout time.Duration, checkInterval time.Duration) error {
+	err := k8sClient.Create(context.TODO(), pod)
+	if err != nil {
+		return err
+	}
+
+	err = WaitForObjectCreation(k8sClient, pod.Name, pod.Namespace, checkTimeout*time.Second, checkInterval*time.Second, pod)
+	if err != nil {
+		return err
+	}
+
+	pod.Status.Phase = podPhase
+	err = k8sClient.Status().Update(context.Background(), pod)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func deletePod(name, ns string) {
