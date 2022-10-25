@@ -225,6 +225,9 @@ var _ = BeforeSuite(func() {
 	err = nodeFlowConfigRc.SetupWithManager(k8sManager)
 	Expect(err).ToNot(HaveOccurred())
 
+	// Point test to the correct "assets" directory
+	podTemplateFile = "../../assets/flowconfig-daemon/daemon.yaml"
+
 	nodeAgentDeploymentRc = &FlowConfigNodeAgentDeploymentReconciler{
 		Client: k8sManager.GetClient(),
 		Log:    ctrl.Log.WithName("controllers").WithName("NodeAgentDeployment"),

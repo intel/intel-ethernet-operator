@@ -129,7 +129,7 @@ func verifyChecksum(path, expected string) (bool, error) {
 	if _, err := io.Copy(h, f); err != nil {
 		return false, errors.New("failed to copy file to calculate sha-1")
 	}
-	if hex.EncodeToString(h.Sum(nil)) != expected {
+	if hex.EncodeToString(h.Sum(nil)) != strings.ToLower(expected) {
 		return false, nil
 	}
 
