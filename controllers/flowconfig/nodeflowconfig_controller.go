@@ -385,7 +385,7 @@ func (r *NodeFlowConfigReconciler) getFlowCreateRequests(fr *flowconfigv1.FlowRu
 	// 4 - Get port information
 	// - ClusterFlowConfig controller will always assing invalid value to portId, so in result NodeFlowConfig is responsible for filling in portID
 	// - if NodeFlowConfig will be created manually, user has option to set portID, controller will not get it from DCF
-	if fr.PortId != invalidPortId {
+	if fr.PortId != automaticPortId {
 		rteFlowCreateRequests.PortId = fr.PortId
 	} else {
 		portId, err := r.getPortIdFromDCFPort(podPciAddress)
@@ -406,18 +406,18 @@ func (r *NodeFlowConfigReconciler) getFlowCreateRequests(fr *flowconfigv1.FlowRu
 func (r *NodeFlowConfigReconciler) getPortIdFromDCFPort(otherVfPciAddress string) (uint32, error) {
 	pfName, err := r.sriovUtils.GetPfName(otherVfPciAddress)
 	if err != nil {
-		return invalidPortId, fmt.Errorf("unable to get pfName of VF that handles traffic. Err %v", err)
+		return automaticPortId, fmt.Errorf("unable to get pfName of VF that handles traffic. Err %v", err)
 	}
 
 	dcfPorts, err := r.listDCFPorts()
 	if err != nil {
-		return invalidPortId, fmt.Errorf("unable to get list of DCF ports. Err %v", err)
+		return automaticPortId, fmt.Errorf("unable to get list of DCF ports. Err %v", err)
 	}
 
 	for _, dcfPort := range dcfPorts {
 		dcfPfName, err := r.sriovUtils.GetPfName(dcfPort.PortPci)
 		if err != nil {
-			return invalidPortId, fmt.Errorf("unable to get pfName of VF that handles DCF. Err %v", err)
+			return automaticPortId, fmt.Errorf("unable to get pfName of VF that handles DCF. Err %v", err)
 		}
 
 		if pfName == dcfPfName {
@@ -425,7 +425,7 @@ func (r *NodeFlowConfigReconciler) getPortIdFromDCFPort(otherVfPciAddress string
 		}
 	}
 
-	return invalidPortId, fmt.Errorf("unable to find DCF port that matches to traffic. Err %v", err)
+	return automaticPortId, fmt.Errorf("unable to find DCF port that matches to traffic. Err %v", err)
 }
 
 func (r *NodeFlowConfigReconciler) listDCFPorts() ([]flowconfigv1.PortsInformation, error) {

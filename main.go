@@ -21,6 +21,7 @@ import (
 	configv1 "github.com/openshift/api/config/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -142,9 +143,10 @@ func main() {
 	}
 
 	if err = (&flowconfigcontrollers.ClusterFlowConfigReconciler{
-		Client: mgr.GetClient(),
-		Log:    ctrl.Log.WithName("controllers").WithName("flowconfig").WithName("ClusterFlowConfig"),
-		Scheme: mgr.GetScheme(),
+		Client:                   mgr.GetClient(),
+		Log:                      ctrl.Log.WithName("controllers").WithName("flowconfig").WithName("ClusterFlowConfig"),
+		Scheme:                   mgr.GetScheme(),
+		Cluster2NodeRulesHashMap: make(map[types.NamespacedName]map[types.NamespacedName][]string),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "ClusterFlowConfig")
 		os.Exit(1)

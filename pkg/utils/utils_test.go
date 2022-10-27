@@ -14,7 +14,6 @@ import (
 	"crypto/x509/pkix"
 	"encoding/hex"
 	"fmt"
-	"github.com/go-logr/logr"
 	"io"
 	"io/fs"
 	"io/ioutil"
@@ -27,6 +26,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/go-logr/logr"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -575,11 +576,11 @@ func createTarArchive(tarPath string, pathToArchiveDirectory string, dirToBeArch
 		Expect(err).ToNot(HaveOccurred())
 
 		header, err := tar.FileInfoHeader(fileInfo, fileInfo.Name())
+		Expect(err).ToNot(HaveOccurred())
 		header.Name = strings.TrimPrefix(
 			strings.Replace(path, pathToArchiveDirectory, "", -1),
 			string(filepath.Separator),
 		)
-		Expect(err).ToNot(HaveOccurred())
 
 		Expect(tarWriter.WriteHeader(header)).ToNot(HaveOccurred())
 		if d.Type().IsRegular() {

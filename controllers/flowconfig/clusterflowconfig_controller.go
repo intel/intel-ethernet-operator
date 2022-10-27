@@ -51,9 +51,9 @@ type ClusterFlowConfigReconciler struct {
 func (r *ClusterFlowConfigReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	cfcLogger := r.Log.WithValues("Reconcile", req.NamespacedName)
 	cfcLogger.Info("Reconciling ClusterFlowConfig")
-	if r.Cluster2NodeRulesHashMap == nil {
-		r.Cluster2NodeRulesHashMap = make(map[types.NamespacedName]map[types.NamespacedName][]string)
-	}
+	// if r.Cluster2NodeRulesHashMap == nil {
+	// 	r.Cluster2NodeRulesHashMap = make(map[types.NamespacedName]map[types.NamespacedName][]string)
+	// }
 
 	instance := &flowconfigv1.ClusterFlowConfig{}
 	err := r.Get(ctx, req.NamespacedName, instance)
@@ -136,7 +136,7 @@ func (r *ClusterFlowConfigReconciler) syncClusterConfigForNodes(ctx context.Cont
 	cfcLogger := r.Log.WithName("syncClusterConfigForNodes")
 	nodeToNodeFlowConfig := make(map[string]*flowconfigv1.NodeFlowConfig) // placeholder for node name to it's NodeFlowConfig API object
 
-	// 1. Get Pod list from PodSelector in ClusterFlowConfig instance
+	// Get Pod list from PodSelector in ClusterFlowConfig instance
 	podList, err := r.getPodsForPodSelector(ctx, instance)
 	if err != nil {
 		return err
@@ -148,16 +148,13 @@ func (r *ClusterFlowConfigReconciler) syncClusterConfigForNodes(ctx context.Cont
 		return r.cleanNodeFlowConfig(req)
 	}
 
-	// 1.1 Get all ClusterFlowConfigs with same PodSelector as PODs to be able to update correctly rules within NodeFlowConfigs
 	clusterFlowList, err := r.getClusterFlowConfigsForPodSelector(ctx, instance)
 	if err != nil || clusterFlowList == nil {
 		return err
 	}
 
-	// 2. Loop over all Pods from podList
 	if podList != nil {
 		for _, pod := range podList.Items {
-			// 2.2. Get nodeName from Pod
 			nodeName := pod.Spec.NodeName
 			if nodeName != "" {
 				nodeFlowConfig, err := r.getNodeFlowConfig(nodeName, instance.Namespace, nodeToNodeFlowConfig)
@@ -172,7 +169,7 @@ func (r *ClusterFlowConfigReconciler) syncClusterConfigForNodes(ctx context.Cont
 					continue
 				}
 
-				// 2.5. Add NodeFlowConfig to nodeToNodeFlowConfig map for that node
+				// Add NodeFlowConfig to nodeToNodeFlowConfig map for that node
 				nodeToNodeFlowConfig[nodeName] = nodeFlowConfig
 			} else {
 				cfcLogger.Info("Missing information about node name", "instance in ns", instance.Namespace, "POD ", pod.ObjectMeta.Name)
@@ -180,14 +177,14 @@ func (r *ClusterFlowConfigReconciler) syncClusterConfigForNodes(ctx context.Cont
 		}
 	}
 
-	// 3. Create/Update all NodeFlowConfig from nodeToNodeFlowConfig map
-	r.createNodeFlowConfigOnNode(nodeToNodeFlowConfig)
+	// Create/Update all NodeFlowConfig from nodeToNodeFlowConfig map
+	r.createOrUpdateNodeFlowConfigs(nodeToNodeFlowConfig)
 
 	return nil
 }
 
-func (r *ClusterFlowConfigReconciler) createNodeFlowConfigOnNode(nodeToNodeFlowConfig map[string]*flowconfigv1.NodeFlowConfig) {
-	logger := r.Log.WithName("createNodeFlowConfigOnNode")
+func (r *ClusterFlowConfigReconciler) createOrUpdateNodeFlowConfigs(nodeToNodeFlowConfig map[string]*flowconfigv1.NodeFlowConfig) {
+	logger := r.Log.WithName("createOrUpdateNodeFlowConfigs")
 	for nodeName, nodeConfig := range nodeToNodeFlowConfig {
 		object := &flowconfigv1.NodeFlowConfig{}
 		err := r.Client.Get(context.TODO(), client.ObjectKey{
@@ -213,10 +210,10 @@ func (r *ClusterFlowConfigReconciler) createNodeFlowConfigOnNode(nodeToNodeFlowC
 }
 
 func (r *ClusterFlowConfigReconciler) getNodeFlowConfig(nodeName, namespace string, nodeToNodeFlowConfig map[string]*flowconfigv1.NodeFlowConfig) (*flowconfigv1.NodeFlowConfig, error) {
-	// 2.3.1. Get NodeFlowConfig from nodeToNodeFlowConfig if it exists
+	// Get NodeFlowConfig from nodeToNodeFlowConfig if it exists
 	nodeFlowConfig, ok := nodeToNodeFlowConfig[nodeName]
 	if !ok {
-		// 2.3.2. If not found Get NodeFlowConfig from K8s APIServer for that Node
+		// If not found Get NodeFlowConfig from K8s APIServer for that Node
 		nodeFlowConfig = &flowconfigv1.NodeFlowConfig{}
 
 		// assuming all NodeFlowConfig objects will be created in that same namespace as the ClusterFlowConfig
@@ -227,7 +224,7 @@ func (r *ClusterFlowConfigReconciler) getNodeFlowConfig(nodeName, namespace stri
 		err := r.Get(context.TODO(), nameSpacedName, nodeFlowConfig)
 		if err != nil {
 			if errors.IsNotFound(err) {
-				// 2.3.3. Not found in API server; create a new instance
+				// Not found in API server; create a new instance
 				nodeFlowConfig.Name = nodeName
 				nodeFlowConfig.Namespace = namespace
 			} else {
@@ -314,7 +311,7 @@ func (r *ClusterFlowConfigReconciler) updateNodeFlowConfigSpec(pod *corev1.Pod,
 			newRule.Pattern = rule.DeepCopy().Pattern
 			newRule.Attr = rule.Attr
 			// set PortId to invalid number, NodeFlowConfig controller based on interface name from POD selector will figure out PortId and fill it in.
-			newRule.PortId = invalidPortId
+			newRule.PortId = automaticPortId
 
 			actions, err := r.getNodeActionsFromClusterActions(rule.Action, pod)
 			if err != nil {
@@ -330,6 +327,8 @@ func (r *ClusterFlowConfigReconciler) updateNodeFlowConfigSpec(pod *corev1.Pod,
 				}
 
 				allHashes[key] = true
+			} else {
+				return fmt.Errorf("Error getting flow rules hash: %v", err)
 			}
 
 			nodeFlowConfig.Spec.Rules = append(nodeFlowConfig.Spec.Rules, newRule)

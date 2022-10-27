@@ -1,10 +1,11 @@
 # SPDX-License-Identifier: Apache-2.0
-# Copyright (c) 2021 Intel Corporation
+# Copyright (c) 2022 Intel Corporation
 
 apiVersion: flowconfig.intel.com/v1
 kind: ClusterFlowConfig
 metadata:
   name: silpixa00399841
+  namespace: intel-ethernet-operator
 spec:
   rules:
     - pattern:
@@ -29,4 +30,3 @@ spec:
                   serverProvider: vodafone
       attr:
         ingress: 1
-      # priority: 0

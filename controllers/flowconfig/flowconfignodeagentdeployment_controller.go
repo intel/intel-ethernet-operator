@@ -376,7 +376,10 @@ func (r *FlowConfigNodeAgentDeploymentReconciler) setInstanceOwner(instance clie
 }
 
 func (r *FlowConfigNodeAgentDeploymentReconciler) getPodTemplate() (*corev1.Pod, error) {
-	filename, _ := filepath.Abs(podTemplateFile)
+	filename, err := filepath.Abs(podTemplateFile)
+	if err != nil {
+		return nil, fmt.Errorf("error getting filepath %v", err)
+	}
 	spec, err := ioutil.ReadFile(filename)
 	if err != nil {
 		return nil, fmt.Errorf("error reading %s file: %v", podTemplateFile, err)

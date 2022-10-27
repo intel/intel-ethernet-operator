@@ -5,4 +5,4 @@ package flowconfig
 
 import "math"
 
-const invalidPortId = math.MaxUint32
+const automaticPortId = math.MaxUint32

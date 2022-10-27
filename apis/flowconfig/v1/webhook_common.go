@@ -16,7 +16,7 @@ func validateFlowPatterns(patterns []*FlowItem) error {
 
 		// validate single RteFlowItem spec
 		if err := validateRteFlowItem(item); err != nil {
-			return fmt.Errorf("pattern[%d] invalid: %v", i, err)
+			return fmt.Errorf("pattern[%v] invalid: %v", i, err)
 		}
 
 		// ensure that last action is RTE_FLOW_ITEM_TYPE_END
@@ -35,7 +35,7 @@ func validateRteFlowItem(item *FlowItem) error {
 
 	val, ok := flow.RteFlowItemType_value[item.Type]
 	if !ok {
-		return fmt.Errorf("invalid flow item type: %s", item.Type)
+		return fmt.Errorf("invalid flow item type: '%s'", item.Type)
 	}
 	flowType := flow.RteFlowItemType(val)
 	rteFlowItem.Type = flowType
@@ -43,33 +43,33 @@ func validateRteFlowItem(item *FlowItem) error {
 	if item.Spec != nil {
 		specAny, err := utils.GetFlowItemAny(item.Type, item.Spec.Raw)
 		if err != nil {
-			return fmt.Errorf("invalid 'spec' in pattern(type %s): %v", flowType, err)
+			return fmt.Errorf("invalid 'spec' in pattern type %s: '%v'", flowType, err)
 		}
 		rteFlowItem.Spec = specAny
 		if err := validateItem(rteFlowItem.Type, "spec", nil, rteFlowItem.Spec); err != nil {
-			return fmt.Errorf("validateItem(): error validating %s spec: %v", rteFlowItem.Type, err)
+			return fmt.Errorf("validateItem(): error validating %s spec: '%v'", rteFlowItem.Type, err)
 		}
 	}
 
 	if item.Last != nil {
 		lastAny, err := utils.GetFlowItemAny(item.Type, item.Last.Raw)
 		if err != nil {
-			return fmt.Errorf("invalid 'last' in pattern(type %s): %v", flowType, err)
+			return fmt.Errorf("invalid 'last' in pattern type %s: '%v'", flowType, err)
 		}
 		rteFlowItem.Last = lastAny
 		if err := validateItem(rteFlowItem.Type, "last", rteFlowItem.Spec, rteFlowItem.Last); err != nil {
-			return fmt.Errorf("validateItem(): error validating %s last: %v", rteFlowItem.Type, err)
+			return fmt.Errorf("validateItem(): error validating %s last: '%v'", rteFlowItem.Type, err)
 		}
 	}
 
 	if item.Mask != nil {
 		maskAny, err := utils.GetFlowItemAny(item.Type, item.Mask.Raw)
 		if err != nil {
-			return fmt.Errorf("invalid 'mask' in pattern(type %s): %v", flowType, err)
+			return fmt.Errorf("invalid 'mask' in pattern type %s: '%v'", flowType, err)
 		}
 		rteFlowItem.Mask = maskAny
 		if err := validateItem(rteFlowItem.Type, "mask", rteFlowItem.Spec, rteFlowItem.Mask); err != nil {
-			return fmt.Errorf("validateItem(): error validating %s mask: %v", rteFlowItem.Type, err)
+			return fmt.Errorf("validateItem(): error validating %s mask: '%v'", rteFlowItem.Type, err)
 		}
 	}
 	return nil
@@ -120,13 +120,13 @@ func validateFlowAttr(attributes *FlowAttr) error {
 
 func validateRteFlowAttr(attr *flow.RteFlowAttr) error {
 	if attr.Ingress > 0x1 {
-		return fmt.Errorf("invalid attr.ingress (%x), must be of value {0,1}", attr.Ingress)
+		return fmt.Errorf("invalid attr.ingress: '%x', must be of value {0,1}", attr.Ingress)
 	}
 	if attr.Egress > 0x1 {
-		return fmt.Errorf("invalid attr.egress (%x), must be of value {0,1}", attr.Egress)
+		return fmt.Errorf("invalid attr.egress: '%x', must be of value {0,1}", attr.Egress)
 	}
 	if attr.Transfer > 0x1 {
-		return fmt.Errorf("invalid attr.transfer (%x), must be of value {0,1}", attr.Transfer)
+		return fmt.Errorf("invalid attr.transfer: '%x', must be of value {0,1}", attr.Transfer)
 	}
 
 	return nil

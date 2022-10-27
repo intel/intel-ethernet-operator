@@ -27,7 +27,7 @@ type ToPodInterfaceConf struct {
 type ClusterFlowActionType int
 
 const (
-	ToPodInterface ClusterFlowActionType = 20000 // number has to greater than last RteFlowItemType_RTE_FLOW_ITEM_TYPE_... defined in flow.pb.go
+	ToPodInterface ClusterFlowActionType = 20000 // number has to be greater than last RteFlowItemType_RTE_FLOW_ITEM_TYPE_... defined in flow.pb.go
 )
 
 var clusterFlowActionTypeName = map[ClusterFlowActionType]string{
@@ -57,10 +57,14 @@ func (s *ClusterFlowActionType) UnmarshalJSON(b []byte) error {
 	if err != nil {
 		return err
 	}
+
+	if j == "" {
+		return fmt.Errorf("json unmarshalling produced an empty string")
+	}
 	// Note that if the string cannot be found then it will be set to the zero value, 'Created' in this case.
 	v, ok := clusterFlowActionTypeValue[j]
 	if !ok {
-		return fmt.Errorf("empty or unsupported type string %s", j)
+		return fmt.Errorf("unsupported type string %s", j)
 	}
 	*s = v
 	return nil

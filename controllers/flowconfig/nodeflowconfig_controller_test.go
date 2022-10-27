@@ -35,7 +35,7 @@ var _ = Describe("NodeFlowConfig controller", func() {
 
 		timeout   = time.Second * 20
 		interval  = time.Millisecond * 250
-		maxportId = invalidPortId
+		maxportId = automaticPortId
 	)
 
 	Context("when the controller is reconciling", func() {
@@ -849,7 +849,7 @@ spec:
 
 			flowRules := &flowconfigv1.FlowRules{
 				Action: action,
-				PortId: invalidPortId,
+				PortId: automaticPortId,
 			}
 
 			flowReqs, err := nodeFlowConfigRc.getFlowCreateRequests(flowRules)
@@ -892,7 +892,7 @@ spec:
 
 			flowRules := &flowconfigv1.FlowRules{
 				Action: action,
-				PortId: invalidPortId,
+				PortId: automaticPortId,
 			}
 
 			flowReqs, err := nodeFlowConfigRc.getFlowCreateRequests(flowRules)
@@ -943,7 +943,7 @@ spec:
 
 			flowRules := &flowconfigv1.FlowRules{
 				Action: action,
-				PortId: invalidPortId,
+				PortId: automaticPortId,
 			}
 
 			flowReqs, err := nodeFlowConfigRc.getFlowCreateRequests(flowRules)
@@ -997,7 +997,7 @@ spec:
 
 			flowRules := &flowconfigv1.FlowRules{
 				Action: action,
-				PortId: invalidPortId,
+				PortId: automaticPortId,
 			}
 
 			flowReqs, err := nodeFlowConfigRc.getFlowCreateRequests(flowRules)
@@ -1049,7 +1049,7 @@ spec:
 
 			flowRules := &flowconfigv1.FlowRules{
 				Action: action,
-				PortId: invalidPortId,
+				PortId: automaticPortId,
 			}
 
 			flowReqs, err := nodeFlowConfigRc.getFlowCreateRequests(flowRules)

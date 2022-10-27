@@ -65,7 +65,7 @@ func main() {
 	fs := flowsets.NewFlowSets()
 	fc := flowconfigctlr.GetDCFClient()
 
-	setupLog.Info("Using", "sysfs", sysFs)
+	setupLog.Info("using sysfs", sysFs)
 	flowRc := flowconfigctlr.GetNodeFlowConfigReconciler(
 		mgr.GetClient(),
 		ctrl.Log.WithName("controllers").WithName("NodeAclPolicy"),
