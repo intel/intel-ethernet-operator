@@ -184,8 +184,8 @@ test_flowconfig: manifests flowconfig-manifests generate fmt vet envtest ## Run 
 test_daemon: manifests generate fmt vet envtest ## Run tests only for the fwddp_daemon.
 	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path)" ETHERNET_NAMESPACE=default go test pkg/fwddp-daemon -coverprofile cover.out
 
-test_fuzz: manifests generate fmt vet envtest ## Run fuzz tests only. Set FUZZITER= env variable to set number of fuzz iteration. Default is 10 if this var is not set or invalid.
-	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path)" ETHERNET_NAMESPACE=default go test -v ./apis/flowconfig/v1 --fuzz -run TestValidateCreateFuzz -coverprofile cover.out
+test_fuzz: manifests generate fmt vet envtest ## Run fuzz tests only. Set FUZZITER= variable to set number of fuzz iteration.
+	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path)" FUZZITER=100 ETHERNET_NAMESPACE=default go test -v ./apis/flowconfig/v1 -run "ValidateCreateFuzz" -coverprofile cover.out
 
 
 build: generate fmt vet ## Build manager binary.

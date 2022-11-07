@@ -4,9 +4,14 @@
 package v1
 
 import (
+	"os"
+	"strconv"
+	"testing"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 
+	fuzz "github.com/google/gofuzz"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
@@ -218,3 +223,74 @@ var _ = Describe("ClusterFlowConfig Webhook tests", func() {
 		})
 	})
 })
+
+// TestClusterValidateCreateFuzz runs fuzz test on ValidateCreate() method by fuzzing ClusterFlowConfig API object.
+// Set FUZZITER env variable to define how many times the test will fuzz. Default count is 10.
+func TestClusterValidateCreateFuzz(t *testing.T) {
+	fuzzIterationStr := os.Getenv("FUZZITER")
+	var fuzzIteration int
+	fuzzIteration, err := strconv.Atoi(fuzzIterationStr)
+
+	if err != nil || fuzzIteration <= 0 {
+		t.Logf("the FUZZITER env variable is not set or contains invalid value: %+s\n", fuzzIterationStr)
+		t.Logf("skipping TestClusterValidateCreateFuzz\n")
+		t.Skip()
+	}
+
+	clusterFlowConfig := &ClusterFlowConfig{}
+	f := fuzz.New().NilChance(0).Funcs(
+		func(e *runtime.RawExtension, c fuzz.Continue) {
+			b := []byte{}
+			c.Fuzz(&b)
+			e.Object = nil
+			e.Raw = b
+
+		},
+		func(e *ClusterFlowRule, c fuzz.Continue) {
+			act := []ClusterFlowAction{}
+			c.Fuzz(&act)
+
+			it := []FlowItem{}
+			c.Fuzz(&it)
+
+			atr := FlowAttr{}
+			c.Fuzz(&atr)
+
+			e.Pattern = itemPtr(it)
+			e.Action = clusterActionPtr(act)
+			e.Attr = &atr
+		},
+		func(e *ClusterFlowConfigSpec, c fuzz.Continue) {
+			x := []ClusterFlowRule{}
+			c.Fuzz(&x)
+			e.Rules = clusterRulePtr(x)
+		},
+	)
+	defer func() {
+		if r := recover(); r != nil {
+			t.Errorf("the code resulted in panic. flowconfig:\n %+v\n", clusterFlowConfig)
+		}
+	}()
+
+	t.Logf("fuzzing ClusterFlowConfig for: %d\n", fuzzIteration)
+	for i := 0; i < fuzzIteration; i++ {
+		f.Fuzz(&clusterFlowConfig)
+		_ = clusterFlowConfig.ValidateCreate()
+	}
+}
+
+func clusterRulePtr(cfr []ClusterFlowRule) []*ClusterFlowRule {
+	out := []*ClusterFlowRule{}
+	for _, r := range cfr {
+		out = append(out, &r)
+	}
+	return out
+}
+
+func clusterActionPtr(x []ClusterFlowAction) []*ClusterFlowAction {
+	out := []*ClusterFlowAction{}
+	for _, xx := range x {
+		out = append(out, &xx)
+	}
+	return out
+}

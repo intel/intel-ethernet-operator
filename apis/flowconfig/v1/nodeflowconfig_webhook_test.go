@@ -5,7 +5,6 @@ package v1
 
 import (
 	"encoding/json"
-	"flag"
 	"os"
 	"strconv"
 	"testing"
@@ -17,16 +16,6 @@ import (
 
 	"github.com/otcshare/intel-ethernet-operator/pkg/flowconfig/rpc/v1/flow"
 	"github.com/otcshare/intel-ethernet-operator/pkg/flowconfig/utils"
-)
-
-const (
-	// Default fuzz iteration number
-	DEFAULT_FUZZITER = 10
-)
-
-var (
-	// dofuzz is used for holding test cli flag fuzz to indicate to run fuzz tests.
-	dofuzz = flag.Bool("fuzz", false, "Do fuzz testing")
 )
 
 func TestValidate(t *testing.T) {
@@ -1184,30 +1173,45 @@ func TestValidateDelete(t *testing.T) {
 // TestValidateCreateFuzz runs fuzz test on ValidateCreate() method by fuzzing NodeFlowConfig API object.
 // Set FUZZITER env variable to define how many times the test will fuzz. Default count is 10.
 func TestValidateCreateFuzz(t *testing.T) {
-	// Skip this test if "-fuzz" flag is not set when 'go test ...' is run
-	if !*dofuzz {
-		t.Skip()
-	}
-
 	fuzzIterationStr := os.Getenv("FUZZITER")
 	var fuzzIteration int
 	fuzzIteration, err := strconv.Atoi(fuzzIterationStr)
 	if err != nil || fuzzIteration <= 0 {
 		t.Logf("the FUZZITER env variable is not set or contains invalid value: %+s\n", fuzzIterationStr)
-		fuzzIteration = DEFAULT_FUZZITER // default count
-		t.Logf("using default FUZZITER: %d\n", fuzzIteration)
+		t.Logf("skipping TestValidateCreateFuzz\n")
+		t.Skip()
 	}
 
 	flowConfig := &NodeFlowConfig{}
 	f := fuzz.New().NilChance(0).Funcs(
-		func(e *NodeFlowConfigSpec, c fuzz.Continue) {
-			e.Rules = []*FlowRules{}
-			c.Fuzz(e)
+		func(e *runtime.RawExtension, c fuzz.Continue) {
+			b := []byte{}
+			c.Fuzz(&b)
+			e.Object = nil
+			e.Raw = b
+
 		},
 		func(e *FlowRules, c fuzz.Continue) {
-			e.Pattern = []*FlowItem{}
-			e.Action = []*FlowAction{}
 			c.Fuzz(e)
+
+			action := []FlowAction{}
+			c.Fuzz(&action)
+
+			item := []FlowItem{}
+			c.Fuzz(&item)
+
+			attr := FlowAttr{}
+			c.Fuzz(&attr)
+
+			e.Pattern = itemPtr(item)
+			e.Action = actionPtr(action)
+			e.Attr = &attr
+			e.PortId = uint32(c.Int31())
+		},
+		func(e *NodeFlowConfigSpec, c fuzz.Continue) {
+			rules := []FlowRules{}
+			c.Fuzz(&rules)
+			e.Rules = rulePtr(rules)
 		},
 	)
 	defer func() {
@@ -1219,7 +1223,31 @@ func TestValidateCreateFuzz(t *testing.T) {
 	t.Logf("fuzzing NodeFlowConfig for: %d\n", fuzzIteration)
 	for i := 0; i < fuzzIteration; i++ {
 		f.Fuzz(&flowConfig)
+
 		_ = flowConfig.ValidateCreate()
 	}
+}
 
+func rulePtr(x []FlowRules) []*FlowRules {
+	out := []*FlowRules{}
+	for _, xx := range x {
+		out = append(out, &xx)
+	}
+	return out
+}
+
+func itemPtr(x []FlowItem) []*FlowItem {
+	out := []*FlowItem{}
+	for _, xx := range x {
+		out = append(out, &xx)
+	}
+	return out
+}
+
+func actionPtr(x []FlowAction) []*FlowAction {
+	out := []*FlowAction{}
+	for _, xx := range x {
+		out = append(out, &xx)
+	}
+	return out
 }
