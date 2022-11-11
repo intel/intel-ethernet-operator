@@ -116,17 +116,17 @@ func (r ResourceNamePredicate) Create(e event.CreateEvent) bool {
 	return true
 }
 
-//returns result indicating necessity of re-queuing Reconcile after configured resyncPeriod
+// returns result indicating necessity of re-queuing Reconcile after configured resyncPeriod
 func requeueLater() (reconcile.Result, error) {
 	return reconcile.Result{RequeueAfter: requeueAfter}, nil
 }
 
-//returns result indicating necessity of re-queuing Reconcile(...) immediately; non-nil err will be logged by controller
+// returns result indicating necessity of re-queuing Reconcile(...) immediately; non-nil err will be logged by controller
 func requeueNowWithError(e error) (reconcile.Result, error) {
 	return reconcile.Result{Requeue: true}, e
 }
 
-//returns result indicating that there is no need to Reconcile because everything is configured as expected
+// returns result indicating that there is no need to Reconcile because everything is configured as expected
 func doNotRequeue() (reconcile.Result, error) {
 	return reconcile.Result{}, nil
 }

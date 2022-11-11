@@ -93,7 +93,7 @@ func (r *FlowConfigNodeAgentDeploymentReconciler) Reconcile(ctx context.Context,
 	err = r.List(context.Background(), nodes)
 
 	if err != nil {
-		reqLogger.Info("failed to get nodes %v", err)
+		reqLogger.Error(err, "failed to get nodes")
 		return ctrl.Result{}, err
 	}
 
@@ -111,10 +111,10 @@ func (r *FlowConfigNodeAgentDeploymentReconciler) Reconcile(ctx context.Context,
 			if errors.IsNotFound(err) {
 				err = r.CreatePod(r.flowConfigPod, instance, node, vfPoolName, r.uftContainerIndex)
 				if err != nil {
-					reqLogger.Info("Failed to create POD on node with error", node.Name, err)
+					reqLogger.Info("Failed to create POD", "node", node.Name, "error", err.Error())
 				}
 			} else {
-				reqLogger.Info("Error getting pod instance on node %s with error %v", node.Name, err)
+				reqLogger.Info("Error getting pod instance", "node", node.Name, "error", err.Error())
 			}
 		} else {
 			var deletePod bool
@@ -136,7 +136,7 @@ func (r *FlowConfigNodeAgentDeploymentReconciler) Reconcile(ctx context.Context,
 				// delete POD, and let the next reconciliation iteration do the creation job
 				err = r.Client.Delete(context.TODO(), pod)
 				if err != nil {
-					reqLogger.Info("Failed to delete POD %s with error %v", pod.Name, err)
+					reqLogger.Info("Failed to delete POD", "name", pod.Name, "error", err.Error())
 				}
 				wasPodDeleted = true
 			}
@@ -280,7 +280,7 @@ func (r *FlowConfigNodeAgentDeploymentReconciler) mapNodesToRequests(object clie
 	crList := &flowconfigv1.FlowConfigNodeAgentDeploymentList{}
 	err := r.Client.List(context.Background(), crList)
 	if err != nil {
-		resLogger.Info("unable to list custom resources", err)
+		resLogger.Info("unable to list custom resources", "error", err.Error())
 		return []reconcile.Request{}
 	}
 
@@ -365,11 +365,11 @@ func (r *FlowConfigNodeAgentDeploymentReconciler) setControllerRef(owner, owned 
 func (r *FlowConfigNodeAgentDeploymentReconciler) setInstanceOwner(instance client.Object) {
 	if instance.GetOwnerReferences() == nil {
 		if err := r.setControllerRef(r.Owner, instance); err != nil {
-			r.Log.Info("error setting instance owner to controller-manager deployment", "error", err)
+			r.Log.Info("error setting instance owner to controller-manager deployment", "error", err.Error())
 			return
 		}
 		if err := r.Update(context.Background(), instance); err != nil {
-			r.Log.Info("error updating instance with ownerReference", "error", err)
+			r.Log.Info("error updating instance with ownerReference", "error", err.Error())
 		}
 
 	}

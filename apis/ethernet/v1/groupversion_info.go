@@ -2,8 +2,8 @@
 // Copyright (c) 2021 Intel Corporation
 
 // Package v1 contains API Schema definitions for the ethernet v1 API group
-//+kubebuilder:object:generate=true
-//+groupName=ethernet.intel.com
+// +kubebuilder:object:generate=true
+// +groupName=ethernet.intel.com
 package v1
 
 import (

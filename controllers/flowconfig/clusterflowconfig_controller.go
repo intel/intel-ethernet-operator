@@ -77,7 +77,7 @@ func (r *ClusterFlowConfigReconciler) Reconcile(ctx context.Context, req ctrl.Re
 
 	err = r.syncClusterConfigForNodes(ctx, instance, req)
 	if err != nil {
-		cfcLogger.Info("failed:", "error", err)
+		cfcLogger.Info("failed:", "error", err.Error())
 		return ctrl.Result{}, err
 	}
 
@@ -159,13 +159,13 @@ func (r *ClusterFlowConfigReconciler) syncClusterConfigForNodes(ctx context.Cont
 			if nodeName != "" {
 				nodeFlowConfig, err := r.getNodeFlowConfig(nodeName, instance.Namespace, nodeToNodeFlowConfig)
 				if err != nil {
-					cfcLogger.Info("Skipping", "instance in ns", instance.Namespace, "node", nodeName, "due to problems with getting node config:", err)
+					cfcLogger.Info("Skipping", "instance in ns", instance.Namespace, "node", nodeName, "due to problems with getting node config:", err.Error())
 					continue
 				}
 
 				// 2.4. Update NodeFlowConfig spec for a given pod from ClusterFlowConfig instance
 				if err := r.updateNodeFlowConfigSpec(&pod, nodeFlowConfig, clusterFlowList); err != nil {
-					cfcLogger.Info("Skipping", "instance in ns", instance.Namespace, "node", nodeName, "due to problems with updating node config:", err)
+					cfcLogger.Info("Skipping", "instance in ns", instance.Namespace, "node", nodeName, "due to problems with updating node config:", err.Error())
 					continue
 				}
 
@@ -278,7 +278,7 @@ func (r *ClusterFlowConfigReconciler) getClusterFlowConfigsForPodSelector(ctx co
 	for _, cr := range configList.Items {
 		insideSelector, err := metav1.LabelSelectorAsSelector(cr.Spec.PodSelector)
 		if err != nil {
-			logger.Info("Unable to convert LabelSelectorAsSelector for CR", cr.ObjectMeta.Name)
+			logger.Info("Unable to convert LabelSelectorAsSelector for CR", "name", cr.ObjectMeta.Name)
 			continue
 		}
 
@@ -478,7 +478,7 @@ func (r *ClusterFlowConfigReconciler) mapPodsToRequests(object client.Object) []
 	crList := &flowconfigv1.ClusterFlowConfigList{}
 	if err := r.Client.List(context.Background(), crList); err != nil {
 		if !errors.IsNotFound(err) {
-			logger.Info("unable to fetch custom resources", err)
+			logger.Info("unable to fetch custom resources", "error", err.Error())
 		}
 
 		return reconcileRequests

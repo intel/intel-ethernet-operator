@@ -117,7 +117,7 @@ func (r *NodeFlowConfigReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 
 	err = r.syncFlowConfig(instance)
 	if err != nil {
-		reqLogger.Info("syncPolicy returned error", "error message", err)
+		reqLogger.Info("syncPolicy returned error", "error message", err.Error())
 		// Even though we have encountered syncPolicy error we are returning error nil to avoid requeuing
 		// TO-DO: log such error in object Status
 	}

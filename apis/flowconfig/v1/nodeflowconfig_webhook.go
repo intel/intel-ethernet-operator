@@ -137,7 +137,7 @@ func validateRteFlowAction(rteFlowAction *flow.RteFlowAction) error {
 		flow.RteFlowActionType_RTE_FLOW_ACTION_TYPE_SET_MAC_DST,
 		flow.RteFlowActionType_RTE_FLOW_ACTION_TYPE_SET_TAG,
 		flow.RteFlowActionType_RTE_FLOW_ACTION_TYPE_SET_META:
-		nodeflowconfiglog.Info("correct action type, but validation not implemented: %s", rteFlowAction.GetType())
+		nodeflowconfiglog.Info("correct action type, but validation not implemented", "action type", rteFlowAction.GetType())
 	default:
 		return fmt.Errorf("invalid action type: %s", rteFlowAction.GetType())
 	}

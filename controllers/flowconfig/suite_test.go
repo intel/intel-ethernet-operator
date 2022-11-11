@@ -25,15 +25,15 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
-	"sigs.k8s.io/controller-runtime/pkg/envtest/printer"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
 
 	flowconfigv1 "github.com/otcshare/intel-ethernet-operator/apis/flowconfig/v1"
 	"github.com/otcshare/intel-ethernet-operator/pkg/flowconfig/flowsets"
 	mock "github.com/otcshare/intel-ethernet-operator/pkg/flowconfig/rpc/v1/flow/mocks"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	//+kubebuilder:scaffold:imports
 )
@@ -171,12 +171,10 @@ func deletePod(name, ns string) {
 func TestAPIs(t *testing.T) {
 	RegisterFailHandler(Fail)
 
-	RunSpecsWithDefaultAndCustomReporters(t,
-		"Controller Suite",
-		[]Reporter{printer.NewlineReporter{}})
+	RunSpecs(t, "Controller Suite")
 }
 
-var _ = BeforeSuite(func() {
+var _ = BeforeSuite(func(ctx SpecContext) {
 	logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
 
 	By("bootstrapping test environment")
@@ -198,15 +196,23 @@ var _ = BeforeSuite(func() {
 
 	// +kubebuilder:scaffold:scheme
 
-	r1 := rand.New(rand.NewSource(time.Now().UnixNano()))
-	var metricsAddr = fmt.Sprintf(":%d", (r1.Intn(100) + 38080))
-
 	managerMutex.Lock()
 
-	k8sManager, err := ctrl.NewManager(cfg, ctrl.Options{
-		Scheme:             scheme.Scheme,
-		MetricsBindAddress: metricsAddr,
-	})
+	var k8sManager manager.Manager
+
+	Eventually(func() error {
+		var err error
+
+		r1 := rand.New(rand.NewSource(time.Now().UnixNano()))
+		var metricsAddr = fmt.Sprintf(":%d", (r1.Intn(100) + 38080))
+
+		k8sManager, err = ctrl.NewManager(cfg, ctrl.Options{
+			Scheme:             scheme.Scheme,
+			MetricsBindAddress: metricsAddr,
+		})
+		return err
+	}, "30s", "5s").ShouldNot(HaveOccurred())
+
 	Expect(err).ToNot(HaveOccurred())
 
 	// Set NodeAclReconciler
@@ -262,7 +268,7 @@ var _ = BeforeSuite(func() {
 		err := k8sManager.Start(ctrl.SetupSignalHandler())
 		Expect(err).ToNot(HaveOccurred())
 	}()
-}, 60)
+}, NodeTimeout(60*time.Second))
 
 var _ = AfterSuite(func() {
 	By("tearing down the test environment")

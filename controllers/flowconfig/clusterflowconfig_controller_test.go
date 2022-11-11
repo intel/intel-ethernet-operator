@@ -21,8 +21,7 @@ import (
 	flowconfigv1 "github.com/otcshare/intel-ethernet-operator/apis/flowconfig/v1"
 	flowapi "github.com/otcshare/intel-ethernet-operator/pkg/flowconfig/rpc/v1/flow"
 
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/ginkgo/extensions/table"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
 
@@ -934,7 +933,7 @@ var _ = Describe("Cluster Flow Config Controller tests", func() {
 					}
 
 					return compareNodeFlowConfigRules(object, NODE_NAME_1, "RTE_FLOW_ITEM_TYPE_VLAN", "RTE_FLOW_ITEM_TYPE_END", 1, 2, 4)
-				}, "1m", "9s").Should(BeTrue())
+				}, "5m", "9s").Should(BeTrue())
 			})
 		})
 

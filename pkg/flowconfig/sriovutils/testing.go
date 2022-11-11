@@ -20,9 +20,9 @@ type FakeFilesystem struct {
 
 // Use function creates entire files structure and returns tempRoot dir and a function to tear it down.
 // Example usage:
-// 		tempRoot, tearDown := fs.Use()
-// 		defer tearDown()
 //
+//	tempRoot, tearDown := fs.Use()
+//	defer tearDown()
 func (fs *FakeFilesystem) Use() (string, func()) {
 	// create the new fake fs root dir in /tmp/sriov...
 	tmpDir, err := ioutil.TempDir("", "sriov")

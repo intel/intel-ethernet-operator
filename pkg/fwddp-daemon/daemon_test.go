@@ -17,7 +17,7 @@ import (
 	gerrors "errors"
 
 	"github.com/go-logr/logr"
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	ethernetv1 "github.com/otcshare/intel-ethernet-operator/apis/ethernet/v1"
 	core "k8s.io/api/core/v1"
@@ -688,42 +688,42 @@ var _ = Describe("DaemonTests", func() {
 			data.NodeConfig.Spec.Config[0].PCIAddress = "0:00:00.1"
 			err := k8sClient.Create(context.TODO(), &data.NodeConfig)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("spec.config.PCIAddress: Invalid value:"))
+			Expect(err.Error()).To(ContainSubstring("spec.config[0].PCIAddress: Invalid value:"))
 
 			data.NodeConfig.Spec.Config[0].PCIAddress = "0000:00:00.a"
 			err = k8sClient.Create(context.TODO(), &data.NodeConfig)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("spec.config.PCIAddress: Invalid value:"))
+			Expect(err.Error()).To(ContainSubstring("spec.config[0].PCIAddress: Invalid value:"))
 
 			data.NodeConfig.Spec.Config[0].PCIAddress = "0:00:00"
 			err = k8sClient.Create(context.TODO(), &data.NodeConfig)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("spec.config.PCIAddress: Invalid value:"))
+			Expect(err.Error()).To(ContainSubstring("spec.config[0].PCIAddress: Invalid value:"))
 
 			data.NodeConfig.Spec.Config[0].PCIAddress = "0:00:00"
 			err = k8sClient.Create(context.TODO(), &data.NodeConfig)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("spec.config.PCIAddress: Invalid value:"))
+			Expect(err.Error()).To(ContainSubstring("spec.config[0].PCIAddress: Invalid value:"))
 
 			data.NodeConfig.Spec.Config[0].PCIAddress = "0000:00:20.1"
 			err = k8sClient.Create(context.TODO(), &data.NodeConfig)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("spec.config.PCIAddress: Invalid value:"))
+			Expect(err.Error()).To(ContainSubstring("spec.config[0].PCIAddress: Invalid value:"))
 
 			data.NodeConfig.Spec.Config[0].PCIAddress = "0000:00:0.1"
 			err = k8sClient.Create(context.TODO(), &data.NodeConfig)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("spec.config.PCIAddress: Invalid value:"))
+			Expect(err.Error()).To(ContainSubstring("spec.config[0].PCIAddress: Invalid value:"))
 
 			data.NodeConfig.Spec.Config[0].PCIAddress = "0000:0:00.1"
 			err = k8sClient.Create(context.TODO(), &data.NodeConfig)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("spec.config.PCIAddress: Invalid value:"))
+			Expect(err.Error()).To(ContainSubstring("spec.config[0].PCIAddress: Invalid value:"))
 
 			data.NodeConfig.Spec.Config[0].PCIAddress = "0000:00:00.*"
 			err = k8sClient.Create(context.TODO(), &data.NodeConfig)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("spec.config.PCIAddress: Invalid value:"))
+			Expect(err.Error()).To(ContainSubstring("spec.config[0].PCIAddress: Invalid value:"))
 		})
 
 		var _ = It("will update condition to UpdateFailed if not able to download DDP", func() {

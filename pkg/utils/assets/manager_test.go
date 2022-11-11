@@ -6,7 +6,8 @@ package assets
 import (
 	"context"
 	gerrors "errors"
-	. "github.com/onsi/ginkgo"
+
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -18,7 +19,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-//  runtime.Object implementation
+// runtime.Object implementation
 type InvalidRuntimeType struct {
 }
 
@@ -54,6 +55,8 @@ func (*InvalidRuntimeType) GetClusterName() string                              
 func (*InvalidRuntimeType) SetClusterName(clusterName string)                      {}
 func (*InvalidRuntimeType) GetManagedFields() []v1.ManagedFieldsEntry              { return nil }
 func (*InvalidRuntimeType) SetManagedFields(managedFields []v1.ManagedFieldsEntry) {}
+func (*InvalidRuntimeType) GetZZZ_DeprecatedClusterName() string                   { return "" }
+func (*InvalidRuntimeType) SetZZZ_DeprecatedClusterName(clusterName string)        {}
 
 func (i *InvalidRuntimeType) GetObjectKind() schema.ObjectKind {
 	return schema.EmptyObjectKind
@@ -123,7 +126,7 @@ var _ = Describe("Asset Tests", func() {
 				Owner:  fakeOwner,
 				Scheme: scheme.Scheme}
 
-			Expect(manager.DeployConfigMaps(context.TODO())).ToNot(HaveOccurred())
+			Eventually(func() error { return manager.DeployConfigMaps(context.TODO()) }, "30s", "5s").ShouldNot(HaveOccurred())
 		})
 		var _ = It("Run DeployConfigMaps (fail setting Owner)", func() {
 			var invalidObject InvalidRuntimeType

@@ -2,7 +2,7 @@
 # Copyright (c) 2021 Intel Corporation
 
 # Build the manager binary
-FROM golang:alpine3.13 as builder
+FROM golang:alpine3.16 as builder
 
 WORKDIR /workspace
 
@@ -21,7 +21,7 @@ COPY pkg/ pkg/
 
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GO111MODULE=on go build -a -o manager main.go
 
-FROM registry.access.redhat.com/ubi8:8.5-214
+FROM registry.access.redhat.com/ubi9/ubi-minimal:9.0.0-1644.1666621587
 
 ARG VERSION
 ### Required OpenShift Labels

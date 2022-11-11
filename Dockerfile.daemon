@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # Copyright (c) 2020-2021 Intel Corporation
 
-FROM golang:alpine3.13 as builder
+FROM golang:alpine3.16 as builder
 
 WORKDIR /workspace
 
@@ -16,9 +16,9 @@ COPY apis apis/
 # Build
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GO111MODULE=on go build -a -o fwddp_daemon cmd/fwddp-daemon/main.go
 
-FROM registry.access.redhat.com/ubi8:8.5-214
+FROM registry.access.redhat.com/ubi9/ubi-minimal:9.0.0-1644.1666621587
 
-RUN yum install -y ethtool iproute kmod pciutils && yum clean all
+RUN microdnf install -y ethtool iproute kmod pciutils && microdnf clean all
 
 ARG VERSION
 ### Required OpenShift Labels

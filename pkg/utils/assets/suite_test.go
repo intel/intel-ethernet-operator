@@ -6,10 +6,10 @@ package assets
 import (
 	"path/filepath"
 	"testing"
+	"time"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"sigs.k8s.io/controller-runtime/pkg/envtest/printer"
 
 	appsv1 "k8s.io/api/apps/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -32,12 +32,10 @@ var fakeConfigMapName string
 func TestAssets(t *testing.T) {
 	RegisterFailHandler(Fail)
 
-	RunSpecsWithDefaultAndCustomReporters(t,
-		"Assets Suite",
-		[]Reporter{printer.NewlineReporter{}})
+	RunSpecs(t, "Assets Suite")
 }
 
-var _ = BeforeSuite(func(done Done) {
+var _ = BeforeSuite(func(ctx SpecContext) {
 	var err error
 
 	fakeAssetFile = "test/101-fake-labeler.yaml"
@@ -62,8 +60,7 @@ var _ = BeforeSuite(func(done Done) {
 	fakeOwner.SetUID("123")
 	fakeOwner.SetName("123")
 
-	close(done)
-}, 60)
+}, NodeTimeout(60*time.Second))
 
 var _ = AfterSuite(func() {
 	By("tearing down the test environment")
