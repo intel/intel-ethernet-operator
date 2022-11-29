@@ -199,7 +199,7 @@ test: manifests flowconfig-manifests generate fmt vet envtest ## Run tests.
 
 .PHONY: test_flowconfig
 test_flowconfig: manifests flowconfig-manifests generate fmt vet envtest ## Run tests.
-	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" ETHERNET_NAMESPACE=default go test -v ./controllers/flowconfig -timeout 30m -coverprofile cover.out
+	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" ETHERNET_NAMESPACE=default go test -v ./controllers/flowconfig -coverprofile cover.out
 
 .PHONY: test
 test_daemon: manifests generate fmt vet envtest ## Run tests only for the fwddp_daemon.

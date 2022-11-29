@@ -56,6 +56,8 @@ var (
 		},
 	}
 	defaultSysFs = "/sys"
+	cctx         context.Context
+	cancel       context.CancelFunc
 )
 
 func MatchQuantityObject(expected interface{}) types.GomegaMatcher {
@@ -211,7 +213,7 @@ var _ = BeforeSuite(func(ctx SpecContext) {
 			MetricsBindAddress: metricsAddr,
 		})
 		return err
-	}, "30s", "5s").ShouldNot(HaveOccurred())
+	}, "15s", "5s").ShouldNot(HaveOccurred())
 
 	Expect(err).ToNot(HaveOccurred())
 
@@ -258,6 +260,8 @@ var _ = BeforeSuite(func(ctx SpecContext) {
 
 	managerMutex.Unlock()
 
+	cctx, cancel = context.WithCancel(ctrl.SetupSignalHandler())
+
 	// Start manager
 	go func() {
 		defer GinkgoRecover()
@@ -265,15 +269,21 @@ var _ = BeforeSuite(func(ctx SpecContext) {
 		managerMutex.Lock()
 		defer managerMutex.Unlock()
 
-		err := k8sManager.Start(ctrl.SetupSignalHandler())
+		err := k8sManager.Start(cctx)
 		Expect(err).ToNot(HaveOccurred())
+
 	}()
 }, NodeTimeout(60*time.Second))
 
 var _ = AfterSuite(func() {
 	By("tearing down the test environment")
-	_ = testEnv.Stop()
+	// https://github.com/kubernetes-sigs/controller-runtime/issues/1571
+	cancel()
+	Eventually(func() error {
+		return testEnv.Stop()
+	}, timeout, time.Second).ShouldNot(HaveOccurred())
 
+	By("Directory cleanup")
 	targetDir, err := filepath.Abs(".")
 	Expect(err).Should(BeNil())
 	err = os.RemoveAll(targetDir + "/assets/")

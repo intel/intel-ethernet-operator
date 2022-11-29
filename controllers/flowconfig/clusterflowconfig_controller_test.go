@@ -25,26 +25,34 @@ import (
 	. "github.com/onsi/gomega"
 )
 
+const (
+	timeout  = 4 * time.Second
+	interval = 250 * time.Millisecond
+)
+
 func WaitForObjectCreation(core client.Client, objectName, ns string, timeout, interval time.Duration, object client.Object) error {
 	return wait.PollImmediate(interval, timeout, func() (done bool, err error) {
-		ctx, cancel := context.WithTimeout(context.Background(), timeout)
-		defer cancel()
-
-		err = core.Get(ctx, client.ObjectKey{
-			Namespace: ns,
-			Name:      objectName,
-		}, object)
-
+		err = GetObject(core, objectName, ns, timeout, object)
 		if err != nil {
 			if strings.Contains(err.Error(), fmt.Sprintf("\"%s\" not found", objectName)) {
 				return false, nil
 			}
-
 			return false, err
 		}
-
 		return true, nil
 	})
+}
+
+func GetObject(core client.Client, objectName, ns string, timeout time.Duration, object client.Object) error {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	err := core.Get(ctx, client.ObjectKey{
+		Namespace: ns,
+		Name:      objectName,
+	}, object)
+
+	return err
 }
 
 var _ = Describe("Cluster Flow Config Controller tests", func() {
@@ -104,6 +112,10 @@ var _ = Describe("Cluster Flow Config Controller tests", func() {
 		}
 
 		Expect(k8sClient.Delete(context.Background(), clusterFlowConfig)).Should(BeNil())
+		Eventually(func() string {
+			return GetObject(k8sClient, clusterFlowConfig.ObjectMeta.Name, clusterFlowConfig.ObjectMeta.Namespace,
+				1*time.Second, &flowconfigv1.ClusterFlowConfig{}).Error()
+		}, timeout, interval).Should(ContainSubstring(fmt.Sprintf("\"%s\" not found", clusterFlowConfig.ObjectMeta.Name)))
 	}
 
 	addPodAnnotations := func(pod *corev1.Pod) {
@@ -158,33 +170,38 @@ var _ = Describe("Cluster Flow Config Controller tests", func() {
 		}
 	}
 
-	compareNodeFlowConfigRules := func(object *flowconfigv1.NodeFlowConfig, name, firstType, lastType string, ruleIndex, rulesSize, patternSize int) bool {
+	compareNodeFlowConfigRule := func(object *flowconfigv1.NodeFlowConfig, name string, patternTypes []string, rulesSize int) error {
 		if object.ObjectMeta.Name != name {
-			fmt.Println("Invalid name", object.ObjectMeta.Name)
-			return false
+			return fmt.Errorf("Invalid name: %s", object.ObjectMeta.Name)
 		}
 
 		if len(object.Spec.Rules) != rulesSize {
-			fmt.Println("Invalid Rules size", len(object.Spec.Rules), "expected", rulesSize)
-			return false
+			return fmt.Errorf("Invalid Rules size %d expected %d", len(object.Spec.Rules), rulesSize)
 		}
 
-		if len(object.Spec.Rules[ruleIndex].Pattern) != patternSize {
-			fmt.Println("Invalid Pattern size at", ruleIndex, "len", len(object.Spec.Rules[ruleIndex].Pattern))
-			return false
+		found := false
+		for _, r := range object.Spec.Rules {
+			if len(patternTypes) != len(r.Pattern) {
+				continue
+			}
+
+			for i := 0; i < len(patternTypes); i++ {
+				if patternTypes[i] != r.Pattern[i].Type {
+					break
+				}
+				found = true
+			}
+
+			if found {
+				break
+			}
 		}
 
-		if object.Spec.Rules[ruleIndex].Pattern[0].Type != firstType {
-			fmt.Println("Invalid first patter at", ruleIndex, ":", object.Spec.Rules[ruleIndex].Pattern[0].Type)
-			return false
+		if !found {
+			return fmt.Errorf("NodeFlowConfig %s does not contain patterns %v", object.ObjectMeta.Name, patternTypes)
 		}
 
-		if object.Spec.Rules[ruleIndex].Pattern[patternSize-1].Type != lastType {
-			fmt.Println("Invalid last pattern at", ruleIndex, ":", object.Spec.Rules[ruleIndex].Pattern[patternSize-1].Type)
-			return false
-		}
-
-		return true
+		return nil
 	}
 
 	Context("Verify ClusterFlowConfig reconcile loop", func() {
@@ -219,11 +236,9 @@ var _ = Describe("Cluster Flow Config Controller tests", func() {
 
 				Expect(k8sClient.Create(context.TODO(), clusterConfig)).ToNot(HaveOccurred())
 
-				object := &flowconfigv1.NodeFlowConfig{}
-				Eventually(func() bool {
-					err := WaitForObjectCreation(k8sClient, NODE_NAME_1, "default", 60*time.Second, 9*time.Second, object)
-					return err != nil
-				}, "65s", "9s").Should(BeTrue())
+				Eventually(func() string {
+					return GetObject(k8sClient, NODE_NAME_1, "default", 1*time.Second, &flowconfigv1.NodeFlowConfig{}).Error()
+				}, timeout, interval).Should(ContainSubstring(fmt.Sprintf("\"%s\" not found", NODE_NAME_1)))
 			})
 
 			It("Add ClusterFlowConfig with POD selectors, without flow rules, POD is misssing", func() {
@@ -241,11 +256,9 @@ var _ = Describe("Cluster Flow Config Controller tests", func() {
 
 				Expect(k8sClient.Create(context.TODO(), clusterConfig)).ToNot(HaveOccurred())
 
-				object := &flowconfigv1.NodeFlowConfig{}
-				Eventually(func() bool {
-					err := WaitForObjectCreation(k8sClient, NODE_NAME_1, "default", 60*time.Second, 9*time.Second, object)
-					return err != nil
-				}, "65s", "9s").Should(BeTrue())
+				Eventually(func() string {
+					return GetObject(k8sClient, NODE_NAME_1, "default", 1*time.Second, &flowconfigv1.NodeFlowConfig{}).Error()
+				}, timeout, interval).Should(ContainSubstring(fmt.Sprintf("\"%s\" not found", NODE_NAME_1)))
 			})
 
 			It("Add ClusterFlowConfig with POD selectors, without flow rules and node name, POD exists", func() {
@@ -270,11 +283,9 @@ var _ = Describe("Cluster Flow Config Controller tests", func() {
 
 				Expect(k8sClient.Create(context.TODO(), clusterConfig)).ToNot(HaveOccurred())
 
-				object := &flowconfigv1.NodeFlowConfig{}
-				Eventually(func() bool {
-					err := WaitForObjectCreation(k8sClient, NODE_NAME_1, "default", 60*time.Second, 9*time.Second, object)
-					return err != nil
-				}, "65s", "9s").Should(BeTrue())
+				Eventually(func() string {
+					return GetObject(k8sClient, NODE_NAME_1, "default", 1*time.Second, &flowconfigv1.NodeFlowConfig{}).Error()
+				}, timeout, interval).Should(ContainSubstring(fmt.Sprintf("\"%s\" not found", NODE_NAME_1)))
 			})
 
 			It("Add ClusterFlowConfig with POD selectors, with flow rules and node name, POD without network status", func() {
@@ -300,11 +311,9 @@ var _ = Describe("Cluster Flow Config Controller tests", func() {
 				defer deleteClusterFlowConfig(clusterConfig.ObjectMeta.Name, clusterConfig.ObjectMeta.Namespace)
 				Expect(k8sClient.Create(context.TODO(), clusterConfig)).ToNot(HaveOccurred())
 
-				object := &flowconfigv1.NodeFlowConfig{}
-				Eventually(func() bool {
-					err := WaitForObjectCreation(k8sClient, NODE_NAME_1, "default", 55*time.Second, 9*time.Second, object)
-					return err != nil
-				}, "1m", "9s").Should(BeTrue())
+				Eventually(func() string {
+					return GetObject(k8sClient, NODE_NAME_1, "default", 1*time.Second, &flowconfigv1.NodeFlowConfig{}).Error()
+				}, timeout, interval).Should(ContainSubstring(fmt.Sprintf("\"%s\" not found", NODE_NAME_1)))
 			})
 
 			It("Add ClusterFlowConfig with POD selector, POD has completely different set of labels", func() {
@@ -330,11 +339,9 @@ var _ = Describe("Cluster Flow Config Controller tests", func() {
 				defer deleteClusterFlowConfig(clusterConfig.ObjectMeta.Name, clusterConfig.ObjectMeta.Namespace)
 				Expect(k8sClient.Create(context.TODO(), clusterConfig)).ToNot(HaveOccurred())
 
-				object := &flowconfigv1.NodeFlowConfig{}
-				Eventually(func() bool {
-					err := WaitForObjectCreation(k8sClient, NODE_NAME_1, "default", 55*time.Second, 9*time.Second, object)
-					return err != nil
-				}, "1m", "9s").Should(BeTrue())
+				Eventually(func() string {
+					return GetObject(k8sClient, NODE_NAME_1, "default", 1*time.Second, &flowconfigv1.NodeFlowConfig{}).Error()
+				}, timeout, interval).Should(ContainSubstring(fmt.Sprintf("\"%s\" not found", NODE_NAME_1)))
 			})
 
 			It("Add ClusterFlowConfig with POD selector, POD and CR have one common out of three labels, CR have second label that does not occurs in POD", func() {
@@ -360,11 +367,9 @@ var _ = Describe("Cluster Flow Config Controller tests", func() {
 				defer deleteClusterFlowConfig(clusterConfig.ObjectMeta.Name, clusterConfig.ObjectMeta.Namespace)
 				Expect(k8sClient.Create(context.TODO(), clusterConfig)).ToNot(HaveOccurred())
 
-				object := &flowconfigv1.NodeFlowConfig{}
-				Eventually(func() bool {
-					err := WaitForObjectCreation(k8sClient, NODE_NAME_1, "default", 55*time.Second, 9*time.Second, object)
-					return err != nil
-				}, "1m", "9s").Should(BeTrue())
+				Eventually(func() string {
+					return GetObject(k8sClient, NODE_NAME_1, "default", 1*time.Second, &flowconfigv1.NodeFlowConfig{}).Error()
+				}, timeout, interval).Should(ContainSubstring(fmt.Sprintf("\"%s\" not found", NODE_NAME_1)))
 			})
 		})
 
@@ -403,10 +408,9 @@ var _ = Describe("Cluster Flow Config Controller tests", func() {
 				Expect(k8sClient.Create(context.TODO(), clusterConfig)).ToNot(HaveOccurred())
 
 				object := &flowconfigv1.NodeFlowConfig{}
-				Eventually(func() bool {
-					err := WaitForObjectCreation(k8sClient, NODE_NAME_1, "default", 90*time.Second, 9*time.Second, object)
-					return err == nil
-				}, "95s", "9s").Should(BeTrue())
+				Eventually(func() error {
+					return GetObject(k8sClient, NODE_NAME_1, "default", 1*time.Second, object)
+				}, timeout, interval).Should(BeNil())
 
 				Expect(object.ObjectMeta.Name).To(Equal(NODE_NAME_1))
 				Expect(object.Spec).To(Equal(flowconfigv1.NodeFlowConfigSpec{}))
@@ -428,12 +432,11 @@ var _ = Describe("Cluster Flow Config Controller tests", func() {
 				Expect(k8sClient.Create(context.TODO(), clusterConfig)).ToNot(HaveOccurred())
 
 				object := &flowconfigv1.NodeFlowConfig{}
-				Eventually(func() bool {
-					err := WaitForObjectCreation(k8sClient, NODE_NAME_1, "default", 55*time.Second, 9*time.Second, object)
-					return err == nil
-				}, "1m", "9s").Should(BeTrue())
+				Eventually(func() error {
+					return GetObject(k8sClient, NODE_NAME_1, "default", 1*time.Second, object)
+				}, timeout, interval).Should(BeNil())
 
-				Expect(compareNodeFlowConfigRules(object, NODE_NAME_1, "RTE_FLOW_ITEM_TYPE_ETH", "RTE_FLOW_ITEM_TYPE_END", 0, 1, 3)).To(BeTrue())
+				Expect(compareNodeFlowConfigRule(object, NODE_NAME_1, []string{"RTE_FLOW_ITEM_TYPE_ETH", "RTE_FLOW_ITEM_TYPE_IPV4", "RTE_FLOW_ITEM_TYPE_END"}, 1)).To(BeNil())
 
 				By("Delete NodeFlowConfig created by the ClusterFlowConfig controller")
 				Expect(k8sClient.Delete(context.Background(), object)).To(BeNil())
@@ -460,12 +463,11 @@ var _ = Describe("Cluster Flow Config Controller tests", func() {
 				Expect(k8sClient.Create(context.TODO(), clusterConfig)).ToNot(HaveOccurred())
 
 				object := &flowconfigv1.NodeFlowConfig{}
-				Eventually(func() bool {
-					err := WaitForObjectCreation(k8sClient, NODE_NAME_1, "default", 55*time.Second, 9*time.Second, object)
-					return err == nil
-				}, "1m", "9s").Should(BeTrue())
+				Eventually(func() error {
+					return GetObject(k8sClient, NODE_NAME_1, "default", 1*time.Second, object)
+				}, timeout, interval).Should(BeNil())
 
-				Expect(compareNodeFlowConfigRules(object, NODE_NAME_1, "RTE_FLOW_ITEM_TYPE_ETH", "RTE_FLOW_ITEM_TYPE_END", 0, 1, 3)).To(BeTrue())
+				Expect(compareNodeFlowConfigRule(object, NODE_NAME_1, []string{"RTE_FLOW_ITEM_TYPE_ETH", "RTE_FLOW_ITEM_TYPE_IPV4", "RTE_FLOW_ITEM_TYPE_END"}, 1)).To(BeNil())
 
 				By("Delete NodeFlowConfig created by the ClusterFlowConfig controller")
 				Expect(k8sClient.Delete(context.Background(), object)).To(BeNil())
@@ -497,11 +499,10 @@ var _ = Describe("Cluster Flow Config Controller tests", func() {
 				Expect(k8sClient.Create(context.TODO(), clusterConfig)).ToNot(HaveOccurred())
 
 				object := &flowconfigv1.NodeFlowConfig{}
-				Eventually(func() bool {
-					err := WaitForObjectCreation(k8sClient, NODE_NAME_2, "default", 55*time.Second, 9*time.Second, object)
-					return err == nil
-				}, "1m", "9s").Should(BeTrue())
-				Expect(compareNodeFlowConfigRules(object, NODE_NAME_2, "RTE_FLOW_ITEM_TYPE_ETH", "RTE_FLOW_ITEM_TYPE_END", 0, 1, 3)).To(BeTrue())
+				Eventually(func() error {
+					return GetObject(k8sClient, NODE_NAME_2, "default", 1*time.Second, object)
+				}, timeout, interval).Should(BeNil())
+				Expect(compareNodeFlowConfigRule(object, NODE_NAME_2, []string{"RTE_FLOW_ITEM_TYPE_ETH", "RTE_FLOW_ITEM_TYPE_IPV4", "RTE_FLOW_ITEM_TYPE_END"}, 1)).To(BeNil())
 
 				defer func() {
 					By("Delete NodeFlowConfig created by the ClusterFlowConfig controller")
@@ -509,10 +510,9 @@ var _ = Describe("Cluster Flow Config Controller tests", func() {
 				}()
 
 				object2 := &flowconfigv1.NodeFlowConfig{}
-				Eventually(func() bool {
-					err := WaitForObjectCreation(k8sClient, NODE_NAME_1, "default", 55*time.Second, 9*time.Second, object2)
-					return err != nil
-				}, "1m", "9s").Should(BeTrue())
+				Eventually(func() error {
+					return GetObject(k8sClient, NODE_NAME_1, "default", 1*time.Second, object2)
+				}, timeout, interval).ShouldNot(BeNil())
 			})
 
 			It("One ClusterFlowConfig CR with correct data, two nodes, on both POD with correct labels, creates NodeFlowConfig on both", func() {
@@ -539,24 +539,24 @@ var _ = Describe("Cluster Flow Config Controller tests", func() {
 				Expect(k8sClient.Create(context.TODO(), clusterConfig)).ToNot(HaveOccurred())
 
 				object := &flowconfigv1.NodeFlowConfig{}
-				Eventually(func() bool {
-					err := WaitForObjectCreation(k8sClient, NODE_NAME_1, "default", 55*time.Second, 9*time.Second, object)
-					return err == nil
-				}, "1m", "9s").Should(BeTrue())
+				Eventually(func() error {
+					return GetObject(k8sClient, NODE_NAME_1, "default", 1*time.Second, object)
+				}, timeout, interval).Should(BeNil())
 
-				Expect(compareNodeFlowConfigRules(object, NODE_NAME_1, "RTE_FLOW_ITEM_TYPE_ETH", "RTE_FLOW_ITEM_TYPE_END", 0, 1, 3)).To(BeTrue())
+				Expect(compareNodeFlowConfigRule(object, NODE_NAME_1, []string{"RTE_FLOW_ITEM_TYPE_ETH", "RTE_FLOW_ITEM_TYPE_IPV4", "RTE_FLOW_ITEM_TYPE_END"}, 1)).To(BeNil())
+
 				defer func() {
 					By("Delete NodeFlowConfig created by the ClusterFlowConfig controller")
 					Expect(k8sClient.Delete(context.Background(), object)).To(BeNil())
 				}()
 
 				object2 := &flowconfigv1.NodeFlowConfig{}
-				Eventually(func() bool {
-					err := WaitForObjectCreation(k8sClient, NODE_NAME_2, "default", 55*time.Second, 9*time.Second, object2)
-					return err == nil
-				}, "1m", "9s").Should(BeTrue())
+				Eventually(func() error {
+					return GetObject(k8sClient, NODE_NAME_2, "default", 1*time.Second, object2)
+				}, timeout, interval).Should(BeNil())
 
-				Expect(compareNodeFlowConfigRules(object2, NODE_NAME_2, "RTE_FLOW_ITEM_TYPE_ETH", "RTE_FLOW_ITEM_TYPE_END", 0, 1, 3)).To(BeTrue())
+				Expect(compareNodeFlowConfigRule(object2, NODE_NAME_2, []string{"RTE_FLOW_ITEM_TYPE_ETH", "RTE_FLOW_ITEM_TYPE_IPV4", "RTE_FLOW_ITEM_TYPE_END"}, 1)).To(BeNil())
+
 				defer func() {
 					By("Delete NodeFlowConfig created by the ClusterFlowConfig controller")
 					Expect(k8sClient.Delete(context.Background(), object2)).To(BeNil())
@@ -576,16 +576,15 @@ var _ = Describe("Cluster Flow Config Controller tests", func() {
 				Expect(k8sClient.Create(context.TODO(), clusterConfig)).ToNot(HaveOccurred())
 
 				object := &flowconfigv1.NodeFlowConfig{}
-				Eventually(func() bool {
-					err := WaitForObjectCreation(k8sClient, NODE_NAME_1, "default", 55*time.Second, 9*time.Second, object)
-					return err == nil
-				}, "1m", "9s").Should(BeTrue())
+				Eventually(func() error {
+					return GetObject(k8sClient, NODE_NAME_1, "default", 1*time.Second, object)
+				}, timeout, interval).Should(BeNil())
 				defer func() {
 					By("Delete NodeFlowConfig created by the ClusterFlowConfig controller")
 					Expect(k8sClient.Delete(context.Background(), object)).To(BeNil())
 				}()
 
-				Expect(compareNodeFlowConfigRules(object, NODE_NAME_1, "RTE_FLOW_ITEM_TYPE_ETH", "RTE_FLOW_ITEM_TYPE_END", 0, 1, 3)).To(BeTrue())
+				Expect(compareNodeFlowConfigRule(object, NODE_NAME_1, []string{"RTE_FLOW_ITEM_TYPE_ETH", "RTE_FLOW_ITEM_TYPE_IPV4", "RTE_FLOW_ITEM_TYPE_END"}, 1)).To(BeNil())
 
 				clusterConfig2 := getClusterFlowConfig(func(flowConfig *flowconfigv1.ClusterFlowConfig) {
 					flowConfig.ObjectMeta.Name = "other-name"
@@ -598,14 +597,14 @@ var _ = Describe("Cluster Flow Config Controller tests", func() {
 				})
 				defer deleteClusterFlowConfig(clusterConfig2.ObjectMeta.Name, clusterConfig2.ObjectMeta.Namespace)
 				Expect(k8sClient.Create(context.TODO(), clusterConfig2)).ToNot(HaveOccurred())
+				Eventually(func() error {
+					err := GetObject(k8sClient, NODE_NAME_1, "default", 1*time.Second, object)
+					if err != nil {
+						return err
+					}
+					return compareNodeFlowConfigRule(object, NODE_NAME_1, []string{"RTE_FLOW_ITEM_TYPE_ETH", "RTE_FLOW_ITEM_TYPE_IPV4", "RTE_FLOW_ITEM_TYPE_END"}, 1)
 
-				time.Sleep(10 * time.Second) // wait for the update from controller side
-				Eventually(func() bool {
-					err := WaitForObjectCreation(k8sClient, NODE_NAME_1, "default", 55*time.Second, 9*time.Second, object)
-					return err == nil
-				}, "1m", "9s").Should(BeTrue())
-
-				Expect(compareNodeFlowConfigRules(object, NODE_NAME_1, "RTE_FLOW_ITEM_TYPE_ETH", "RTE_FLOW_ITEM_TYPE_END", 0, 1, 3)).To(BeTrue())
+				}, timeout, interval).Should(BeNil())
 			})
 
 			It("Two ClusterFlowConfig CR with correct data, two nodes, on both POD with correct labels, creates NodeFlowConfig on both with correct set of rules", func() {
@@ -646,28 +645,27 @@ var _ = Describe("Cluster Flow Config Controller tests", func() {
 				Expect(k8sClient.Create(context.TODO(), clusterConfig2)).ToNot(HaveOccurred())
 
 				object := &flowconfigv1.NodeFlowConfig{}
-				Eventually(func() bool {
-					err := WaitForObjectCreation(k8sClient, NODE_NAME_1, "default", 55*time.Second, 9*time.Second, object)
-					return err == nil
-				}, "1m", "9s").Should(BeTrue())
+				Eventually(func() error {
+					return GetObject(k8sClient, NODE_NAME_1, "default", 1*time.Second, object)
+				}, timeout, interval).Should(BeNil())
 				defer func() {
 					By("Delete NodeFlowConfig created by the ClusterFlowConfig controller")
 					Expect(k8sClient.Delete(context.Background(), object)).To(BeNil())
 				}()
 
-				Expect(compareNodeFlowConfigRules(object, NODE_NAME_1, "RTE_FLOW_ITEM_TYPE_ETH", "RTE_FLOW_ITEM_TYPE_END", 0, 1, 3)).To(BeTrue())
+				Expect(compareNodeFlowConfigRule(object, NODE_NAME_1, []string{"RTE_FLOW_ITEM_TYPE_ETH", "RTE_FLOW_ITEM_TYPE_IPV4", "RTE_FLOW_ITEM_TYPE_END"}, 1)).To(BeNil())
 
 				object2 := &flowconfigv1.NodeFlowConfig{}
-				Eventually(func() bool {
-					err := WaitForObjectCreation(k8sClient, NODE_NAME_2, "default", 55*time.Second, 9*time.Second, object2)
-					return err == nil
-				}, "1m", "9s").Should(BeTrue())
+				Eventually(func() error {
+					return GetObject(k8sClient, NODE_NAME_2, "default", 1*time.Second, object2)
+				}, timeout, interval).Should(BeNil())
 				defer func() {
 					By("Delete NodeFlowConfig created by the ClusterFlowConfig controller")
 					Expect(k8sClient.Delete(context.Background(), object2)).To(BeNil())
 				}()
 
-				Expect(compareNodeFlowConfigRules(object2, NODE_NAME_2, "RTE_FLOW_ITEM_TYPE_VLAN", "RTE_FLOW_ITEM_TYPE_VLAN", 0, 1, 4)).To(BeTrue())
+				Expect(compareNodeFlowConfigRule(object2, NODE_NAME_2, []string{"RTE_FLOW_ITEM_TYPE_VLAN", "RTE_FLOW_ITEM_TYPE_IPV4", "RTE_FLOW_ITEM_TYPE_END", "RTE_FLOW_ITEM_TYPE_VLAN"}, 1)).To(BeNil())
+
 			})
 
 			It("Two ClusterFlowConfig with different set of labels, one node, two PODs with different set of labels matched to CRs, NodeFlowConfig is overwritten", func() {
@@ -691,15 +689,14 @@ var _ = Describe("Cluster Flow Config Controller tests", func() {
 				Expect(k8sClient.Create(context.TODO(), clusterConfig)).ToNot(HaveOccurred())
 
 				object := &flowconfigv1.NodeFlowConfig{}
-				Eventually(func() bool {
-					err := WaitForObjectCreation(k8sClient, NODE_NAME_1, "default", 55*time.Second, 9*time.Second, object)
-					return err == nil
-				}, "1m", "9s").Should(BeTrue())
+				Eventually(func() error {
+					return GetObject(k8sClient, NODE_NAME_1, "default", 1*time.Second, object)
+				}, timeout, interval).Should(BeNil())
 				defer func() {
 					By("Delete NodeFlowConfig created by the ClusterFlowConfig controller")
 					Expect(k8sClient.Delete(context.Background(), object)).To(BeNil())
 				}()
-				Expect(compareNodeFlowConfigRules(object, NODE_NAME_1, "RTE_FLOW_ITEM_TYPE_ETH", "RTE_FLOW_ITEM_TYPE_END", 0, 1, 3)).To(BeTrue())
+				Expect(compareNodeFlowConfigRule(object, NODE_NAME_1, []string{"RTE_FLOW_ITEM_TYPE_ETH", "RTE_FLOW_ITEM_TYPE_IPV4", "RTE_FLOW_ITEM_TYPE_END"}, 1)).To(BeNil())
 
 				clusterConfig2 := getClusterFlowConfig(func(flowConfig *flowconfigv1.ClusterFlowConfig) {
 					flowConfig.ObjectMeta.Name = "other-rules-definition"
@@ -716,13 +713,14 @@ var _ = Describe("Cluster Flow Config Controller tests", func() {
 				Expect(k8sClient.Create(context.TODO(), clusterConfig2)).ToNot(HaveOccurred())
 
 				By("Give some time to update NodeFlowConfigs and check results")
-				time.Sleep(35 * time.Second)
 				object2 := &flowconfigv1.NodeFlowConfig{}
-				Eventually(func() bool {
-					err := WaitForObjectCreation(k8sClient, NODE_NAME_1, "default", 55*time.Second, 9*time.Second, object2)
-					return err == nil
-				}, "1m", "9s").Should(BeTrue())
-				Expect(compareNodeFlowConfigRules(object2, NODE_NAME_1, "RTE_FLOW_ITEM_TYPE_VLAN", "RTE_FLOW_ITEM_TYPE_VLAN", 0, 1, 4)).To(BeTrue())
+				Eventually(func() error {
+					err := GetObject(k8sClient, NODE_NAME_1, "default", 1*time.Second, object2)
+					if err != nil {
+						return err
+					}
+					return compareNodeFlowConfigRule(object2, NODE_NAME_1, []string{"RTE_FLOW_ITEM_TYPE_VLAN", "RTE_FLOW_ITEM_TYPE_IPV4", "RTE_FLOW_ITEM_TYPE_END", "RTE_FLOW_ITEM_TYPE_VLAN"}, 1)
+				}, timeout, interval).Should(BeNil())
 			})
 		})
 
@@ -753,12 +751,11 @@ var _ = Describe("Cluster Flow Config Controller tests", func() {
 				Expect(k8sClient.Create(context.TODO(), clusterConfig)).ToNot(HaveOccurred())
 
 				object = &flowconfigv1.NodeFlowConfig{}
-				Eventually(func() bool {
-					err := WaitForObjectCreation(k8sClient, NODE_NAME_1, "default", 55*time.Second, 9*time.Second, object)
-					return err == nil
-				}, "1m", "9s").Should(BeTrue())
+				Eventually(func() error {
+					return GetObject(k8sClient, NODE_NAME_1, "default", 1*time.Second, object)
+				}, timeout, interval).Should(BeNil())
 
-				Expect(compareNodeFlowConfigRules(object, NODE_NAME_1, "RTE_FLOW_ITEM_TYPE_ETH", "RTE_FLOW_ITEM_TYPE_END", 0, 1, 3)).To(BeTrue())
+				Expect(compareNodeFlowConfigRule(object, NODE_NAME_1, []string{"RTE_FLOW_ITEM_TYPE_ETH", "RTE_FLOW_ITEM_TYPE_IPV4", "RTE_FLOW_ITEM_TYPE_END"}, 1)).To(BeNil())
 			})
 
 			AfterEach(func() {
@@ -766,8 +763,17 @@ var _ = Describe("Cluster Flow Config Controller tests", func() {
 				deletePod(pod.ObjectMeta.Name, pod.ObjectMeta.Namespace)
 				deleteClusterFlowConfig(clusterConfig.ObjectMeta.Name, clusterConfig.ObjectMeta.Namespace)
 
+				clusterFlowConfig := &flowconfigv1.ClusterFlowConfig{}
+				Eventually(func() string {
+					return GetObject(k8sClient, clusterConfig.ObjectMeta.Name, clusterConfig.ObjectMeta.Namespace, 1*time.Second, clusterFlowConfig).Error()
+				}, timeout, interval).Should(ContainSubstring(fmt.Sprintf("\"%s\" not found", clusterConfig.ObjectMeta.Name)))
+
 				By("Delete NodeFlowConfig created by the ClusterFlowConfig controller")
 				Expect(k8sClient.Delete(context.Background(), object)).To(BeNil())
+
+				Eventually(func() string {
+					return GetObject(k8sClient, NODE_NAME_1, "default", 1*time.Second, object).Error()
+				}, timeout, interval).Should(ContainSubstring(fmt.Sprintf("\"%s\" not found", NODE_NAME_1)))
 			})
 
 			It("Update existing ClusterFlowConfig by adding new rules, POD selectors stays the same", func() {
@@ -777,17 +783,17 @@ var _ = Describe("Cluster Flow Config Controller tests", func() {
 				Expect(k8sClient.Update(context.Background(), clusterConfig)).To(BeNil())
 
 				By("Update object NodeFlowConfig")
-				Eventually(func() bool {
+				Eventually(func() error {
 					if err := k8sClient.Get(context.TODO(), client.ObjectKey{
 						Namespace: object.Namespace,
-						Name:      object.Name,
+						Name:      NODE_NAME_1,
 					}, object); err != nil {
-						fmt.Println("Error", err)
-						return false
+						return err
 					}
 
-					return compareNodeFlowConfigRules(object, NODE_NAME_1, "RTE_FLOW_ITEM_TYPE_VLAN", "RTE_FLOW_ITEM_TYPE_END", 0, 1, 4)
-				}, "60s", "9s").Should(BeTrue())
+					return compareNodeFlowConfigRule(object, NODE_NAME_1,
+						[]string{"RTE_FLOW_ITEM_TYPE_VLAN", "RTE_FLOW_ITEM_TYPE_IPV4", "RTE_FLOW_ITEM_TYPE_END", "RTE_FLOW_ITEM_TYPE_END"}, 1)
+				}, timeout, interval).Should(BeNil())
 			})
 
 			It("Create two ClusterFlowConfig CRs that targets the same POD spec, NodeFlowConfig expected to be created, rules merged", func() {
@@ -800,27 +806,31 @@ var _ = Describe("Cluster Flow Config Controller tests", func() {
 					}
 					flowConfig.Spec.Rules = getClusterFlowRules()
 					flowConfig.Spec.Rules[0].Pattern[0].Type = "RTE_FLOW_ITEM_TYPE_VLAN"
-					newPattern := &flowconfigv1.FlowItem{Type: "RTE_FLOW_ITEM_TYPE_END"}
-					flowConfig.Spec.Rules[0].Pattern = append(flowConfig.Spec.Rules[0].Pattern, newPattern)
 				})
+
 				Expect(k8sClient.Create(context.TODO(), secondClusterConfig)).ToNot(HaveOccurred())
 				defer deleteClusterFlowConfig(secondClusterConfig.ObjectMeta.Name, secondClusterConfig.ObjectMeta.Namespace)
 
-				Eventually(func() bool {
+				Eventually(func() error {
 					if err := k8sClient.Get(context.TODO(), client.ObjectKey{
 						Namespace: object.Namespace,
-						Name:      object.Name,
+						Name:      NODE_NAME_1,
 					}, object); err != nil {
-						fmt.Println("Error", err)
-						return false
+						return err
 					}
 
-					if !compareNodeFlowConfigRules(object, NODE_NAME_1, "RTE_FLOW_ITEM_TYPE_ETH", "RTE_FLOW_ITEM_TYPE_END", 0, 2, 3) {
-						return false
+					if err := compareNodeFlowConfigRule(object, NODE_NAME_1,
+						[]string{"RTE_FLOW_ITEM_TYPE_ETH", "RTE_FLOW_ITEM_TYPE_IPV4", "RTE_FLOW_ITEM_TYPE_END"}, 2); err != nil {
+						return err
 					}
 
-					return compareNodeFlowConfigRules(object, NODE_NAME_1, "RTE_FLOW_ITEM_TYPE_VLAN", "RTE_FLOW_ITEM_TYPE_END", 1, 2, 4)
-				}, "1m", "9s").Should(BeTrue())
+					if err := compareNodeFlowConfigRule(object, NODE_NAME_1,
+						[]string{"RTE_FLOW_ITEM_TYPE_VLAN", "RTE_FLOW_ITEM_TYPE_IPV4", "RTE_FLOW_ITEM_TYPE_END"}, 2); err != nil {
+						return err
+					}
+
+					return nil
+				}, timeout, interval).Should(BeNil())
 			})
 
 			It("On two nodes create two different PODs and CRs. For each node different NodeFlowConfig is expected", func() {
@@ -837,11 +847,18 @@ var _ = Describe("Cluster Flow Config Controller tests", func() {
 				defer deletePod(pod2.ObjectMeta.Name, pod2.ObjectMeta.Namespace)
 
 				object2 := &flowconfigv1.NodeFlowConfig{}
-				err = WaitForObjectCreation(k8sClient, NODE_NAME_2, "default", 55*time.Second, 9*time.Second, object2)
+
+				Eventually(func() error {
+					return GetObject(k8sClient, NODE_NAME_2, "default", 1*time.Second, object2)
+				}, timeout, interval).ShouldNot(BeNil())
+
 				defer func() {
 					_ = k8sClient.Delete(context.Background(), object2)
+					Eventually(func() string {
+						return GetObject(k8sClient, NODE_NAME_2, "default", 1*time.Second, &flowconfigv1.NodeFlowConfig{}).Error()
+					}, timeout, interval).Should(ContainSubstring(fmt.Sprintf("\"%s\" not found", NODE_NAME_2)))
 				}()
-				Expect(err).ToNot(BeNil())
+
 				Expect(object2.ObjectMeta.Name).To(Equal(""))
 				Expect(len(object2.Spec.Rules)).To(Equal(0))
 
@@ -854,40 +871,35 @@ var _ = Describe("Cluster Flow Config Controller tests", func() {
 					}
 					flowConfig.Spec.Rules = getClusterFlowRules()
 					flowConfig.Spec.Rules[0].Pattern[0].Type = "RTE_FLOW_ITEM_TYPE_VLAN"
-					newPattern := &flowconfigv1.FlowItem{Type: "RTE_FLOW_ITEM_TYPE_END"}
-					flowConfig.Spec.Rules[0].Pattern = append(flowConfig.Spec.Rules[0].Pattern, newPattern)
 				})
 				Expect(k8sClient.Create(context.TODO(), secondClusterConfig)).ToNot(HaveOccurred())
 				defer deleteClusterFlowConfig(secondClusterConfig.ObjectMeta.Name, secondClusterConfig.ObjectMeta.Namespace)
 
-				err = WaitForObjectCreation(k8sClient, NODE_NAME_2, "default", 55*time.Second, 9*time.Second, object2)
-				Expect(err).To(BeNil())
+				Eventually(func() error {
+					return GetObject(k8sClient, NODE_NAME_2, "default", 1*time.Second, object2)
+				}, timeout, interval).Should(BeNil())
 
 				By("Check NodeFlowConfig on second worker node")
-				Eventually(func() bool {
+				Eventually(func() error {
 					if err := k8sClient.Get(context.TODO(), client.ObjectKey{
 						Namespace: object2.Namespace,
-						Name:      object2.Name,
+						Name:      NODE_NAME_2,
 					}, object2); err != nil {
-						fmt.Println("Error", err)
-						return false
+						return err
 					}
-
-					return compareNodeFlowConfigRules(object2, NODE_NAME_2, "RTE_FLOW_ITEM_TYPE_VLAN", "RTE_FLOW_ITEM_TYPE_END", 0, 1, 4)
-				}, "1m", "9s").Should(BeTrue())
+					return compareNodeFlowConfigRule(object2, NODE_NAME_2, []string{"RTE_FLOW_ITEM_TYPE_VLAN", "RTE_FLOW_ITEM_TYPE_IPV4", "RTE_FLOW_ITEM_TYPE_END"}, 1)
+				}, timeout, interval).Should(BeNil())
 
 				By("Check NodeFlowConfig on first worker node")
-				Eventually(func() bool {
+				Eventually(func() error {
 					if err := k8sClient.Get(context.TODO(), client.ObjectKey{
 						Namespace: object.Namespace,
-						Name:      object.Name,
+						Name:      NODE_NAME_1,
 					}, object); err != nil {
-						fmt.Println("object Error", err)
-						return false
+						return err
 					}
-
-					return compareNodeFlowConfigRules(object, NODE_NAME_1, "RTE_FLOW_ITEM_TYPE_ETH", "RTE_FLOW_ITEM_TYPE_END", 0, 1, 3)
-				}, "1m", "9s").Should(BeTrue())
+					return compareNodeFlowConfigRule(object, NODE_NAME_1, []string{"RTE_FLOW_ITEM_TYPE_ETH", "RTE_FLOW_ITEM_TYPE_IPV4", "RTE_FLOW_ITEM_TYPE_END"}, 1)
+				}, timeout, interval).Should(BeNil())
 
 				By("Create third ClusterFlowConfig, expect only one NodeFlowConfig to be updated")
 				thirdClusterConfig := getClusterFlowConfig(func(flowConfig *flowconfigv1.ClusterFlowConfig) {
@@ -899,41 +911,42 @@ var _ = Describe("Cluster Flow Config Controller tests", func() {
 					}
 					flowConfig.Spec.Rules = getClusterFlowRules()
 					flowConfig.Spec.Rules[0].Pattern[0].Type = "RTE_FLOW_ITEM_TYPE_VLAN"
-					newPattern := &flowconfigv1.FlowItem{Type: "RTE_FLOW_ITEM_TYPE_END"}
-					flowConfig.Spec.Rules[0].Pattern = append(flowConfig.Spec.Rules[0].Pattern, newPattern)
 				})
 				Expect(k8sClient.Create(context.TODO(), thirdClusterConfig)).ToNot(HaveOccurred())
 				defer deleteClusterFlowConfig(thirdClusterConfig.ObjectMeta.Name, thirdClusterConfig.ObjectMeta.Namespace)
 
 				By("Check NodeFlowConfig on second worker node")
-				Eventually(func() bool {
+				Eventually(func() error {
 					if err := k8sClient.Get(context.TODO(), client.ObjectKey{
 						Namespace: object2.Namespace,
-						Name:      object2.Name,
+						Name:      NODE_NAME_2,
 					}, object2); err != nil {
-						fmt.Println("Error", err)
-						return false
+						return err
 					}
-
-					return compareNodeFlowConfigRules(object2, NODE_NAME_2, "RTE_FLOW_ITEM_TYPE_VLAN", "RTE_FLOW_ITEM_TYPE_END", 0, 1, 4)
-				}, "1m", "9s").Should(BeTrue())
+					return compareNodeFlowConfigRule(object2, NODE_NAME_2, []string{"RTE_FLOW_ITEM_TYPE_VLAN", "RTE_FLOW_ITEM_TYPE_IPV4", "RTE_FLOW_ITEM_TYPE_END"}, 1)
+				}, timeout, interval).Should(BeNil())
 
 				By("Check NodeFlowConfig on first worker node")
-				Eventually(func() bool {
+				Eventually(func() error {
 					if err := k8sClient.Get(context.TODO(), client.ObjectKey{
 						Namespace: object.Namespace,
-						Name:      object.Name,
+						Name:      NODE_NAME_1,
 					}, object); err != nil {
-						fmt.Println("Error", err)
-						return false
+						return err
 					}
 
-					if !compareNodeFlowConfigRules(object, NODE_NAME_1, "RTE_FLOW_ITEM_TYPE_ETH", "RTE_FLOW_ITEM_TYPE_END", 0, 2, 3) {
-						return false
+					if err := compareNodeFlowConfigRule(object, NODE_NAME_1,
+						[]string{"RTE_FLOW_ITEM_TYPE_ETH", "RTE_FLOW_ITEM_TYPE_IPV4", "RTE_FLOW_ITEM_TYPE_END"}, 2); err != nil {
+						return err
 					}
 
-					return compareNodeFlowConfigRules(object, NODE_NAME_1, "RTE_FLOW_ITEM_TYPE_VLAN", "RTE_FLOW_ITEM_TYPE_END", 1, 2, 4)
-				}, "5m", "9s").Should(BeTrue())
+					if err := compareNodeFlowConfigRule(object, NODE_NAME_1,
+						[]string{"RTE_FLOW_ITEM_TYPE_VLAN", "RTE_FLOW_ITEM_TYPE_IPV4", "RTE_FLOW_ITEM_TYPE_END"}, 2); err != nil {
+						return err
+					}
+
+					return nil
+				}, timeout, interval).Should(BeNil())
 			})
 		})
 
@@ -963,12 +976,11 @@ var _ = Describe("Cluster Flow Config Controller tests", func() {
 				})
 				Expect(k8sClient.Create(context.TODO(), clusterConfig)).ToNot(HaveOccurred())
 				object = &flowconfigv1.NodeFlowConfig{}
-				Eventually(func() bool {
-					err := WaitForObjectCreation(k8sClient, NODE_NAME_1, "default", 55*time.Second, 9*time.Second, object)
-					return err == nil
-				}, "1m", "9s").Should(BeTrue())
+				Eventually(func() error {
+					return GetObject(k8sClient, NODE_NAME_1, "default", 1*time.Second, object)
+				}, timeout, interval).Should(BeNil())
 
-				Expect(compareNodeFlowConfigRules(object, NODE_NAME_1, "RTE_FLOW_ITEM_TYPE_ETH", "RTE_FLOW_ITEM_TYPE_END", 0, 1, 3)).To(BeTrue())
+				Expect(compareNodeFlowConfigRule(object, NODE_NAME_1, []string{"RTE_FLOW_ITEM_TYPE_ETH", "RTE_FLOW_ITEM_TYPE_IPV4", "RTE_FLOW_ITEM_TYPE_END"}, 1)).To(BeNil())
 			})
 
 			AfterEach(func() {
@@ -983,8 +995,8 @@ var _ = Describe("Cluster Flow Config Controller tests", func() {
 				deleteClusterFlowConfig(clusterConfig.ObjectMeta.Name, clusterConfig.ObjectMeta.Namespace)
 				Eventually(func() bool {
 					err := k8sClient.Get(context.TODO(), client.ObjectKey{
-						Namespace: object.Namespace,
-						Name:      object.Name,
+						Namespace: clusterConfig.ObjectMeta.Namespace,
+						Name:      NODE_NAME_1,
 					}, object)
 					fmt.Println(err)
 					if err != nil {
@@ -997,9 +1009,11 @@ var _ = Describe("Cluster Flow Config Controller tests", func() {
 					}
 
 					return true
-				}, "60s", "6s").Should(BeTrue())
+				}, timeout, interval).Should(BeTrue())
 
-				Expect(len(clusterFlowConfigRc.Cluster2NodeRulesHashMap)).To(Equal(0))
+				Eventually(func() int {
+					return len(clusterFlowConfigRc.Cluster2NodeRulesHashMap)
+				}, timeout, interval).Should(Equal(0))
 			})
 
 			It("Add second ClusterFlowConfig, delete first one, and expect only part of rules to be removed", func() {
@@ -1036,9 +1050,12 @@ var _ = Describe("Cluster Flow Config Controller tests", func() {
 					fmt.Println("Invalid length", len(object.Spec.Rules))
 
 					return false
-				}, "60s", "6s").Should(BeTrue())
+				}, timeout, interval).Should(BeTrue())
 
-				Expect(len(clusterFlowConfigRc.Cluster2NodeRulesHashMap)).To(Equal(1))
+				Eventually(func() int {
+					return len(clusterFlowConfigRc.Cluster2NodeRulesHashMap)
+				}, timeout, interval).Should(Equal(1))
+
 				Expect(len(object.Spec.Rules[0].Pattern)).To(Equal(4))
 			})
 
@@ -1056,15 +1073,14 @@ var _ = Describe("Cluster Flow Config Controller tests", func() {
 				defer deletePod(pod2.ObjectMeta.Name, pod2.ObjectMeta.Namespace)
 
 				object2 := &flowconfigv1.NodeFlowConfig{}
-				Eventually(func() bool {
-					err := WaitForObjectCreation(k8sClient, NODE_NAME_2, "default", 55*time.Second, 9*time.Second, object2)
-					return err == nil
-				}, "1m", "9s").Should(BeTrue())
+				Eventually(func() error {
+					return GetObject(k8sClient, NODE_NAME_2, "default", 1*time.Second, object2)
+				}, timeout, interval).Should(BeNil())
 				defer func() {
 					_ = k8sClient.Delete(context.Background(), object2)
 				}()
 
-				Expect(compareNodeFlowConfigRules(object2, NODE_NAME_2, "RTE_FLOW_ITEM_TYPE_ETH", "RTE_FLOW_ITEM_TYPE_END", 0, 1, 3)).To(BeTrue())
+				Expect(compareNodeFlowConfigRule(object2, NODE_NAME_2, []string{"RTE_FLOW_ITEM_TYPE_ETH", "RTE_FLOW_ITEM_TYPE_IPV4", "RTE_FLOW_ITEM_TYPE_END"}, 1)).To(BeNil())
 
 				deleteClusterFlowConfig(clusterConfig.ObjectMeta.Name, clusterConfig.ObjectMeta.Namespace)
 
@@ -1084,7 +1100,7 @@ var _ = Describe("Cluster Flow Config Controller tests", func() {
 					}
 
 					return true
-				}, "60s", "6s").Should(BeTrue())
+				}, timeout, interval).Should(BeTrue())
 
 				Eventually(func() bool {
 					err := k8sClient.Get(context.TODO(), client.ObjectKey{
@@ -1102,9 +1118,11 @@ var _ = Describe("Cluster Flow Config Controller tests", func() {
 					}
 
 					return true
-				}, "60s", "6s").Should(BeTrue())
+				}, timeout, interval).Should(BeTrue())
 
-				Expect(len(clusterFlowConfigRc.Cluster2NodeRulesHashMap)).To(Equal(0))
+				Eventually(func() int {
+					return len(clusterFlowConfigRc.Cluster2NodeRulesHashMap)
+				}, timeout, interval).Should(Equal(0))
 			})
 
 			PIt("Add second ClusterFlowConfig, different name, the same set of rules, delete second CR, expected duplicated rules to be not removed from NodeFlowConfig", func() {
@@ -1124,24 +1142,23 @@ var _ = Describe("Cluster Flow Config Controller tests", func() {
 				}()
 				Expect(k8sClient.Create(context.TODO(), clusterConfig2)).ToNot(HaveOccurred())
 
-				Consistently(func() bool {
-					return compareNodeFlowConfigRules(object, NODE_NAME_1, "RTE_FLOW_ITEM_TYPE_ETH", "RTE_FLOW_ITEM_TYPE_END", 0, 1, 3)
-				}, "35s", "8s").Should(BeTrue())
+				Consistently(func() error {
+					return compareNodeFlowConfigRule(object, NODE_NAME_1, []string{"RTE_FLOW_ITEM_TYPE_ETH", "RTE_FLOW_ITEM_TYPE_IPV4", "RTE_FLOW_ITEM_TYPE_END"}, 1)
+				}, "35s", "8s").Should(BeNil())
 
 				By("Delete second ClusterFlowConfig")
 				deleteClusterFlowConfig(clusterConfig.ObjectMeta.Name, clusterConfig.ObjectMeta.Namespace)
 
-				Consistently(func() bool {
+				Consistently(func() error {
 					err := k8sClient.Get(context.TODO(), client.ObjectKey{
 						Namespace: object.ObjectMeta.Namespace,
 						Name:      object.ObjectMeta.Name,
 					}, object)
 					if err != nil {
-						return false
+						return err
 					}
-
-					return compareNodeFlowConfigRules(object, NODE_NAME_1, "RTE_FLOW_ITEM_TYPE_ETH", "RTE_FLOW_ITEM_TYPE_END", 0, 1, 3)
-				}, "65s", "9s").Should(BeTrue())
+					return compareNodeFlowConfigRule(object, NODE_NAME_1, []string{"RTE_FLOW_ITEM_TYPE_ETH", "RTE_FLOW_ITEM_TYPE_IPV4", "RTE_FLOW_ITEM_TYPE_END"}, 1)
+				}, "65s", "9s").Should(BeNil())
 			})
 		})
 
@@ -1172,12 +1189,11 @@ var _ = Describe("Cluster Flow Config Controller tests", func() {
 				})
 				Expect(k8sClient.Create(context.TODO(), clusterConfig)).ToNot(HaveOccurred())
 				object = &flowconfigv1.NodeFlowConfig{}
-				Eventually(func() bool {
-					err := WaitForObjectCreation(k8sClient, NODE_NAME_1, "default", 55*time.Second, 9*time.Second, object)
-					return err == nil
-				}, "1m", "9s").Should(BeTrue())
+				Eventually(func() error {
+					return GetObject(k8sClient, NODE_NAME_1, "default", 1*time.Second, object)
+				}, timeout, interval).Should(BeNil())
 
-				Expect(compareNodeFlowConfigRules(object, NODE_NAME_1, "RTE_FLOW_ITEM_TYPE_ETH", "RTE_FLOW_ITEM_TYPE_END", 0, 1, 3)).To(BeTrue())
+				Expect(compareNodeFlowConfigRule(object, NODE_NAME_1, []string{"RTE_FLOW_ITEM_TYPE_ETH", "RTE_FLOW_ITEM_TYPE_IPV4", "RTE_FLOW_ITEM_TYPE_END"}, 1)).To(BeNil())
 			})
 
 			AfterEach(func() {
@@ -1201,10 +1217,9 @@ var _ = Describe("Cluster Flow Config Controller tests", func() {
 				defer deletePod(pod2.ObjectMeta.Name, pod2.ObjectMeta.Namespace)
 
 				object2 := &flowconfigv1.NodeFlowConfig{}
-				Eventually(func() bool {
-					err := WaitForObjectCreation(k8sClient, NODE_NAME_2, "default", 55*time.Second, 9*time.Second, object2)
-					return err != nil
-				}, "1m", "9s").Should(BeTrue())
+				Eventually(func() string {
+					return GetObject(k8sClient, NODE_NAME_2, "default", 1*time.Second, object2).Error()
+				}, timeout, interval).Should(ContainSubstring(fmt.Sprintf("\"%s\" not found", NODE_NAME_2)))
 			})
 
 			It("with POD that matches ClusterFlowConfig CR, expected to create NodeFlowConfig", func() {
@@ -1218,12 +1233,11 @@ var _ = Describe("Cluster Flow Config Controller tests", func() {
 				defer deletePod(pod2.ObjectMeta.Name, pod2.ObjectMeta.Namespace)
 
 				object2 := &flowconfigv1.NodeFlowConfig{}
-				Eventually(func() bool {
-					err := WaitForObjectCreation(k8sClient, NODE_NAME_2, "default", 55*time.Second, 9*time.Second, object2)
-					return err == nil
-				}, "1m", "9s").Should(BeTrue())
+				Eventually(func() error {
+					return GetObject(k8sClient, NODE_NAME_2, "default", 1*time.Second, object2)
+				}, timeout, interval).Should(BeNil())
 
-				Expect(compareNodeFlowConfigRules(object2, NODE_NAME_2, "RTE_FLOW_ITEM_TYPE_ETH", "RTE_FLOW_ITEM_TYPE_END", 0, 1, 3)).To(BeTrue())
+				Expect(compareNodeFlowConfigRule(object2, NODE_NAME_2, []string{"RTE_FLOW_ITEM_TYPE_ETH", "RTE_FLOW_ITEM_TYPE_IPV4", "RTE_FLOW_ITEM_TYPE_END"}, 1)).To(BeNil())
 				By("Delete NodeFlowConfig created by the ClusterFlowConfig controller to avoid clashes with other tests")
 				Expect(k8sClient.Delete(context.Background(), object2)).To(BeNil())
 			})
@@ -1271,12 +1285,11 @@ var _ = Describe("Cluster Flow Config Controller tests", func() {
 				})
 				Expect(k8sClient.Create(context.TODO(), clusterConfig)).ToNot(HaveOccurred())
 				object = &flowconfigv1.NodeFlowConfig{}
-				Eventually(func() bool {
-					err := WaitForObjectCreation(k8sClient, NODE_NAME_1, "default", 55*time.Second, 9*time.Second, object)
-					return err == nil
-				}, "1m", "9s").Should(BeTrue())
+				Eventually(func() error {
+					return GetObject(k8sClient, NODE_NAME_1, "default", 1*time.Second, object)
+				}, timeout, interval).Should(BeNil())
 
-				Expect(compareNodeFlowConfigRules(object, NODE_NAME_1, "RTE_FLOW_ITEM_TYPE_ETH", "RTE_FLOW_ITEM_TYPE_END", 0, 1, 3)).To(BeTrue())
+				Expect(compareNodeFlowConfigRule(object, NODE_NAME_1, []string{"RTE_FLOW_ITEM_TYPE_ETH", "RTE_FLOW_ITEM_TYPE_IPV4", "RTE_FLOW_ITEM_TYPE_END"}, 1)).To(BeNil())
 			})
 
 			AfterEach(func() {
@@ -1299,17 +1312,15 @@ var _ = Describe("Cluster Flow Config Controller tests", func() {
 				Expect(err).ToNot(HaveOccurred())
 				defer deletePod(pod2.ObjectMeta.Name, pod2.ObjectMeta.Namespace)
 
-				Eventually(func() bool {
+				Eventually(func() error {
 					if err := k8sClient.Get(context.TODO(), client.ObjectKey{
 						Namespace: object.Namespace,
 						Name:      object.Name,
 					}, object); err != nil {
-						fmt.Println("Error", err)
-						return false
+						return err
 					}
-
-					return compareNodeFlowConfigRules(object, NODE_NAME_1, "RTE_FLOW_ITEM_TYPE_VLAN", "RTE_FLOW_ITEM_TYPE_END", 0, 1, 4)
-				}, "1m", "9s").Should(BeTrue())
+					return compareNodeFlowConfigRule(object, NODE_NAME_1, []string{"RTE_FLOW_ITEM_TYPE_VLAN", "RTE_FLOW_ITEM_TYPE_IPV4", "RTE_FLOW_ITEM_TYPE_END", "RTE_FLOW_ITEM_TYPE_END"}, 1)
+				}, timeout, interval).Should(BeNil())
 			})
 
 			It("Delete POD with matching CR labels, expected to remove rules from NodeFlowConfig", func() {
@@ -1325,7 +1336,7 @@ var _ = Describe("Cluster Flow Config Controller tests", func() {
 					}
 
 					return len(object.Spec.Rules) == 0
-				}, "1m", "9s").Should(BeTrue())
+				}, timeout, interval).Should(BeTrue())
 
 				// to avoid error recreate POD that will be removed in AfterEach function
 				pod = createPod("test-pod", "default")
@@ -1345,39 +1356,36 @@ var _ = Describe("Cluster Flow Config Controller tests", func() {
 					}
 
 					return len(object.Spec.Rules) == 0
-				}, "1m", "9s").Should(BeTrue())
+				}, timeout, interval).Should(BeTrue())
 			})
 
 			It("Update labels in POD, so they do match the second ClusterFlowConfig CR, expect NodeFlowConfig to be updated with new rules", func() {
 				pod.ObjectMeta.Labels["otherKey"] = "testName"
 				Expect(k8sClient.Update(context.Background(), pod)).To(BeNil())
-				Eventually(func() bool {
+				Eventually(func() error {
 					if err := k8sClient.Get(context.TODO(), client.ObjectKey{
 						Namespace: object.Namespace,
 						Name:      object.Name,
 					}, object); err != nil {
-						fmt.Println("Error", err)
-						return false
+						return err
 					}
 
-					return compareNodeFlowConfigRules(object, NODE_NAME_1, "RTE_FLOW_ITEM_TYPE_VLAN", "RTE_FLOW_ITEM_TYPE_END", 0, 1, 4)
-				}, "1m", "9s").Should(BeTrue())
+					return compareNodeFlowConfigRule(object, NODE_NAME_1, []string{"RTE_FLOW_ITEM_TYPE_VLAN", "RTE_FLOW_ITEM_TYPE_IPV4", "RTE_FLOW_ITEM_TYPE_END", "RTE_FLOW_ITEM_TYPE_END"}, 1)
+				}, timeout, interval).Should(BeNil())
 			})
 
 			It("Update POD annotations, NodeFlowConfig should not be affected, actually Reconcile loop should not be called at all", func() {
 				addPodAnnotations(pod)
-				time.Sleep(10 * time.Second) // give a controller time to react on event
-				Eventually(func() bool {
+				Eventually(func() error {
 					if err := k8sClient.Get(context.TODO(), client.ObjectKey{
 						Namespace: object.Namespace,
 						Name:      object.Name,
 					}, object); err != nil {
-						fmt.Println("Error", err)
-						return false
+						return err
 					}
 
-					return compareNodeFlowConfigRules(object, NODE_NAME_1, "RTE_FLOW_ITEM_TYPE_ETH", "RTE_FLOW_ITEM_TYPE_END", 0, 1, 3)
-				}, "1m", "9s").Should(BeTrue())
+					return compareNodeFlowConfigRule(object, NODE_NAME_1, []string{"RTE_FLOW_ITEM_TYPE_ETH", "RTE_FLOW_ITEM_TYPE_IPV4", "RTE_FLOW_ITEM_TYPE_END"}, 1)
+				}, timeout, interval).Should(BeNil())
 			})
 		})
 	})
@@ -1394,8 +1402,8 @@ var _ = Describe("Cluster Flow Config Controller tests", func() {
 				createClusterFlowAction([]flowconfigv1.ClusterFlowActionType{flowconfigv1.ClusterFlowActionType(flowapi.RteFlowActionType_RTE_FLOW_ACTION_TYPE_DROP)}),
 				nil,
 				[]*flowconfigv1.FlowAction{
-					&flowconfigv1.FlowAction{Type: flowapi.RteFlowActionType_RTE_FLOW_ACTION_TYPE_DROP.String()},
-					&flowconfigv1.FlowAction{Type: flowapi.RteFlowActionType_RTE_FLOW_ACTION_TYPE_END.String()}},
+					{Type: flowapi.RteFlowActionType_RTE_FLOW_ACTION_TYPE_DROP.String()},
+					{Type: flowapi.RteFlowActionType_RTE_FLOW_ACTION_TYPE_END.String()}},
 			),
 		)
 	})

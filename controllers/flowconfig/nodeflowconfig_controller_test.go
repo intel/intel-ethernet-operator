@@ -131,8 +131,6 @@ var _ = Describe("NodeFlowConfig controller", func() {
 					err := k8sClient.Create(ctx, policy)
 					return err == nil
 				}, timeout, interval).Should(BeTrue())
-				// Add delays after creating api object before retrieving it again
-				time.Sleep(time.Second * 2)
 
 				/*
 					After the policy spec is created, we expect the controller should update its internal state in its flowSets field and also update
@@ -141,16 +139,23 @@ var _ = Describe("NodeFlowConfig controller", func() {
 				policyObjLookupKey := types.NamespacedName{Name: nodeName, Namespace: nodeFlowConfigNamespace}
 				createdPolicyObj = &flowconfigv1.NodeFlowConfig{}
 
-				Eventually(func() bool {
-					err := k8sClient.Get(ctx, policyObjLookupKey, createdPolicyObj)
-					return err == nil
-				}, timeout, interval).Should(BeTrue())
-
 				By("updating its Status with DCF port info")
-				Expect(len(createdPolicyObj.Status.PortInfo)).Should(Equal(1))
+				Eventually(func() int {
+					err := k8sClient.Get(ctx, policyObjLookupKey, createdPolicyObj)
+					if err != nil {
+						return 0
+					}
+					return len(createdPolicyObj.Status.PortInfo)
+				}, timeout, interval).Should(Equal(1))
 
 				By("updating its flowSets with the new NodeFlowConfig")
-				Expect(nodeFlowConfigRc.flowSets.Size()).Should(Equal(1))
+				Eventually(func() int {
+					err := k8sClient.Get(ctx, policyObjLookupKey, createdPolicyObj)
+					if err != nil {
+						return 0
+					}
+					return nodeFlowConfigRc.flowSets.Size()
+				}, timeout, interval).Should(Equal(1))
 			})
 		})
 
@@ -178,13 +183,13 @@ var _ = Describe("NodeFlowConfig controller", func() {
 					return err == nil
 				}, timeout, interval).Should(BeTrue())
 
-				// Add delays after deleting api object before validating the controller's default config
-				time.Sleep(time.Second * 2)
 				/*
 					When a NodeFlowConfig object is deleted, we expect the controller to delete all rules from its default config.
 				*/
 				By("deleting the spec from the controller's flowSets")
-				Expect(nodeFlowConfigRc.flowSets.Size()).Should(Equal(0))
+				Eventually(func() int {
+					return nodeFlowConfigRc.flowSets.Size()
+				}, timeout, interval).Should(Equal(0))
 			})
 		})
 	})
@@ -700,7 +705,11 @@ spec:
 				return err == nil
 			}, timeout, interval).Should(BeTrue())
 
-			time.Sleep(2 * time.Second)
+			policyObjLookupKey := types.NamespacedName{Name: nodeName, Namespace: nodeFlowConfigNamespace}
+			Eventually(func() error {
+				return k8sClient.Get(context.Background(), policyObjLookupKey, policy)
+			}, timeout, interval).Should(BeNil())
+
 			defer func() {
 				Eventually(func() bool {
 					err := k8sClient.Delete(context.Background(), policy)
