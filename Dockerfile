@@ -21,7 +21,7 @@ COPY pkg/ pkg/
 
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GO111MODULE=on go build -a -o manager main.go
 
-FROM registry.access.redhat.com/ubi9/ubi-minimal:9.0.0-1644.1666621587
+FROM registry.access.redhat.com/ubi9/ubi-micro:9.1.0-6
 
 ARG VERSION
 ### Required OpenShift Labels

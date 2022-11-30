@@ -13,9 +13,10 @@ COPY apis apis/
 
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GO111MODULE=on go build -a -o node_labeler cmd/labeler/main.go
 
-FROM registry.access.redhat.com/ubi9/ubi-minimal:9.0.0-1644.1666621587
+RUN apk update && apk add curl
+RUN curl https://pci-ids.ucw.cz/v2.2/pci.ids.gz -o pci.ids.gz && gunzip pci.ids.gz
 
-RUN microdnf -y install gzip && microdnf clean all
+FROM registry.access.redhat.com/ubi9/ubi-micro:9.1.0-6
 
 ARG VERSION
 ### Required OpenShift Labels
@@ -28,10 +29,7 @@ devices as set in the config file (typically Intel Ethernet E810)" \
     description="The container detects the relevant PCI devices, labels the nodes that contain them \
 and removes the label for the nodes that do not."
 
-WORKDIR /usr/share/misc/
-
-RUN curl https://pci-ids.ucw.cz/v2.2/pci.ids.gz -o pci.ids.gz && \
-    gunzip pci.ids.gz
+COPY --from=builder /workspace/pci.ids /usr/share/misc/pci.ids
 
 USER 1001
 WORKDIR /labeler-workspace
