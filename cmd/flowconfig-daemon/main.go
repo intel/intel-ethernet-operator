@@ -65,6 +65,14 @@ func main() {
 	fs := flowsets.NewFlowSets()
 	fc := flowconfigctlr.GetDCFClient()
 
+	setupLog.Info("checking for UFT grpc client readiness...")
+	err = flowconfigctlr.CheckClientReadiness()
+	if err != nil {
+		setupLog.Error(err, "unable to create UFT grpc client connection")
+		os.Exit(1)
+	}
+	setupLog.Info("UFT grpc client is ready")
+
 	setupLog.Info("using sysfs", "sysFs", sysFs)
 	flowRc := flowconfigctlr.GetNodeFlowConfigReconciler(
 		mgr.GetClient(),

@@ -10,6 +10,7 @@ import (
 
 	flowapi "github.com/otcshare/intel-ethernet-operator/pkg/flowconfig/rpc/v1/flow"
 	"google.golang.org/grpc"
+	"k8s.io/apimachinery/pkg/util/wait"
 )
 
 const (
@@ -112,4 +113,35 @@ func getDCFFlowClientConn() (*grpc.ClientConn, error) {
 		return nil, fmt.Errorf("unable to connect to DCF grpc endpoint: %s", err)
 	}
 	return conn, nil
+}
+
+// CheckClientReadiness wait for UFT grpc client to be ready using ExponentialBackoff algorithm.
+// It tries total 10 steps start with 50 ms initial delays which multiplied by 2 in each steps - for total 51 seconds before returns an error.
+func CheckClientReadiness() error {
+	// start with 50 ms, multiply by 2 each step, 10 steps = 51 seconds
+	backoff := wait.Backoff{
+		Duration: 50 * time.Millisecond,
+		Jitter:   0,
+		Factor:   2,
+		Steps:    10,
+	}
+	err := wait.ExponentialBackoff(backoff, func() (done bool, err error) {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+
+		conn, err := grpc.DialContext(ctx, grpcUrl, grpc.WithInsecure())
+		if err == nil && conn != nil {
+			defer conn.Close()
+			client := flowapi.NewFlowServiceClient(conn)
+			if client != nil {
+				_, err = client.ListPorts(context.TODO(), &flowapi.RequestListPorts{})
+				if err == nil {
+					return true, nil
+				}
+			}
+		}
+
+		return false, nil
+	})
+	return err
 }
