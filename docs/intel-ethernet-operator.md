@@ -17,21 +17,23 @@ Copyright (c) 2021 Intel Corporation
     - [Unified Flow Tool](#unified-flow-tool)
   - [Prerequisites](#prerequisites)
     - [Intel Ethernet Operator - SRIOV](#intel-ethernet-operator---sriov)
-    - [Intel Ethernet Operator - OOT ICE driver update](#intel-ethernet-operator---oot-ice-driver-update)
-- [Technical Requirements and Dependencies](#technical-requirements-and-dependencies)
+    - [Node Feature Discovery](#node-feature-discovery)
 - [Deploying the Operator](#deploying-the-operator)
+  - [Installing Go](#installing-go)
+  - [Installing Operator SDK](#installing-operator-sdk)
   - [Applying custom resources](#applying-custom-resources)
     - [Webserver for disconnected environment](#webserver-for-disconnected-environment)
-    - [Updating Firmware](#updating-firmware)
+    - [Certificate validation](#certificate-validation)
     - [Updating DDP](#updating-ddp)
-    - [Deploy Flow Configuration agent](#deploy-flow-configuration-agent)
+    - [Deploying Flow Configuration Agent](#deploying-flow-configuration-agent)
       - [Creating Trusted VF using SRIOV Network Operator](#creating-trusted-vf-using-sriov-network-operator)
       - [Check node status](#check-node-status)
       - [Create DCF capable SRIOV Network](#create-dcf-capable-sriov-network)
       - [Build UFT image](#build-uft-image)
-      - [Create FlowConfig Node Agent deployment CR](#create-flowconfig-node-agent-deployment-cr)
-      - [Verify that FlowConfig Daemon is running on available nodes:](#verify-that-flowconfig-daemon-is-running-on-available-nodes)
+      - [Creating FlowConfig Node Agent Deployment CR](#creating-flowconfig-node-agent-deployment-cr)
+      - [Verifying that FlowConfig Daemon is running on available nodes:](#verifying-that-flowconfig-daemon-is-running-on-available-nodes)
       - [Creating Flow Configuration rules with Intel Ethernet Operator](#creating-flow-configuration-rules-with-intel-ethernet-operator)
+      - [Creating Flow Configuration rules with Intel Ethernet Operator (NodeFlowConfig)](#creating-flow-configuration-rules-with-intel-ethernet-operator-nodeflowconfig)
       - [Update a sample Node Flow Configuration rule](#update-a-sample-node-flow-configuration-rule)
 - [Hardware Validation Environment](#hardware-validation-environment)
 - [Summary](#summary)
@@ -151,12 +153,14 @@ Building the operator bundle images will require Go and Operator SDK to be insta
 ### Installing Go
 You can install Go following the steps [here](https://go.dev/doc/install).
 
+> Note: Intel Ethernet Operator is not compatible with Go versions below 1.19
+
 ### Installing Operator SDK
-Please install Operator SDK v1.7.2 following the steps below:
+Please install Operator SDK v1.25.0 following the steps below:
 ```
 export ARCH=$(case $(uname -m) in x86_64) echo -n amd64 ;; aarch64) echo -n arm64 ;; *) echo -n $(uname -m) ;; esac)
 export OS=$(uname | awk '{print tolower($0)}')
-export SDK_VERSION=v1.7.2
+export SDK_VERSION=v1.25.0
 export OPERATOR_SDK_DL_URL=https://github.com/operator-framework/operator-sdk/releases/download/${SDK_VERSION}
 curl -LO ${OPERATOR_SDK_DL_URL}/operator-sdk_${OS}_${ARCH}
 chmod +x operator-sdk_${OS}_${ARCH} && sudo mv operator-sdk_${OS}_${ARCH} /usr/local/bin/operator-sdk
