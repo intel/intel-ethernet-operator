@@ -1,6 +1,6 @@
 ```text
 SPDX-License-Identifier: Apache-2.0
-Copyright (c) 2022 Intel Corporation
+Copyright (c) 2020-2022 Intel Corporation
 ```
 
 # Deploy Intel Ethernet Operator on Vanilla K8s with Intel CEK
@@ -10,7 +10,6 @@ Copyright (c) 2022 Intel Corporation
 The Intel Ethernet Operator on vanilla K8s has the following requirements:
 
 - Intel® Ethernet Network Adapter E810
-- Vanilla Kubernetes cluster using [Intel Container Experience Kits](https://github.com/intel/container-experience-kits) v21.08 or later with `remote_fp` profile.
 - [Intel® Network Adapter Driver for E810 Series Devices](https://www.intel.com/content/www/us/en/download/19630/intel-network-adapter-driver-for-e810-series-devices-under-linux.html)
 - IOMMU enabled
 - Hugepage memory configured
@@ -32,7 +31,6 @@ The following will install OLM v0.20.0 in your cluster.
 ## Deploying the Operator
 
 The Intel Ethernet Operator can be deployed by building the Bundle image and the Operator images from source. An external registry is necessary to push the images during build.
-
 
 ### Building the Operator from Source
 
@@ -65,7 +63,7 @@ Create the following `Catalog Source` `yaml` file:
 
 > Note: The REGISTRY_ADDRESS and VERSION need to be replaced:
 >
-> * VERSION is the version to be applied to the bundle ie. `0.0.1`.
+> * VERSION is the version to be applied to the bundle ie. `0.0.2`.
 > * IMAGE_REGISTRY is the address of the registry where the build images are to be pushed to ie. `my.private.registry.com`.
 
 ```yaml

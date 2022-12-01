@@ -1,14 +1,15 @@
 // SPDX-License-Identifier: Apache-2.0
-// Copyright (c) 2021 Intel Corporation
+// Copyright (c) 2020-2022 Intel Corporation
 
 package daemon
 
 import (
-	configv1 "github.com/openshift/api/config/v1"
-	ethernetv1 "github.com/otcshare/intel-ethernet-operator/apis/ethernet/v1"
 	"os"
 	"path/filepath"
 	"testing"
+
+	configv1 "github.com/openshift/api/config/v1"
+	ethernetv1 "github.com/otcshare/intel-ethernet-operator/apis/ethernet/v1"
 
 	ctrl "sigs.k8s.io/controller-runtime"
 

@@ -1,10 +1,7 @@
 ```text
 SPDX-License-Identifier: Apache-2.0
-Copyright (c) 2021 Intel Corporation
+Copyright (c) 2020-2022 Intel Corporation
 ```
-
-| :point_right:          This project is still under technical preview and it is not intended to run on production clusters     |
-|-------------------------------------------------------------------------------------------------------------------------------|
 
 Intel Ethernet Operator:
 

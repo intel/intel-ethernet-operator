@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// Copyright (c) 2021 Intel Corporation
+// Copyright (c) 2020-2022 Intel Corporation
 
 package flowconfig
 
@@ -322,7 +322,10 @@ func (r *FlowConfigNodeAgentDeploymentReconciler) getNodeFilterPredicates() pred
 }
 
 func (r *FlowConfigNodeAgentDeploymentReconciler) getPodTemplate() (*corev1.Pod, error) {
-	filename, _ := filepath.Abs(podTemplateFile)
+	filename, err := filepath.Abs(podTemplateFile)
+	if err != nil {
+		return nil, fmt.Errorf("error getting filepath %v", err)
+	}
 	spec, err := ioutil.ReadFile(filename)
 	if err != nil {
 		return nil, fmt.Errorf("error reading %s file: %v", podTemplateFile, err)

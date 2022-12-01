@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// Copyright (c) 2021 Intel Corporation
+// Copyright (c) 2020-2022 Intel Corporation
 
 package utils
 
@@ -15,15 +15,16 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/types"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 	"strings"
 	"syscall"
+
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/go-logr/logr"
 	configv1 "github.com/openshift/api/config/v1"
@@ -65,10 +66,7 @@ func IsOpenshiftSno(c client.Client, log logr.Logger) (bool, error) {
 	defaultInfraName := "cluster"
 	err := c.Get(context.TODO(), types.NamespacedName{Name: defaultInfraName}, infra)
 	if err != nil {
-		return false, err
-	}
-	if infra == nil {
-		return false, fmt.Errorf("getting resource Infrastructure (name: %s) succeeded but object was nil", defaultInfraName)
+		return false, fmt.Errorf("getting resource Infrastructure (name: %s) succeeded but object was empty", defaultInfraName)
 	}
 	log.Info("OCP cluster infrastructure", "infra", infra.Status.ControlPlaneTopology)
 	return infra.Status.ControlPlaneTopology == configv1.SingleReplicaTopologyMode, nil

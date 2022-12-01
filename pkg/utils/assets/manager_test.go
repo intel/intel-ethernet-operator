@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
-// Copyright (c) 2021 Intel Corporation
+// Copyright (c) 2020-2022 Intel Corporation
 
 package assets
 
 import (
 	"context"
 	gerrors "errors"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
@@ -18,7 +19,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-//  runtime.Object implementation
+// runtime.Object implementation
 type InvalidRuntimeType struct {
 }
 

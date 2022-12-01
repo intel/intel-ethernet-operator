@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-# Copyright (c) 2021-2022 Intel Corporation
+# Copyright (c) 2020-2022 Intel Corporation
 
 apiVersion: v1
 kind: ConfigMap
@@ -146,6 +146,8 @@ data:
                   mountPath: /host/usr/lib64
                 - name: lib64
                   mountPath: /host/lib64
+                - name: ocpfw
+                  mountPath: /lib/firmware
                 {{ if isK8s }}
                 - name: k8sddp
                   mountPath: /host/lib/firmware/updates/intel/ice/ddp/
@@ -205,6 +207,8 @@ data:
             - name: libmodules
               hostPath:
                 path: /lib/modules
+            - name: ocpfw
+              emptyDir: {}
             {{ if isK8s }}
             - name: k8sddp
               hostPath:

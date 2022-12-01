@@ -1,10 +1,17 @@
 # SPDX-License-Identifier: Apache-2.0
-# Copyright (c) 2021 Intel Corporation
+# Copyright (c) 2020-2022 Intel Corporation
 
 apiVersion: ethernet.intel.com/v1
 kind: EthernetClusterConfig
 metadata:
   name: ethernetclusterconfig-sample
+  namespace: <namespace>
 spec:
-  # Add fields here
-  foo: bar
+  nodeSelectors:
+    kubernetes.io/hostname: <hostname>
+  deviceSelector:
+    pciAddress: "<pci-address>"
+  deviceConfig:
+    fwURL: "<URL_to_firmware>"
+    fwChecksum: "<file_checksum_md5_hash>"
+

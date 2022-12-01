@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// Copyright (c) 2021 Intel Corporation
+// Copyright (c) 2020-2022 Intel Corporation
 
 package flowconfig
 
@@ -27,8 +27,8 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-//WaitForPodCreation will wait for POD creation
-//In the artificial env POD will never be in running state, due to missing container image
+// WaitForPodCreation will wait for POD creation
+// In the artificial env POD will never be in running state, due to missing container image
 func WaitForPodCreation(core client.Client, podName, ns string, timeout, interval time.Duration) error {
 	return wait.PollImmediate(interval, timeout, func() (done bool, err error) {
 		ctx, cancel := context.WithTimeout(context.Background(), timeout)

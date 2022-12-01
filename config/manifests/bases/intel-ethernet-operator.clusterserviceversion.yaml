@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-# Copyright (c) 2021 Intel Corporation
+# Copyright (c) 2020-2022 Intel Corporation
 
 apiVersion: operators.coreos.com/v1alpha1
 kind: ClusterServiceVersion
@@ -8,10 +8,10 @@ metadata:
     alm-examples: '[]'
     capabilities: Basic Install
     categories: Networking
-    containerImage: #TODO update before release e.g. registry.connect.redhat.com/intel/sriov-fec-operator@sha256:c2c989aa3e9f03558bf207df4524b756c89bc9234194d4f82c2ce77f6dd0b255
-    createdAt: #TODO update before release e.g. 2021-11-30
+    containerImage: # TODO
+    createdAt: # TODO
     description: The role of the Intel Ethernet Operator is to orchestrate and manage the configuration of the capabilities exposed by the Intel E810 Series network interface cards (NICs).
-    repository: https://github.com/smart-edge-open/intel-ethernet-operator
+    repository: https://github.com/intel/intel-ethernet-operator
     support: Intel Corporation
   name: intel-ethernet-operator.v0.0.0
   namespace: placeholder
@@ -70,10 +70,25 @@ spec:
   - Firmware
   - Update
   links:
-  - name: Intel Ethernet Operator
-    url: https://intel-ethernet-operator.domain
+  - name: Documentation
+    url: https://github.com/intel/intel-ethernet-operator/blob/main/docs/intel-ethernet-operator.md
+  - name: Release Notes
+    url: https://github.com/intel/intel-ethernet-operator/blob/main/docs/intel-ethernet-operator-release-notes.md
+  - name: 100GbE Intel® Ethernet Network Adapter E810
+    url: https://ark.intel.com/content/www/us/en/ark/products/series/184846/100gbe-intel-ethernet-network-adapter-e810.html
+  - name: DDP Training Video
+    url: https://www.intel.com/content/www/us/en/design/products-and-solutions/networking-and-io/ethernet-800-series/dynamic-device-personalization-video.html
   maturity: alpha
   provider:
     name: Intel Corporation
     url: https://www.intel.com/content/www/us/en/products/details/ethernet/800-controllers/e810-controllers/docs.html
   version: 0.0.0
+  maintainers:
+  - email: kevin.clarke@intel.com
+    name: Kevin Clarke
+  - email: eoghan.russell@intel.com
+    name: Eoghan Russell
+  - email: padraig.j.connolly@intel.com
+    name: Padraig Connolly
+  - email: rafalx.lal@intel.com
+    name: Rafal Lal

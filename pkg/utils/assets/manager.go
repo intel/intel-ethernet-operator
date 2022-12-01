@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: Apache-2.0
-// Copyright (c) 2021 Intel Corporation
+// Copyright (c) 2020-2022 Intel Corporation
 
 package assets
 
 import (
 	"context"
-	"github.com/go-logr/logr"
 	"os"
 	"strings"
+
+	"github.com/go-logr/logr"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"

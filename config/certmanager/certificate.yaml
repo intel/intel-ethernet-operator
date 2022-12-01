@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-# Copyright (c) 2021 Intel Corporation
+# Copyright (c) 2020-2022 Intel Corporation
 
 # The following manifests contain a self-signed issuer CR and a certificate CR.
 # More document can be found at https://docs.cert-manager.io

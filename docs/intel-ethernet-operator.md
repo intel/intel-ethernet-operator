@@ -1,6 +1,6 @@
 ```text
 SPDX-License-Identifier: Apache-2.0
-Copyright (c) 2021 Intel Corporation
+Copyright (c) 2020-2022 Intel Corporation
 ```
 <!-- omit in toc -->
 # Intel Ethernet Operator documentation
@@ -42,7 +42,6 @@ This document provides the instructions for using the Intel Ethernet Operator on
 
 ## Intel Ethernet Operator
 
-> Note: This operator is not ready for production environment.
 
 The role of the Intel Ethernet Operator is to orchestrate and manage the configuration of the capabilities exposed by the Intel E810 Series network interface cards (NICs). The operator is a state machine which will configure certain functions of the card and then monitor the status and act autonomously based on the user interaction.
 The operator design of the Intel Ethernet Operator supports the following E810 series cards:
@@ -157,8 +156,8 @@ chmod +x operator-sdk_${OS}_${ARCH} && sudo mv operator-sdk_${OS}_${ARCH} /usr/l
 
 Based on target cluster please follow one of the deployment steps from list below.
 
-- [Deploy on OCP 4.9](deployment/ocp-deployment.md)
-- [Deploy on Vanilla K8s with Intel Container Experience Kits](deployment/k8s-deployment.md)
+- [Deploy on OCP](deployment/ocp-deployment.md)
+- [Deploy on Vanilla K8s](deployment/k8s-deployment.md)
 ### Applying custom resources
 
 Once the operator is successfully deployed, the user interacts with it by creating CRs which will be interpreted by the operator.

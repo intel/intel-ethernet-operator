@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// Copyright (c) 2021 Intel Corporation
+// Copyright (c) 2020-2022 Intel Corporation
 
 package daemon
 
@@ -7,10 +7,11 @@ import (
 	"context"
 	"encoding/xml"
 	"errors"
-	"github.com/otcshare/intel-ethernet-operator/pkg/utils"
 	"io"
 	"strconv"
 	"time"
+
+	"github.com/otcshare/intel-ethernet-operator/pkg/utils"
 )
 
 var (

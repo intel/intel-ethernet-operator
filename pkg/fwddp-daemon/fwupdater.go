@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// Copyright (c) 2021 Intel Corporation
+// Copyright (c) 2020-2022 Intel Corporation
 
 package daemon
 
@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 
@@ -74,15 +75,8 @@ func (f *fwUpdater) handleFWUpdate(pciAddr, fwPath string) (bool, error) {
 		log.Error(err, "Failed to update firmware", "device", pciAddr)
 		return false, err
 	}
+	rebootRequired = true
 
-	reboot, err := isRebootRequired(updateResultPath(fwPath))
-	if err != nil {
-		log.Error(err, "Failed to extract reboot required flag from file")
-		rebootRequired = true // failsafe
-	} else if reboot {
-		log.V(4).Info("Node reboot required to complete firmware update", "device", pciAddr)
-		rebootRequired = true
-	}
 	return rebootRequired, nil
 }
 
@@ -92,30 +86,50 @@ func (f *fwUpdater) updateFirmware(pciAddr, fwPath string) error {
 	rootAttr := &syscall.SysProcAttr{
 		Credential: &syscall.Credential{Uid: 0, Gid: 0},
 	}
-	// Call nvmupdate64 -i first to refresh devices
-	log.V(2).Info("Refreshing nvmupdate inventory")
-	cmd := exec.Command(nvmupdate64e, "-i")
-	cmd.SysProcAttr = rootAttr
-	cmd.Dir = fwPath
-	err := nvmupdateExec(cmd, log)
+
+	log.V(2).Info("Splitting PCI addr and converting to decimal", "pciAddr", pciAddr)
+	domain, bus, _, _, err := splitPCIAddr(pciAddr, log)
 	if err != nil {
+		log.V(2).Info("Error spitting PCI Addr", "error", err)
 		return err
 	}
 
-	mac, err := getDeviceMAC(pciAddr, log)
+	bus_dec, err := strconv.ParseInt(bus, 16, 32)
 	if err != nil {
 		log.Error(err, "Failed to get MAC for", "device", pciAddr)
+		log.V(2).Info("Error converting bus PCI to decimal", "error", err)
 		return err
 	}
+	domain_dec, err := strconv.ParseInt(domain, 16, 32)
+	if err != nil {
+		log.V(2).Info("Error converting PCI domain to decimal", "error", err)
+		return err
+	}
+	log.V(2).Info("PCI Addr splitted and converted successfully", "domain",
+		domain_dec, "bus", bus_dec)
 
-	log.V(2).Info("Updating", "MAC", mac)
-	cmd = exec.Command(nvmupdate64e, "-u", "-m", mac, "-c", nvmupdate64eCfgPath(fwPath), "-o", updateResultPath(fwPath), "-l")
+	configPath := nvmupdate64eCfgPath(fwPath)
+	resultPath := updateResultPath(fwPath)
+	pciLocation := fmt.Sprintf("%02d:%03d", domain_dec, bus_dec)
 
+	log.V(2).Info("Starting Firmware Update", "pciLocation", pciLocation,
+		"configPath", configPath, "resultPath", resultPath)
+
+	cmd := exec.Command(nvmupdate64e, "-u", "-location", pciLocation, "-c",
+		configPath, "-o", resultPath, "-l")
 	cmd.SysProcAttr = rootAttr
 	cmd.Dir = fwPath
 	err = nvmupdateExec(cmd, log)
 	if err != nil {
-		return err
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			code := exitErr.ExitCode()
+			if code != 3 && code != 30 {
+				return exitErr
+			}
+		} else {
+			return err
+		}
+		log.V(2).Info("Known issue NUL_INVENTORY_ERROR found but ignoring", "error", err)
 	}
 
 	return nil

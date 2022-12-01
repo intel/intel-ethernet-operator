@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0
-// Copyright (c) 2021 Intel Corporation
+// Copyright (c) 2020-2022 Intel Corporation
 
 package fwddp_manager
 
 import (
 	"context"
-	"github.com/otcshare/intel-ethernet-operator/pkg/utils"
 	"os"
+
+	"github.com/otcshare/intel-ethernet-operator/pkg/utils"
 
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"

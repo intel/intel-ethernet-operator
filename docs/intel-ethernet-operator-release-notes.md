@@ -1,6 +1,6 @@
 ```text
 SPDX-License-Identifier: Apache-2.0
-Copyright (c) 2021 Intel Corporation
+Copyright (c) 2020-2022 Intel Corporation
 ```
 
 <!-- omit in toc -->
@@ -20,13 +20,20 @@ This document provides high-level system features, issues, and limitations infor
 
 # Release history
 
-| Version   | Release Date   | Cluster Compatibility        | Verified on OCP         |
-| --------- | ---------------| ---------------------------- | ------------------------|
-| 0.0.1     | January 2022   | OCP 4.9                      | 4.9.7                   |
-| 0.0.2     | April 2022     | BMRA 22.01(K8S v1.22.3)      | BMRA 22.01 (K8S v1.22.3)|
-|           |                | OCP 4.10                     | 4.10.3
+| Version   | Release Date   | Cluster Compatibility        | Verified on OCP          |
+| --------- | ---------------| ---------------------------- | -------------------------|
+| 0.0.1     | January 2022   | OCP 4.9                      | 4.9.7                    |
+| 0.0.2     | April 2022     | BMRA 22.01(K8S v1.22.3)      | BMRA 22.01 (K8S v1.22.3) |
+|           |                | OCP 4.10                     | 4.10.3                   |
+| 0.1.0     | December 2022  | OCP 4.9, 4.10, 4.11          | 4.9.51, 4.10.34,  4.11.13|
+|           |                |       |
+
 
 # Features for Release
+
+***v0.1.0 (certified on OCP)***
+- FW update supported on in-tree driver
+- DDP profile update and traffic flow configuration are not supported when using in-tree
 
 ***v0.0.2***
 
@@ -40,6 +47,9 @@ This document provides high-level system features, issues, and limitations infor
   - The operator handles the traffic flow configuration of Intel® Ethernet Network Adapter E810 Series.
 
 # Changes to Existing Features
+
+***v0.1.0***
+- FW update is now possible on in-tree driver
 
 ***v0.0.2***
 
@@ -65,7 +75,9 @@ This document provides high-level system features, issues, and limitations infor
 
 # Known Issues and Limitations
 
-- The installation of the Out Of Tree [ICE driver](https://www.intel.com/content/www/us/en/download/19630/29746/) is necessary for correct functionality of the operator. The provision/installation of this driver is out of scope for this operator, the user is required to provide/install the [OOT ICE driver](https://www.intel.com/content/www/us/en/download/19630/29746/intel-network-adapter-driver-for-e810-series-devices-under-linux.html) on the desired platforms. **BMRA distribution comes with required version of ICE driver and no additional steps are required.**
+- The certified version 0.1.0 only functionality is fw update, DDP and traffic flow configuration is not possible on in-tree driver
+ 
+- The installation of the Out Of Tree [ICE driver](https://www.intel.com/content/www/us/en/download/19630/29746/) is necessary for full functionality of the operator. The provision/installation of this driver is out of scope for this operator, the user is required to provide/install the [OOT ICE driver](https://www.intel.com/content/www/us/en/download/19630/29746/intel-network-adapter-driver-for-e810-series-devices-under-linux.html) on the desired platforms. **BMRA distribution comes with required version of ICE driver and no additional steps are required.**
  
 - The creation of trusted VFs to be used by the Flow Configuration controller of the operator and the creation of VFs to be used by the applications is out of scope for this operator. The user is required to create necessary VFs.
 
@@ -83,6 +95,12 @@ This document provides high-level system features, issues, and limitations infor
 - OpenShift Container Platform
 
 # Supported Operating Systems
+
+***v0.1.0*** was tested using the following:
+  - OpenShift
+    - 4.9.51
+    - 4.10.34
+    - 4.11.13
 
 ***v0.0.2*** was tested using the following:
 

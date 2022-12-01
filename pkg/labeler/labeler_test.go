@@ -1,15 +1,16 @@
 // SPDX-License-Identifier: Apache-2.0
-// Copyright (c) 2021 Intel Corporation
+// Copyright (c) 2020-2022 Intel Corporation
 
 package labeler
 
 import (
 	"context"
 	"fmt"
-	"k8s.io/client-go/kubernetes/scheme"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"k8s.io/client-go/kubernetes/scheme"
 
 	"github.com/jaypipes/ghw"
 	"github.com/jaypipes/pcidb"

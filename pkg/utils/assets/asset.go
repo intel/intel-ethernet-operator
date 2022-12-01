@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// Copyright (c) 2021 Intel Corporation
+// Copyright (c) 2020-2022 Intel Corporation
 
 package assets
 
@@ -7,8 +7,6 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"github.com/go-logr/logr"
-	"github.com/otcshare/intel-ethernet-operator/pkg/utils"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -16,6 +14,9 @@ import (
 	"strings"
 	"text/template"
 	"time"
+
+	"github.com/go-logr/logr"
+	"github.com/otcshare/intel-ethernet-operator/pkg/utils"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"

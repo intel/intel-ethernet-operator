@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
-// Copyright (c) 2021 Intel Corporation
+// Copyright (c) 2020-2022 Intel Corporation
 
 // Package v1 contains API Schema definitions for the flowconfig v1 API group
-//+kubebuilder:object:generate=true
-//+groupName=flowconfig.intel.com
+// +kubebuilder:object:generate=true
+// +groupName=flowconfig.intel.com
 package v1
 
 import (

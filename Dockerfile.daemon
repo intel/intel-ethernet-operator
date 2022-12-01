@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
-# Copyright (c) 2020-2021 Intel Corporation
+# Copyright (c) 2020-2022 Intel Corporation
 
-FROM golang:alpine3.13 as builder
+FROM docker.io/golang:alpine3.16 as builder
 
 WORKDIR /workspace
 
@@ -16,9 +16,17 @@ COPY apis apis/
 # Build
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GO111MODULE=on go build -a -o fwddp_daemon cmd/fwddp-daemon/main.go
 
-FROM registry.access.redhat.com/ubi8:8.5-214
+FROM registry.access.redhat.com/ubi9/ubi:9.1.0-1646.1669023907 as package_installer
 
-RUN yum install -y ethtool iproute kmod pciutils && yum clean all
+RUN dnf install -y ethtool iproute kmod pciutils gcc make
+
+# Manually compile latest version of zlib
+RUN curl -L -o zlib-1.2.13.tar.gz https://github.com/madler/zlib/releases/download/v1.2.13/zlib-1.2.13.tar.gz && \ 
+    tar xzvf zlib-1.2.13.tar.gz
+WORKDIR /zlib-1.2.13
+RUN ./configure && make test && make install
+
+FROM registry.access.redhat.com/ubi9/ubi-micro:9.1.0-6
 
 ARG VERSION
 ### Required OpenShift Labels
@@ -31,5 +39,23 @@ LABEL name="Intel Ethernet Operator - daemonset" \
 
 WORKDIR /
 COPY --from=builder /workspace/fwddp_daemon .
+
+COPY --from=package_installer /lib64/libm.so.6 /lib64/libmnl.so.0 /lib64/libc.so.6 /lib64/ld-linux-x86-64.so.2 \ 
+    /lib64/libzstd.so.1 /lib64/liblzma.so.5 /lib64/libcrypto.so.3 /lib64/libgcc_s.so.1 \
+    /lib64/libpci.so.3 /lib64/libkmod.so.2 /lib64/libbpf.so.0 \
+    /lib64/libmnl.so.0 /lib64/libtinfo.so.6 /lib64
+COPY --from=package_installer /usr/local/lib/libz.so.1.2.13 /lib64/libz.so.1
+COPY --from=package_installer /usr/sbin/ethtool /usr/sbin/lspci \
+    /usr/sbin/setpci /usr/sbin/update-pciids /usr/sbin/ip /usr/sbin
+COPY --from=package_installer /usr/bin/kmod /usr/bin/
+
+RUN mkdir /usr/share/hwdata
+COPY --from=package_installer /usr/share/hwdata /usr/share/hwdata
+
+USER root
+RUN mkdir /licenses
+COPY LICENSE /licenses/LICENSE.txt
+RUN chown 1001 /licenses
+USER 1001
 
 ENTRYPOINT ["/fwddp_daemon"]

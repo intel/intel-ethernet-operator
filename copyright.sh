@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # SPDX-License-Identifier: Apache-2.0
-# Copyright (c) 2020-2021 Intel Corporation
+# Copyright (c) 2020-2022 Intel Corporation
 
 FOLDER=${FOLDER:-.}
 COPYRIGHT_FILE=${COPYRIGHT_FILE:-COPYRIGHT}

@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
-# Copyright (c) 2021 Intel Corporation
+# Copyright (c) 2020-2022 Intel Corporation
 
-FROM golang:alpine3.13 as builder
+FROM docker.io/golang:alpine3.16 as builder
 
 WORKDIR /workspace
 COPY go.mod go.sum ./
@@ -11,9 +11,12 @@ COPY cmd cmd/
 COPY pkg pkg/
 COPY apis apis/
 
+RUN apk update && apk add curl
+RUN curl https://pci-ids.ucw.cz/v2.2/pci.ids.gz -o pci.ids.gz && gunzip pci.ids.gz
+
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GO111MODULE=on go build -a -o node_labeler cmd/labeler/main.go
 
-FROM registry.access.redhat.com/ubi8:8.5-214
+FROM registry.access.redhat.com/ubi9/ubi-micro:9.1.0-6
 
 ARG VERSION
 ### Required OpenShift Labels
@@ -26,13 +29,16 @@ devices as set in the config file (typically Intel Ethernet E810)" \
     description="The container detects the relevant PCI devices, labels the nodes that contain them \
 and removes the label for the nodes that do not."
 
-WORKDIR /usr/share/misc/
-
-RUN curl https://pci-ids.ucw.cz/v2.2/pci.ids.gz -o pci.ids.gz && \
-    gunzip pci.ids.gz
+COPY --from=builder /workspace/pci.ids /usr/share/misc/pci.ids
 
 USER 1001
 WORKDIR /labeler-workspace
 COPY --from=builder /workspace/node_labeler .
+
+USER root
+RUN mkdir /licenses
+COPY LICENSE /licenses/LICENSE.txt
+RUN chown 1001 /licenses
+USER 1001
 
 ENTRYPOINT ["bash", "-c", "/labeler-workspace/node_labeler && sleep infinity"]

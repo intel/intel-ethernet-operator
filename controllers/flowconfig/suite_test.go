@@ -1,17 +1,18 @@
 // SPDX-License-Identifier: Apache-2.0
-// Copyright (c) 2021 Intel Corporation
+// Copyright (c) 2020-2022 Intel Corporation
 
 package flowconfig
 
 import (
 	"fmt"
-	configv1 "github.com/openshift/api/config/v1"
 	"math/rand"
 	"os"
 	"path/filepath"
 	"sync"
 	"testing"
 	"time"
+
+	configv1 "github.com/openshift/api/config/v1"
 
 	"github.com/onsi/gomega/types"
 	"k8s.io/apimachinery/pkg/api/resource"
