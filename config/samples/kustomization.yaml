@@ -7,4 +7,5 @@ resources:
 - ethernet_v1_ethernetnodeconfig.yaml
 - flowconfig_v1_nodeflowconfig.yaml
 - flowconfig_v1_flowconfignodeagentdeployment.yaml
+- flowconfig_v1_clusterflowconfig.yaml
 #+kubebuilder:scaffold:manifestskustomizesamples

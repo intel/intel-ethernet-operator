@@ -5,9 +5,11 @@ package daemon
 
 import (
 	"context"
-
+	"crypto/x509"
+	"io/ioutil"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/retry"
+	"net/http"
 
 	"os"
 	"syscall"
@@ -114,27 +116,36 @@ func (r ResourceNamePredicate) Create(e event.CreateEvent) bool {
 	return true
 }
 
-//returns result indicating necessity of re-queuing Reconcile after configured resyncPeriod
+// returns result indicating necessity of re-queuing Reconcile after configured resyncPeriod
 func requeueLater() (reconcile.Result, error) {
 	return reconcile.Result{RequeueAfter: requeueAfter}, nil
 }
 
-//returns result indicating necessity of re-queuing Reconcile(...) immediately; non-nil err will be logged by controller
+// returns result indicating necessity of re-queuing Reconcile(...) immediately; non-nil err will be logged by controller
 func requeueNowWithError(e error) (reconcile.Result, error) {
 	return reconcile.Result{Requeue: true}, e
 }
 
-//returns result indicating that there is no need to Reconcile because everything is configured as expected
+// returns result indicating that there is no need to Reconcile because everything is configured as expected
 func doNotRequeue() (reconcile.Result, error) {
 	return reconcile.Result{}, nil
 }
 
-func NewNodeConfigReconciler(c client.Client, clientSet *clientset.Clientset, log logr.Logger,
-	nodeName, ns string) (*NodeConfigReconciler, error) {
-
+func NewNodeConfigReconciler(c client.Client, clientSet *clientset.Clientset, log logr.Logger, nodeName, ns string) (*NodeConfigReconciler, error) {
 	err := LoadConfig()
 	if err != nil {
 		return nil, err
+	}
+
+	cert := getTlsCert(log)
+
+	httpClient := http.DefaultClient
+	if cert != nil {
+		log.Info("found certificate - using HTTPS client")
+		httpClient, err = utils.NewSecureHttpsClient(cert)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return &NodeConfigReconciler{
@@ -146,12 +157,29 @@ func NewNodeConfigReconciler(c client.Client, clientSet *clientset.Clientset, lo
 			Name:      nodeName,
 		},
 		ddpUpdater: &ddpUpdater{
-			log: log,
+			log:        log,
+			httpClient: httpClient,
 		},
 		fwUpdater: &fwUpdater{
-			log: log,
+			log:        log,
+			httpClient: httpClient,
 		},
 	}, nil
+}
+
+func getTlsCert(log logr.Logger) *x509.Certificate {
+	derBytes, err := ioutil.ReadFile("/etc/certificate/tls.crt")
+	if err != nil {
+		log.Error(err, "failed to read mounted certificate")
+		return nil
+	}
+
+	cert, err := x509.ParseCertificate(derBytes)
+	if err != nil {
+		log.Error(err, "failed to parse certificate")
+		return nil
+	}
+	return cert
 }
 
 func (r *NodeConfigReconciler) SetupWithManager(mgr ctrl.Manager) error {
@@ -217,10 +245,10 @@ func (r *NodeConfigReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	nodeConfig := &ethernetv1.EthernetNodeConfig{}
 
 	syscall.Umask(0077)
-	if err := r.Client.Get(ctx, req.NamespacedName, nodeConfig); err != nil {
+	if err := r.Get(ctx, req.NamespacedName, nodeConfig); err != nil {
 		if k8serrors.IsNotFound(err) {
 			log.V(4).Info("not found - creating")
-			return requeueNowWithError(r.CreateEmptyNodeConfigIfNeeded(r.Client))
+			return requeueNowWithError(r.CreateEmptyNodeConfigIfNeeded(r))
 		}
 		log.Error(err, "Get() failed")
 		return requeueNowWithError(err)
@@ -241,7 +269,7 @@ func (r *NodeConfigReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		return doNotRequeue()
 	}
 
-	if len(nodeConfig.Spec.Config) == 0 {
+	if len(nodeConfig.Spec.Config) == 0 || r.allDeviceConfigsEmpty(nodeConfig.Spec.Config) {
 		log.V(4).Info("Nothing to do")
 		r.updateCondition(nodeConfig, metav1.ConditionTrue, UpdateNotRequested, "Inventory up to date")
 		return doNotRequeue()
@@ -403,4 +431,13 @@ func (r *NodeConfigReconciler) rebootNode() error {
 	_, err := execCmd([]string{"chroot", "--userspec", "0", "/host",
 		"sh", "-c", "systemctl stop kubelet.service; systemctl reboot"}, log)
 	return err
+}
+
+func (r *NodeConfigReconciler) allDeviceConfigsEmpty(deviceNodeConfigs []ethernetv1.DeviceNodeConfig) bool {
+	for _, config := range deviceNodeConfigs {
+		if config.DeviceConfig != (ethernetv1.DeviceConfig{}) {
+			return false
+		}
+	}
+	return true
 }

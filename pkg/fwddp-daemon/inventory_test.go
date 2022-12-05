@@ -9,7 +9,7 @@ import (
 	"github.com/jaypipes/ghw"
 	"github.com/jaypipes/ghw/pkg/net"
 	"github.com/jaypipes/pcidb"
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/otcshare/intel-ethernet-operator/pkg/utils"
 	ctrl "sigs.k8s.io/controller-runtime"

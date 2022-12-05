@@ -37,6 +37,7 @@ type FlowConfigNodeAgentDeploymentReconciler struct {
 	client.Client
 	Log    logr.Logger
 	Scheme *runtime.Scheme
+	Owner  client.Object
 
 	oldDCFVfPoolName  corev1.ResourceName
 	oldNADAnnotation  string
@@ -48,11 +49,12 @@ const (
 	networkAnnotation = "k8s.v1.cni.cncf.io/networks"
 	nodeLabel         = "kubernetes.io/hostname"
 	uftContainerName  = "uft"
-	podTemplateFile   = "../../assets/flowconfig-daemon/daemon.yaml"
 	ocpDdpUpdatePath  = "/var/lib/firmware/intel/ice/ddp/"
 	k8sDdpUpdatePath  = "/lib/firmware/updates/intel/ice/ddp"
 	podVolumeName     = "iceddp"
 )
+
+var podTemplateFile string = "assets/flowconfig-daemon/daemon.yaml"
 
 //+kubebuilder:rbac:groups=flowconfig.intel.com,resources=flowconfignodeagentdeployments,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=flowconfig.intel.com,resources=flowconfignodeagentdeployments/status,verbs=get;update;patch
@@ -63,14 +65,22 @@ const (
 func (r *FlowConfigNodeAgentDeploymentReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	reqLogger := r.Log.WithValues("Reconcile", req.NamespacedName)
 	reqLogger.Info("Reconciling FlowConfigNodeAgentDeployment")
-
 	instance := &flowconfigv1.FlowConfigNodeAgentDeployment{}
 	err := r.Client.Get(context.Background(), req.NamespacedName, instance)
 
 	if err != nil {
+		if errors.IsNotFound(err) {
+			// Request object not found, could have been deleted after reconcile request.
+			// Owned objects are automatically garbage collected.
+			// Return and don't requeue
+			reqLogger.Info("FlowConfigNodeAgentDeployment instance not found. Ignoring since object must be deleted")
+			return ctrl.Result{}, nil
+		}
 		reqLogger.Info("failed to get FlowConfigNodeAgentDeployment instance, will try to get one after 30 seconds")
 		return ctrl.Result{RequeueAfter: 30 * time.Second}, err
 	}
+	// Set instance owner to controller-manager so that instance gets garbage collected when controller-manager is removed.
+	r.setInstanceOwner(instance)
 
 	if instance.Spec.NADAnnotation == "" {
 		reqLogger.Info("NADAnnotation is not defined, will try to get one after 30 seconds")
@@ -83,7 +93,7 @@ func (r *FlowConfigNodeAgentDeploymentReconciler) Reconcile(ctx context.Context,
 	err = r.List(context.Background(), nodes)
 
 	if err != nil {
-		reqLogger.Info("failed to get nodes %v", err)
+		reqLogger.Error(err, "failed to get nodes")
 		return ctrl.Result{}, err
 	}
 
@@ -101,10 +111,10 @@ func (r *FlowConfigNodeAgentDeploymentReconciler) Reconcile(ctx context.Context,
 			if errors.IsNotFound(err) {
 				err = r.CreatePod(r.flowConfigPod, instance, node, vfPoolName, r.uftContainerIndex)
 				if err != nil {
-					reqLogger.Info("Failed to create POD on node with error", node.Name, err)
+					reqLogger.Info("Failed to create POD", "node", node.Name, "error", err.Error())
 				}
 			} else {
-				reqLogger.Info("Error getting pod instance on node %s with error %v", node.Name, err)
+				reqLogger.Info("Error getting pod instance", "node", node.Name, "error", err.Error())
 			}
 		} else {
 			var deletePod bool
@@ -126,7 +136,7 @@ func (r *FlowConfigNodeAgentDeploymentReconciler) Reconcile(ctx context.Context,
 				// delete POD, and let the next reconciliation iteration do the creation job
 				err = r.Client.Delete(context.TODO(), pod)
 				if err != nil {
-					reqLogger.Info("Failed to delete POD %s with error %v", pod.Name, err)
+					reqLogger.Info("Failed to delete POD", "name", pod.Name, "error", err.Error())
 				}
 				wasPodDeleted = true
 			}
@@ -183,12 +193,14 @@ func (r *FlowConfigNodeAgentDeploymentReconciler) CreatePod(templatePod *corev1.
 	uftContainer = r.addResources(uftContainer, vfPoolName, numResources)
 	pod.Spec.Containers[uftContainerIndex] = uftContainer
 
-	if err := controllerutil.SetControllerReference(instance, pod, r.Scheme); err != nil {
+	err := r.setControllerRef(instance, pod)
+
+	if err != nil {
 		podLogger.Info("Failed to set controller reference")
 		return err
 	}
 
-	err := r.Client.Create(context.TODO(), pod)
+	err = r.Client.Create(context.TODO(), pod)
 	if err != nil {
 		podLogger.Info("Failed to create pod")
 		return err
@@ -241,19 +253,24 @@ func (r *FlowConfigNodeAgentDeploymentReconciler) getPodResources(pod *corev1.Po
 
 func (r *FlowConfigNodeAgentDeploymentReconciler) getNodeResources(node *corev1.Node, vfPoolName string) int64 {
 	resLogger := r.Log.WithName("getNodeResources")
-	quantity, ok := node.Status.Capacity[corev1.ResourceName(vfPoolName)]
+	resource := corev1.ResourceName(vfPoolName)
 
-	if !ok {
-		resLogger.Info("Error getting number of resources on node")
+	if resource.String() != "" {
+		quantity, ok := node.Status.Capacity[resource]
+
+		if !ok {
+			resLogger.Info("Error getting number of resources on node")
+		}
+
+		numResources, ok := quantity.AsInt64()
+
+		if !ok {
+			resLogger.Info("Error parsing quantity to int64")
+		}
+
+		return numResources
 	}
-
-	numResources, ok := quantity.AsInt64()
-
-	if !ok {
-		resLogger.Info("Error parsing quantity to int64")
-	}
-
-	return numResources
+	return 0
 }
 
 func (r *FlowConfigNodeAgentDeploymentReconciler) mapNodesToRequests(object client.Object) []reconcile.Request {
@@ -263,7 +280,7 @@ func (r *FlowConfigNodeAgentDeploymentReconciler) mapNodesToRequests(object clie
 	crList := &flowconfigv1.FlowConfigNodeAgentDeploymentList{}
 	err := r.Client.List(context.Background(), crList)
 	if err != nil {
-		resLogger.Info("unable to list custom resources", err)
+		resLogger.Info("unable to list custom resources", "error", err.Error())
 		return []reconcile.Request{}
 	}
 
@@ -284,7 +301,15 @@ func (r *FlowConfigNodeAgentDeploymentReconciler) getNodeFilterPredicates() pred
 	pred := predicate.Funcs{
 		// Create returns true if the Create event should be processed
 		CreateFunc: func(e event.CreateEvent) bool {
-			return true
+			if _, ok := e.Object.(*flowconfigv1.FlowConfigNodeAgentDeployment); ok {
+				return true
+			}
+
+			if _, ok := e.Object.(*corev1.Node); ok {
+				return true
+			}
+
+			return false
 		},
 
 		// Delete returns true if the Delete event should be processed
@@ -305,15 +330,21 @@ func (r *FlowConfigNodeAgentDeploymentReconciler) getNodeFilterPredicates() pred
 						return true
 					}
 				}
-
-				return false
 			}
 
-			return true
+			// When the FlowConfigNodeAgentDeployment CR gets updated
+			if _, ok := e.ObjectNew.(*flowconfigv1.FlowConfigNodeAgentDeployment); ok {
+				if _, ok := e.ObjectOld.(*flowconfigv1.FlowConfigNodeAgentDeployment); ok {
+					return true
+				}
+			}
+
+			return false
 		},
 
 		// Generic returns true if the Generic event should be processed
 		GenericFunc: func(e event.GenericEvent) bool {
+
 			return true
 		},
 	}
@@ -321,8 +352,34 @@ func (r *FlowConfigNodeAgentDeploymentReconciler) getNodeFilterPredicates() pred
 	return pred
 }
 
+func (r *FlowConfigNodeAgentDeploymentReconciler) setControllerRef(owner, owned client.Object) error {
+	if r.Owner != nil {
+		if err := controllerutil.SetControllerReference(owner, owned, r.Scheme); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// setInstanceOwner sets instance controller-manager deployment as the owner for garbage collection
+func (r *FlowConfigNodeAgentDeploymentReconciler) setInstanceOwner(instance client.Object) {
+	if instance.GetOwnerReferences() == nil {
+		if err := r.setControllerRef(r.Owner, instance); err != nil {
+			r.Log.Info("error setting instance owner to controller-manager deployment", "error", err.Error())
+			return
+		}
+		if err := r.Update(context.Background(), instance); err != nil {
+			r.Log.Info("error updating instance with ownerReference", "error", err.Error())
+		}
+
+	}
+}
+
 func (r *FlowConfigNodeAgentDeploymentReconciler) getPodTemplate() (*corev1.Pod, error) {
-	filename, _ := filepath.Abs(podTemplateFile)
+	filename, err := filepath.Abs(podTemplateFile)
+	if err != nil {
+		return nil, fmt.Errorf("error getting filepath %v", err)
+	}
 	spec, err := ioutil.ReadFile(filename)
 	if err != nil {
 		return nil, fmt.Errorf("error reading %s file: %v", podTemplateFile, err)

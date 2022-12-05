@@ -3,10 +3,62 @@ SPDX-License-Identifier: Apache-2.0
 Copyright (c) 2020-2021 Intel Corporation
 ```
 
-# Creating NodeFlowConfig Spec
-To apply flow rules, a resource of type NodeFlowConfig needs to be created. At the moment the Unified Flow Operator gives only partial support of the Generic flow API. All the supported options are described below.
+There are two API available for use configuration of flow rules: ClusterFlowConfig and NodeFlowConfig.
 
-NOTE: Most of the objects parameters names are consistent with the names given in the [official dpdk rte flow documentation](https://doc.dpdk.org/guides/prog_guide/rte_flow.html). 
+ClusterFlowConfig supports cluster wide configuration of flow rules using a single CRD(see Example ClusterFlowConfig section below).
+NodeFlowConfig supports node specific configuration of flow rules using a CRD per node that the user would like to configure flow rules on(see example NodeFlowConfig section below).
+
+# Creating ClusterFlowConfig Spec
+To apply flow rules, a resource of type ClusterFlowConfig needs to be created. At the moment the Intel Ethernet Operator gives only partial support of the Generic flow API. All the supported options are described below.
+
+NOTE: Most of the objects parameters names are consistent with the names given in the [official dpdk rte flow documentation](https://doc.dpdk.org/guides/prog_guide/rte_flow.html).
+
+For the full description of Generic flow API see https://doc.dpdk.org/guides/prog_guide/rte_flow.html.
+
+## Example ClusterFlowConfig
+A correct ClusterFlowConfig should be similar to this:
+
+```yaml
+apiVersion: flowconfig.intel.com/v1
+kind: ClusterFlowConfig
+metadata:
+  name: pppoes-sample
+  namespace: intel-ethernet-operator
+spec:
+  rules:
+    - pattern:
+        - type: RTE_FLOW_ITEM_TYPE_ETH
+        - type: RTE_FLOW_ITEM_TYPE_IPV4
+          spec:
+            hdr:
+             src_addr: 10.56.217.9
+          mask:
+            hdr:
+             src_addr: 255.255.255.255
+        - type: RTE_FLOW_ITEM_TYPE_END
+      action:
+        - type: to-pod-interface
+          conf:
+            podInterface: net1
+      attr:
+        ingress: 1
+        priority: 0
+  podSelector:
+      matchLabels:
+        app: vagf
+        role: controlplane
+
+```
+
+NOTE: Make sure to use the correct names of the types and their parameters.
+
+NOTE: podSelector should be set to target pods. Flow rules will then be configured on nodes that meet the podSelector criteria.
+
+# Creating NodeFlowConfig Spec
+If ClusterFlowConfig does not satisfy your use case, you can use NodeFlowConfig.
+To apply flow rules, a resource of type NodeFlowConfig needs to be created. At the moment the Intel Ethernet Operator gives only partial support of the Generic flow API. All the supported options are described below.
+
+NOTE: Most of the objects parameters names are consistent with the names given in the [official dpdk rte flow documentation](https://doc.dpdk.org/guides/prog_guide/rte_flow.html).
 
 For the full description of Generic flow API see https://doc.dpdk.org/guides/prog_guide/rte_flow.html.
 
@@ -59,7 +111,7 @@ An Item can contain up to three structures of the same type:
 - mask
 
 #### Supported Item Types
-At the moment Unified Flow Operator supports item types listed below.
+At the moment Intel Ethernet Operator supports item types listed below.
 
 |   Item                                |   Description                         |
 |---------------------------------------|---------------------------------------|
@@ -184,7 +236,7 @@ An example of PPPOE PROTO ID Pattern Item:
 ```
 NOTE: A recent [Ice COMMS DDP package](https://downloadcenter.intel.com/download/29889/Intel-Ethernet-800-Series-Telecommunication-Comms-Dynamic-Device-Personalization-DDP-Package) needs to be loaded in order to create items of type PPPOE PROTO ID.
 ### Actions
-Actions can alter the fate of matching traffic, its contents or properties. A list of actions can be assigned to a flow rule. These actions are performed in a given order and can require additional configuration. 
+Actions can alter the fate of matching traffic, its contents or properties. A list of actions can be assigned to a flow rule. These actions are performed in a given order and can require additional configuration.
 
 #### Supported Action Types
 

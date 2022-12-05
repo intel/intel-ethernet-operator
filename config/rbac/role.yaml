@@ -1,6 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-# Copyright (c) 2021 Intel Corporation
-
+# Copyright (c) 2021-2022 Intel Corporation
 
 ---
 apiVersion: rbac.authorization.k8s.io/v1
@@ -75,6 +74,32 @@ rules:
   resources:
   - ethernetclusterconfigs/status
   - ethernetnodeconfigs/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - flowconfig.intel.com
+  resources:
+  - clusterflowconfigs
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - flowconfig.intel.com
+  resources:
+  - clusterflowconfigs/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - flowconfig.intel.com
+  resources:
+  - clusterflowconfigs/status
   verbs:
   - get
   - patch

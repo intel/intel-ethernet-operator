@@ -7,8 +7,9 @@ import (
 	"context"
 	"time"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+
 	ethernetv1 "github.com/otcshare/intel-ethernet-operator/apis/ethernet/v1"
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -487,7 +488,7 @@ var _ = Describe("EthernetControllerTest", func() {
 				cc := clusterConfigPrototype.DeepCopy()
 				cc.Name = "foobar"
 
-				// Valid Pattern=`^[a-fA-F0-9]{32}$`
+				// Valid Pattern=`^[a-fA-F0-9]{40}$`
 				cc.Spec.DeviceConfig = ethernetv1.DeviceConfig{
 					FWChecksum: "1234567890123456789012345678901",
 				}
@@ -531,7 +532,7 @@ var _ = Describe("EthernetControllerTest", func() {
 				cc := clusterConfigPrototype.DeepCopy()
 				cc.Name = "foobar"
 
-				// Valid Pattern=`^[a-fA-F0-9]{32}$`
+				// Valid Pattern=`^[a-fA-F0-9]{40}$`
 				cc.Spec.DeviceConfig = ethernetv1.DeviceConfig{
 					DDPChecksum: "1234567890123456789012345678901",
 				}

@@ -126,6 +126,9 @@ data:
                 - --zap-log-level=4
               imagePullPolicy: IfNotPresent
               volumeMounts:
+                - name: tlscert
+                  mountPath: "/etc/certificate"
+                  readOnly: true
                 - name: run
                   mountPath: /host/run
                 - name: run-volume
@@ -191,6 +194,10 @@ data:
                 privileged: true
                 runAsUser: 0
           volumes:
+            - name: tlscert
+              secret:
+                secretName: tls-cert
+                optional: true
             - name: run
               hostPath:
                 path: /run

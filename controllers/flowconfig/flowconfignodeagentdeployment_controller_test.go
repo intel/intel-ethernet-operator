@@ -20,15 +20,17 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	flowconfigv1 "github.com/otcshare/intel-ethernet-operator/apis/flowconfig/v1"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
 
-//WaitForPodCreation will wait for POD creation
-//In the artificial env POD will never be in running state, due to missing container image
+// WaitForPodCreation will wait for POD creation
+// In the artificial env POD will never be in running state, due to missing container image
 func WaitForPodCreation(core client.Client, podName, ns string, timeout, interval time.Duration) error {
 	return wait.PollImmediate(interval, timeout, func() (done bool, err error) {
 		ctx, cancel := context.WithTimeout(context.Background(), timeout)
@@ -55,12 +57,6 @@ func WaitForPodCreation(core client.Client, podName, ns string, timeout, interva
 
 var _ = Describe("FlowConfigNodeAgentDeployment controller", func() {
 	var (
-		nodePrototype = &corev1.Node{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: "node-dummy",
-			},
-		}
-
 		namespacePrototype = &corev1.Namespace{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "namespace-dummy",
@@ -77,26 +73,8 @@ var _ = Describe("FlowConfigNodeAgentDeployment controller", func() {
 		clusterTypeEnvKey = "ETHERNET_GENERIC_K8S"
 
 		timeout  = 4 * time.Second
-		interval = 1000 * time.Millisecond
+		interval = 250 * time.Millisecond
 	)
-
-	createNode := func(name string, configurers ...func(n *corev1.Node)) *corev1.Node {
-		node := nodePrototype.DeepCopy()
-		node.Name = name
-		for _, configure := range configurers {
-			configure(node)
-		}
-
-		Expect(k8sClient.Create(context.TODO(), node)).ToNot(HaveOccurred())
-
-		return node
-	}
-
-	deleteNode := func(node *corev1.Node) {
-		err := k8sClient.Delete(context.Background(), node)
-
-		Expect(err).Should(BeNil())
-	}
 
 	createNamespace := func(name string) *corev1.Namespace {
 		namespace := namespacePrototype.DeepCopy()
@@ -105,44 +83,6 @@ var _ = Describe("FlowConfigNodeAgentDeployment controller", func() {
 		Expect(k8sClient.Create(context.TODO(), namespace)).ToNot(HaveOccurred())
 
 		return namespace
-	}
-
-	createPod := func(name, ns string, configurers ...func(pod *corev1.Pod)) *corev1.Pod {
-		var graceTime int64 = 0
-		pod := &corev1.Pod{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      name,
-				Namespace: ns,
-			},
-			Spec: corev1.PodSpec{
-				TerminationGracePeriodSeconds: &graceTime,
-				Containers: []corev1.Container{
-					{
-						Name:    "uft",
-						Image:   "docker.io/alpine",
-						Command: []string{"/bin/sh", "-c", "sleep INF"},
-					},
-				},
-			},
-		}
-
-		for _, configure := range configurers {
-			configure(pod)
-		}
-
-		return pod
-	}
-
-	deletePod := func(name, ns string) {
-		pod := &corev1.Pod{
-			ObjectMeta: metav1.ObjectMeta{
-				Namespace: ns,
-				Name:      name,
-			},
-		}
-
-		err := k8sClient.Delete(context.Background(), pod)
-		Expect(err).Should(BeNil())
 	}
 
 	getFlowConfigNodeAgentDeployment := func(namespace string, configurers ...func(flow *flowconfigv1.FlowConfigNodeAgentDeployment)) *flowconfigv1.FlowConfigNodeAgentDeployment {
@@ -242,9 +182,10 @@ var _ = Describe("FlowConfigNodeAgentDeployment controller", func() {
 			}, timeout, interval).Should(BeTrue())
 			defer deleteFlowConfigNodeAgentDeployment(namespaceDefault)
 
-			// wait for POD, expected not to be created, due to missing resources on node
-			err := WaitForPodCreation(k8sClient, fmt.Sprintf("flowconfig-daemon-%s", nodeName1), namespaceDefault, timeout, interval)
-			Expect(err).ToNot(BeNil())
+			obj := &flowconfigv1.FlowConfigNodeAgentDeployment{}
+			Eventually(func() string {
+				return GetObject(k8sClient, fmt.Sprintf("flowconfig-daemon-%s", nodeName1), namespaceDefault, 1*time.Second, obj).Error()
+			}, timeout, interval).Should(ContainSubstring(fmt.Sprintf("\"%s\" not found", fmt.Sprintf("flowconfig-daemon-%s", nodeName1))))
 		})
 	})
 
@@ -395,31 +336,47 @@ var _ = Describe("FlowConfigNodeAgentDeployment controller", func() {
 				})
 				defer deleteNode(node)
 
-				Eventually(func() bool {
-					err := k8sClient.Create(context.Background(), getFlowConfigNodeAgentDeployment(namespaceDefault, func(flow *flowconfigv1.FlowConfigNodeAgentDeployment) {
-						flow.Spec.DCFVfPoolName = vfPoolName
-						flow.Spec.NADAnnotation = "flowconfig-daemon-sriov-cvl0-admin"
-					}))
-					return err == nil
-				}, timeout, interval).Should(BeTrue())
+				flowconfig := getFlowConfigNodeAgentDeployment(namespaceDefault, func(flow *flowconfigv1.FlowConfigNodeAgentDeployment) {
+					flow.Spec.DCFVfPoolName = vfPoolName
+					flow.Spec.NADAnnotation = "flowconfig-daemon-sriov-cvl0-admin"
+				})
+
+				Eventually(func() error {
+					return k8sClient.Create(context.Background(), flowconfig)
+				}, timeout, interval).Should(BeNil())
+
 				defer deletePod(fmt.Sprintf("flowconfig-daemon-%s", nodeName1), namespaceDefault)
 				defer deleteFlowConfigNodeAgentDeployment(namespaceDefault)
 
 				// wait for POD, expected to be created
-				err := WaitForPodCreation(k8sClient, fmt.Sprintf("flowconfig-daemon-%s", nodeName1), namespaceDefault, timeout, interval)
-				Expect(err).To(BeNil())
-
 				pod := &corev1.Pod{}
-				err = k8sClient.Get(context.Background(), client.ObjectKey{
-					Name:      fmt.Sprintf("flowconfig-daemon-%s", nodeName1),
-					Namespace: namespaceDefault}, pod)
+				Eventually(func() error {
+					return GetObject(k8sClient, fmt.Sprintf("flowconfig-daemon-%s", nodeName1), namespaceDefault, 1*time.Second, pod)
+				}, timeout, interval).Should(BeNil())
+
+				state := bool(true)
+				pod.ObjectMeta.OwnerReferences = []metav1.OwnerReference{
+					{
+						Kind:               "FlowConfigNodeAgentDeployment",
+						APIVersion:         "flowconfig.intel.com/v1",
+						Name:               flowconfig.ObjectMeta.Name,
+						UID:                flowconfig.ObjectMeta.UID,
+						Controller:         &state,
+						BlockOwnerDeletion: &state,
+					},
+				}
+
+				err := k8sClient.Update(context.Background(), pod)
 				Expect(err).To(BeNil())
 
 				By("Delete POD and wait for its recreation by controller")
 				deletePod(fmt.Sprintf("flowconfig-daemon-%s", nodeName1), namespaceDefault)
 
-				err = WaitForPodCreation(k8sClient, fmt.Sprintf("flowconfig-daemon-%s", nodeName1), namespaceDefault, timeout, interval)
-				Expect(err).To(BeNil())
+				Eventually(func() error {
+					return GetObject(k8sClient, fmt.Sprintf("flowconfig-daemon-%s", nodeName1), namespaceDefault, 1*time.Second, pod)
+				}, timeout, interval).Should(BeNil())
+
+				fmt.Println("POD ", pod.ObjectMeta.OwnerReferences)
 			})
 
 			It("Update CR by changing the DCFVfPoolName, expected POD should be recreated with new configuration", func() {
@@ -514,6 +471,11 @@ var _ = Describe("FlowConfigNodeAgentDeployment controller", func() {
 				})
 				defer deleteNode(node2)
 
+				tmpWriteBuffer := bytes.NewBuffer(nil)
+				zlog := zap.New(zap.WriteTo(tmpWriteBuffer), zap.UseDevMode(true))
+				logf.SetLogger(zlog)
+				nodeAgentDeploymentRc.Log = zlog
+
 				Eventually(func() bool {
 					err := k8sClient.Create(context.Background(), getFlowConfigNodeAgentDeployment(namespaceDefault, func(flow *flowconfigv1.FlowConfigNodeAgentDeployment) {
 						flow.Spec.DCFVfPoolName = vfPoolName
@@ -527,9 +489,15 @@ var _ = Describe("FlowConfigNodeAgentDeployment controller", func() {
 				verifyExpectedPODDefintion(namespaceDefault, fmt.Sprintf("flowconfig-daemon-%s", nodeName1), nodeName1,
 					"flowconfig-daemon-sriov-cvl0-admin", vfPoolName, 0, 1)
 
-				// wait for POD, expected not to be created
-				err := WaitForPodCreation(k8sClient, fmt.Sprintf("flowconfig-daemon-%s", nodeName2), namespaceDefault, timeout, interval)
-				Expect(err).ToNot(BeNil())
+				Eventually(func() string {
+					return tmpWriteBuffer.String()
+				}, timeout, interval).Should(ContainSubstring("No resources present on node"))
+
+				// POD expected to not to be created
+				obj := &flowconfigv1.FlowConfigNodeAgentDeployment{}
+				Eventually(func() string {
+					return GetObject(k8sClient, fmt.Sprintf("flowconfig-daemon-%s", nodeName2), namespaceDefault, 1*time.Second, obj).Error()
+				}, "1s", interval).Should(ContainSubstring(fmt.Sprintf("\"%s\" not found", fmt.Sprintf("flowconfig-daemon-%s", nodeName2))))
 			})
 		})
 
@@ -537,6 +505,11 @@ var _ = Describe("FlowConfigNodeAgentDeployment controller", func() {
 			It("Node without defined resources", func() {
 				node := createNode(nodeName1)
 				defer deleteNode(node)
+
+				tmpWriteBuffer := bytes.NewBuffer(nil)
+				zlog := zap.New(zap.WriteTo(tmpWriteBuffer), zap.UseDevMode(true))
+				logf.SetLogger(zlog)
+				nodeAgentDeploymentRc.Log = zlog
 
 				Eventually(func() bool {
 					err := k8sClient.Create(context.Background(), getFlowConfigNodeAgentDeployment(namespaceDefault, func(flow *flowconfigv1.FlowConfigNodeAgentDeployment) {
@@ -548,8 +521,15 @@ var _ = Describe("FlowConfigNodeAgentDeployment controller", func() {
 				defer deleteFlowConfigNodeAgentDeployment(namespaceDefault)
 
 				// wait for POD, expected not to be created, due to missing resources on node
-				err := WaitForPodCreation(k8sClient, fmt.Sprintf("flowconfig-daemon-%s", nodeName1), namespaceDefault, timeout, interval)
-				Expect(err).ToNot(BeNil())
+				Eventually(func() string {
+					return tmpWriteBuffer.String()
+				}, timeout, interval).Should(ContainSubstring("No resources present on node"))
+
+				// POD expected to not to be created
+				obj := &flowconfigv1.FlowConfigNodeAgentDeployment{}
+				Eventually(func() string {
+					return GetObject(k8sClient, fmt.Sprintf("flowconfig-daemon-%s", nodeName1), namespaceDefault, 1*time.Second, obj).Error()
+				}, "1s", interval).Should(ContainSubstring(fmt.Sprintf("\"%s\" not found", fmt.Sprintf("flowconfig-daemon-%s", nodeName1))))
 			})
 
 			It("Node with defined resources but equal to zero", func() {
@@ -559,6 +539,11 @@ var _ = Describe("FlowConfigNodeAgentDeployment controller", func() {
 				})
 				defer deleteNode(node)
 
+				tmpWriteBuffer := bytes.NewBuffer(nil)
+				zlog := zap.New(zap.WriteTo(tmpWriteBuffer), zap.UseDevMode(true))
+				logf.SetLogger(zlog)
+				nodeAgentDeploymentRc.Log = zlog
+
 				Eventually(func() bool {
 					err := k8sClient.Create(context.Background(), getFlowConfigNodeAgentDeployment(namespaceDefault, func(flow *flowconfigv1.FlowConfigNodeAgentDeployment) {
 						flow.Spec.DCFVfPoolName = vfPoolName
@@ -568,9 +553,15 @@ var _ = Describe("FlowConfigNodeAgentDeployment controller", func() {
 				}, timeout, interval).Should(BeTrue())
 				defer deleteFlowConfigNodeAgentDeployment(namespaceDefault)
 
-				// wait for POD, expected to not be created
-				err := WaitForPodCreation(k8sClient, fmt.Sprintf("flowconfig-daemon-%s", nodeName1), namespaceDefault, timeout, interval)
-				Expect(err).ToNot(BeNil())
+				Eventually(func() string {
+					return tmpWriteBuffer.String()
+				}, timeout, interval).Should(ContainSubstring("No resources present on node"))
+
+				// POD expected to not to be created
+				obj := &flowconfigv1.FlowConfigNodeAgentDeployment{}
+				Eventually(func() string {
+					return GetObject(k8sClient, fmt.Sprintf("flowconfig-daemon-%s", nodeName1), namespaceDefault, 1*time.Second, obj).Error()
+				}, "1s", interval).Should(ContainSubstring(fmt.Sprintf("\"%s\" not found", fmt.Sprintf("flowconfig-daemon-%s", nodeName1))))
 			})
 
 			It("Node with resource, but different than the one defined in Custom Resource", func() {
@@ -580,6 +571,11 @@ var _ = Describe("FlowConfigNodeAgentDeployment controller", func() {
 				})
 				defer deleteNode(node)
 
+				tmpWriteBuffer := bytes.NewBuffer(nil)
+				zlog := zap.New(zap.WriteTo(tmpWriteBuffer), zap.UseDevMode(true))
+				logf.SetLogger(zlog)
+				nodeAgentDeploymentRc.Log = zlog
+
 				Eventually(func() bool {
 					err := k8sClient.Create(context.Background(), getFlowConfigNodeAgentDeployment(namespaceDefault, func(flow *flowconfigv1.FlowConfigNodeAgentDeployment) {
 						flow.Spec.DCFVfPoolName = vfPoolName
@@ -589,9 +585,15 @@ var _ = Describe("FlowConfigNodeAgentDeployment controller", func() {
 				}, timeout, interval).Should(BeTrue())
 				defer deleteFlowConfigNodeAgentDeployment(namespaceDefault)
 
+				Eventually(func() string {
+					return tmpWriteBuffer.String()
+				}, timeout, interval).Should(ContainSubstring("No resources present on node"))
+
 				// wait for POD, expected not to be created, due to missing resources on node
-				err := WaitForPodCreation(k8sClient, fmt.Sprintf("flowconfig-daemon-%s", nodeName1), namespaceDefault, timeout, interval)
-				Expect(err).ToNot(BeNil())
+				obj := &flowconfigv1.FlowConfigNodeAgentDeployment{}
+				Eventually(func() string {
+					return GetObject(k8sClient, fmt.Sprintf("flowconfig-daemon-%s", nodeName1), namespaceDefault, 1*time.Second, obj).Error()
+				}, "1s", interval).Should(ContainSubstring(fmt.Sprintf("\"%s\" not found", fmt.Sprintf("flowconfig-daemon-%s", nodeName1))))
 			})
 
 			It("One node, missing DCFVfPoolName and NADAnnotation in CR, expected no error", func() {
@@ -601,15 +603,26 @@ var _ = Describe("FlowConfigNodeAgentDeployment controller", func() {
 				})
 				defer deleteNode(node)
 
+				tmpWriteBuffer := bytes.NewBuffer(nil)
+				zlog := zap.New(zap.WriteTo(tmpWriteBuffer), zap.UseDevMode(true))
+				logf.SetLogger(zlog)
+				nodeAgentDeploymentRc.Log = zlog
+
 				Eventually(func() bool {
 					err := k8sClient.Create(context.Background(), getFlowConfigNodeAgentDeployment(namespaceDefault))
 					return err == nil
 				}, timeout, interval).Should(BeTrue())
 				defer deleteFlowConfigNodeAgentDeployment(namespaceDefault)
 
-				// wait for POD, expected not to be created
-				err := WaitForPodCreation(k8sClient, fmt.Sprintf("flowconfig-daemon-%s", nodeName1), namespaceDefault, timeout, interval)
-				Expect(err).ToNot(BeNil())
+				Eventually(func() string {
+					return tmpWriteBuffer.String()
+				}, timeout, interval).Should(ContainSubstring("NADAnnotation is not defined, will try to get one after 30 seconds"))
+
+				// POD expected to not to be created
+				obj := &flowconfigv1.FlowConfigNodeAgentDeployment{}
+				Eventually(func() string {
+					return GetObject(k8sClient, fmt.Sprintf("flowconfig-daemon-%s", nodeName1), namespaceDefault, 1*time.Second, obj).Error()
+				}, "1s", interval).Should(ContainSubstring(fmt.Sprintf("\"%s\" not found", fmt.Sprintf("flowconfig-daemon-%s", nodeName1))))
 			})
 
 			It("One node, missing DCFVfPoolName in CR, expected no error", func() {
@@ -618,6 +631,11 @@ var _ = Describe("FlowConfigNodeAgentDeployment controller", func() {
 					node.Status.Capacity[vfPoolName] = *resource.NewQuantity(1, resource.DecimalSI)
 				})
 				defer deleteNode(node)
+
+				tmpWriteBuffer := bytes.NewBuffer(nil)
+				zlog := zap.New(zap.WriteTo(tmpWriteBuffer), zap.UseDevMode(true))
+				logf.SetLogger(zlog)
+				nodeAgentDeploymentRc.Log = zlog
 
 				Eventually(func() bool {
 					err := k8sClient.Create(context.Background(),
@@ -628,9 +646,15 @@ var _ = Describe("FlowConfigNodeAgentDeployment controller", func() {
 				}, timeout, interval).Should(BeTrue())
 				defer deleteFlowConfigNodeAgentDeployment(namespaceDefault)
 
-				// wait for POD, expected to be created
-				err := WaitForPodCreation(k8sClient, fmt.Sprintf("flowconfig-daemon-%s", nodeName1), namespaceDefault, timeout, interval)
-				Expect(err).ToNot(BeNil())
+				Eventually(func() string {
+					return tmpWriteBuffer.String()
+				}, timeout, interval).Should(ContainSubstring("No resources present on node"))
+
+				// POD expected to not to be created
+				obj := &flowconfigv1.FlowConfigNodeAgentDeployment{}
+				Eventually(func() string {
+					return GetObject(k8sClient, fmt.Sprintf("flowconfig-daemon-%s", nodeName1), namespaceDefault, 1*time.Second, obj).Error()
+				}, "1s", interval).Should(ContainSubstring(fmt.Sprintf("\"%s\" not found", fmt.Sprintf("flowconfig-daemon-%s", nodeName1))))
 			})
 
 			It("One node, missing NADAnnotation in CR, expected no error", func() {
@@ -638,7 +662,13 @@ var _ = Describe("FlowConfigNodeAgentDeployment controller", func() {
 					node.Status.Capacity = make(map[corev1.ResourceName]resource.Quantity)
 					node.Status.Capacity[vfPoolName] = *resource.NewQuantity(10, resource.DecimalSI)
 				})
+
 				defer deleteNode(node)
+
+				tmpWriteBuffer := bytes.NewBuffer(nil)
+				zlog := zap.New(zap.WriteTo(tmpWriteBuffer), zap.UseDevMode(true))
+				logf.SetLogger(zlog)
+				nodeAgentDeploymentRc.Log = zlog
 
 				Eventually(func() bool {
 					err := k8sClient.Create(context.Background(),
@@ -649,9 +679,15 @@ var _ = Describe("FlowConfigNodeAgentDeployment controller", func() {
 				}, timeout, interval).Should(BeTrue())
 				defer deleteFlowConfigNodeAgentDeployment(namespaceDefault)
 
-				// wait for POD, expected to be created
-				err := WaitForPodCreation(k8sClient, fmt.Sprintf("flowconfig-daemon-%s", nodeName1), namespaceDefault, timeout, interval)
-				Expect(err).ToNot(BeNil())
+				Eventually(func() string {
+					return tmpWriteBuffer.String()
+				}, timeout, interval).Should(ContainSubstring("NADAnnotation is not defined, will try to get one after 30 seconds"))
+
+				// POD expected to not to be created
+				obj := &flowconfigv1.FlowConfigNodeAgentDeployment{}
+				Eventually(func() string {
+					return GetObject(k8sClient, fmt.Sprintf("flowconfig-daemon-%s", nodeName1), namespaceDefault, 1*time.Second, obj).Error()
+				}, "1s", interval).Should(ContainSubstring(fmt.Sprintf("\"%s\" not found", fmt.Sprintf("flowconfig-daemon-%s", nodeName1))))
 			})
 		})
 
@@ -702,11 +738,24 @@ var _ = Describe("FlowConfigNodeAgentDeployment controller", func() {
 					BlockOwnerDeletion: &state,
 				}
 
+				pod.ObjectMeta.OwnerReferences = []metav1.OwnerReference{
+					{
+						Kind:               "FlowConfigNodeAgentDeployment",
+						APIVersion:         "flowconfig.intel.com/v1",
+						Name:               instance.ObjectMeta.Name,
+						UID:                instance.ObjectMeta.UID,
+						Controller:         &state,
+						BlockOwnerDeletion: &state,
+					},
+				}
+
+				err = k8sClient.Update(context.Background(), pod)
+				Expect(err).To(BeNil())
 				By("Delete CR and check POD references - POD will be not deleted due to envtest constraints")
 				deleteFlowConfigNodeAgentDeployment(namespaceDefault)
 				defer deletePod(fmt.Sprintf("flowconfig-daemon-%s", nodeName1), namespaceDefault)
 
-				time.Sleep(1 * time.Second)
+				time.Sleep(interval)
 				err = k8sClient.Get(context.Background(), client.ObjectKey{
 					Name:      fmt.Sprintf("flowconfig-daemon-%s", nodeName1),
 					Namespace: namespaceDefault}, pod)
@@ -773,8 +822,10 @@ var _ = Describe("FlowConfigNodeAgentDeployment controller", func() {
 				"flowconfig-daemon-sriov-cvl0-admin", vfPoolName, 0, 1)
 
 			By("Verify that there is no second POD")
-			err := WaitForPodCreation(k8sClient, fmt.Sprintf("flowconfig-daemon-%s", nodeName2), namespaceDefault, timeout, interval)
-			Expect(err).ToNot(BeNil())
+			obj := &flowconfigv1.FlowConfigNodeAgentDeployment{}
+			Eventually(func() string {
+				return GetObject(k8sClient, fmt.Sprintf("flowconfig-daemon-%s", nodeName2), namespaceDefault, 1*time.Second, obj).Error()
+			}, timeout, interval).Should(ContainSubstring(fmt.Sprintf("\"%s\" not found", fmt.Sprintf("flowconfig-daemon-%s", nodeName2))))
 
 			By("Create second node in cluster")
 			node2 := createNode(nodeName2, func(node *corev1.Node) {
@@ -817,7 +868,7 @@ var _ = Describe("FlowConfigNodeAgentDeployment controller", func() {
 			Expect(err).Should(BeNil())
 
 			By("Verify that POD resources has been updated")
-			time.Sleep(2 * time.Second)
+			time.Sleep(interval)
 			verifyExpectedPODDefintion(namespaceDefault, fmt.Sprintf("flowconfig-daemon-%s", nodeName1), nodeName1,
 				"flowconfig-daemon-sriov-cvl0-admin, flowconfig-daemon-sriov-cvl0-admin", vfPoolName, 0, 2)
 		})
@@ -850,7 +901,7 @@ var _ = Describe("FlowConfigNodeAgentDeployment controller", func() {
 			Expect(err).Should(BeNil())
 
 			By("Verify that POD resources has been updated")
-			time.Sleep(2 * time.Second)
+			time.Sleep(interval)
 			verifyExpectedPODDefintion(namespaceDefault, fmt.Sprintf("flowconfig-daemon-%s", nodeName1), nodeName1,
 				"flowconfig-daemon-sriov-cvl0-admin", vfPoolName, 0, 1)
 
@@ -860,9 +911,10 @@ var _ = Describe("FlowConfigNodeAgentDeployment controller", func() {
 			Expect(err).Should(BeNil())
 
 			By("Verify that POD was removed from node")
-			time.Sleep(2 * time.Second)
-			err = WaitForPodCreation(k8sClient, fmt.Sprintf("flowconfig-daemon-%s", nodeName1), namespaceDefault, timeout, interval)
-			Expect(err).ToNot(BeNil())
+			obj := &flowconfigv1.FlowConfigNodeAgentDeployment{}
+			Eventually(func() string {
+				return GetObject(k8sClient, fmt.Sprintf("flowconfig-daemon-%s", nodeName1), namespaceDefault, 1*time.Second, obj).Error()
+			}, timeout, interval).Should(ContainSubstring(fmt.Sprintf("\"%s\" not found", fmt.Sprintf("flowconfig-daemon-%s", nodeName1))))
 		})
 	})
 

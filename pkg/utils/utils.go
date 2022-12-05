@@ -8,22 +8,25 @@ import (
 	"archive/zip"
 	"compress/gzip"
 	"context"
-	"crypto/md5"
+	"crypto/sha1"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
-	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/types"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 	"strings"
 	"syscall"
+
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/go-logr/logr"
 	configv1 "github.com/openshift/api/config/v1"
@@ -65,10 +68,7 @@ func IsOpenshiftSno(c client.Client, log logr.Logger) (bool, error) {
 	defaultInfraName := "cluster"
 	err := c.Get(context.TODO(), types.NamespacedName{Name: defaultInfraName}, infra)
 	if err != nil {
-		return false, err
-	}
-	if infra == nil {
-		return false, fmt.Errorf("getting resource Infrastructure (name: %s) succeeded but object was nil", defaultInfraName)
+		return false, fmt.Errorf("getting resource Infrastructure (name: %s) succeeded but object was empty", defaultInfraName)
 	}
 	log.Info("OCP cluster infrastructure", "infra", infra.Status.ControlPlaneTopology)
 	return infra.Status.ControlPlaneTopology == configv1.SingleReplicaTopologyMode, nil
@@ -120,28 +120,46 @@ func verifyChecksum(path, expected string) (bool, error) {
 	}
 	f, err := OpenNoLinks(path)
 	if err != nil {
-		return false, errors.New("Failed to open file to calculate md5")
+		return false, errors.New("failed to open file to calculate sha-1")
 	}
 	defer f.Close()
-	h := md5.New()
+	h := sha1.New()
 	if _, err := io.Copy(h, f); err != nil {
-		return false, errors.New("Failed to copy file to calculate md5")
+		return false, errors.New("failed to copy file to calculate sha-1")
 	}
-	if hex.EncodeToString(h.Sum(nil)) != expected {
+	if hex.EncodeToString(h.Sum(nil)) != strings.ToLower(expected) {
 		return false, nil
 	}
 
 	return true, nil
 }
 
-func DownloadFile(path, url, checksum string) error {
+func NewSecureHttpsClient(cert *x509.Certificate) (*http.Client, error) {
+	certPool, err := x509.SystemCertPool()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get syscerts - %v", err)
+	}
+	certPool.AddCert(cert)
+	transport := &http.Transport{
+		TLSClientConfig: &tls.Config{
+			RootCAs:    certPool,
+			ClientAuth: tls.RequireAndVerifyClientCert,
+		},
+	}
+	httpsClient := http.Client{
+		Transport: transport,
+	}
+	return &httpsClient, nil
+}
+
+func DownloadFile(path, url, checksum string, client *http.Client) error {
 	f, err := CreateNoLinks(path)
 	if err != nil {
 		return err
 	}
 	defer f.Close()
 
-	r, err := http.Get(url)
+	r, err := client.Get(url)
 	if err != nil {
 		return fmt.Errorf("unable to download image from: %s err: %s", url, err)
 	}

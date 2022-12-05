@@ -5,9 +5,11 @@ package v1
 
 import (
 	"encoding/json"
+	"os"
+	"strconv"
 	"testing"
 
-	sriovutils "github.com/k8snetworkplumbingwg/sriov-network-device-plugin/pkg/utils"
+	fuzz "github.com/google/gofuzz"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/yaml"
@@ -216,20 +218,10 @@ spec:
 		},
 		{
 			name:    "RTE_FLOW_ACTION_TYPE_VFPCIADDR invalid PCI address",
-			wantErr: true,
+			wantErr: false, // webhook does not validate PCI address correctess
 			data:    createVfPciAddrAction("0000:01:11.0"),
 		},
 	}
-
-	fs := &sriovutils.FakeFilesystem{
-		Dirs: []string{"sys/bus/pci/devices/0000:01:10.0/", "sys/bus/pci/devices/0000:01:00.0/"},
-		Symlinks: map[string]string{"sys/bus/pci/devices/0000:01:10.0/physfn": "../0000:01:00.0",
-			"sys/bus/pci/devices/0000:01:00.0/virtfn0": "../0000:01:08.0",
-			"sys/bus/pci/devices/0000:01:00.0/virtfn1": "../0000:01:09.0",
-			"sys/bus/pci/devices/0000:01:00.0/virtfn2": "../0000:01:10.0",
-		},
-	}
-	defer fs.Use()()
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -243,7 +235,7 @@ spec:
 
 			spec := config.Spec
 			for _, rule := range spec.Rules {
-				if err := validate(rule); (err != nil) != tt.wantErr {
+				if err := rule.validate(); (err != nil) != tt.wantErr {
 					t.Errorf("validate() error = %v, wantErr %v", err, tt.wantErr)
 				}
 			}
@@ -277,7 +269,7 @@ func TestValidateRteFlowActionVf(t *testing.T) {
 
 			if action.Conf != nil {
 				var err error
-				rteFlowAction.Conf, err = utils.GetFlowActionAny(action.Type, action.Conf.Raw)
+				rteFlowAction.Conf, err = utils.GetFlowActionAnyForWebhook(action.Type, action.Conf.Raw)
 				if err != nil {
 					t.Errorf("error: %s", err)
 				}
@@ -300,20 +292,10 @@ func TestValidateRteFlowActionPciAddr(t *testing.T) {
 		wantErr    bool
 	}{
 		{name: "valid PCI address", conf: []byte(`{"addr":"0000:01:10.0"}`), inputError: false, wantErr: false},
-		{name: "invalid PCI config", conf: []byte(`{"addr":"0000:01:11.0"}`), inputError: true, wantErr: true},
+		{name: "invalid PCI config", conf: []byte(`{"addr":"0000:01:11."}`), inputError: true, wantErr: true},
 		{name: "invalid config: Lack of addr", conf: []byte(`{"Id":253}`), inputError: true, wantErr: true},
 		{name: "empty config", inputError: false, wantErr: true},
 	}
-
-	fs := &sriovutils.FakeFilesystem{
-		Dirs: []string{"sys/bus/pci/devices/0000:01:10.0/", "sys/bus/pci/devices/0000:01:00.0/"},
-		Symlinks: map[string]string{"sys/bus/pci/devices/0000:01:10.0/physfn": "../0000:01:00.0",
-			"sys/bus/pci/devices/0000:01:00.0/virtfn0": "../0000:01:08.0",
-			"sys/bus/pci/devices/0000:01:00.0/virtfn1": "../0000:01:09.0",
-			"sys/bus/pci/devices/0000:01:00.0/virtfn2": "../0000:01:10.0",
-		},
-	}
-	defer fs.Use()()
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -328,7 +310,7 @@ func TestValidateRteFlowActionPciAddr(t *testing.T) {
 
 			if action.Conf != nil {
 				var err error
-				rteFlowAction.Conf, err = utils.GetFlowActionAny(action.Type, action.Conf.Raw)
+				rteFlowAction.Conf, err = utils.GetFlowActionAnyForWebhook(action.Type, action.Conf.Raw)
 				if err != nil && !tt.inputError {
 					t.Errorf("error: %s", err)
 				}
@@ -1078,7 +1060,7 @@ func TestValidateRteFlowAction(t *testing.T) {
 			}
 			if action.Conf != nil {
 				var err error
-				rteFlowAction.Conf, err = utils.GetFlowActionAny(action.Type, action.Conf.Raw)
+				rteFlowAction.Conf, err = utils.GetFlowActionAnyForWebhook(action.Type, action.Conf.Raw)
 				if err != nil {
 					t.Errorf("error: %s", err)
 				}
@@ -1186,4 +1168,86 @@ func TestValidateDelete(t *testing.T) {
 			t.Errorf("NodeFlowConfig.ValidateUpdate() error = %v, wantErr %v", err, false)
 		}
 	})
+}
+
+// TestValidateCreateFuzz runs fuzz test on ValidateCreate() method by fuzzing NodeFlowConfig API object.
+// Set FUZZITER env variable to define how many times the test will fuzz. Default count is 10.
+func TestValidateCreateFuzz(t *testing.T) {
+	fuzzIterationStr := os.Getenv("FUZZITER")
+	var fuzzIteration int
+	fuzzIteration, err := strconv.Atoi(fuzzIterationStr)
+	if err != nil || fuzzIteration <= 0 {
+		t.Logf("the FUZZITER env variable is not set or contains invalid value: %+s\n", fuzzIterationStr)
+		t.Logf("skipping TestValidateCreateFuzz\n")
+		t.Skip()
+	}
+
+	flowConfig := &NodeFlowConfig{}
+	f := fuzz.New().NilChance(0).Funcs(
+		func(e *runtime.RawExtension, c fuzz.Continue) {
+			b := []byte{}
+			c.Fuzz(&b)
+			e.Object = nil
+			e.Raw = b
+
+		},
+		func(e *FlowRules, c fuzz.Continue) {
+			c.Fuzz(e)
+
+			action := []FlowAction{}
+			c.Fuzz(&action)
+
+			item := []FlowItem{}
+			c.Fuzz(&item)
+
+			attr := FlowAttr{}
+			c.Fuzz(&attr)
+
+			e.Pattern = itemPtr(item)
+			e.Action = actionPtr(action)
+			e.Attr = &attr
+			e.PortId = uint32(c.Int31())
+		},
+		func(e *NodeFlowConfigSpec, c fuzz.Continue) {
+			rules := []FlowRules{}
+			c.Fuzz(&rules)
+			e.Rules = rulePtr(rules)
+		},
+	)
+	defer func() {
+		if r := recover(); r != nil {
+			t.Errorf("the code resulted in panic. flowconfig:\n %+v\n", flowConfig)
+		}
+	}()
+
+	t.Logf("fuzzing NodeFlowConfig for: %d\n", fuzzIteration)
+	for i := 0; i < fuzzIteration; i++ {
+		f.Fuzz(&flowConfig)
+
+		_ = flowConfig.ValidateCreate()
+	}
+}
+
+func rulePtr(x []FlowRules) []*FlowRules {
+	out := []*FlowRules{}
+	for _, xx := range x {
+		out = append(out, &xx)
+	}
+	return out
+}
+
+func itemPtr(x []FlowItem) []*FlowItem {
+	out := []*FlowItem{}
+	for _, xx := range x {
+		out = append(out, &xx)
+	}
+	return out
+}
+
+func actionPtr(x []FlowAction) []*FlowAction {
+	out := []*FlowAction{}
+	for _, xx := range x {
+		out = append(out, &xx)
+	}
+	return out
 }

@@ -4,9 +4,10 @@
 package utils
 
 import (
+	"path"
 	"testing"
 
-	sriovutils "github.com/k8snetworkplumbingwg/sriov-network-device-plugin/pkg/utils"
+	sutils "github.com/otcshare/intel-ethernet-operator/pkg/flowconfig/sriovutils"
 
 	flowapi "github.com/otcshare/intel-ethernet-operator/pkg/flowconfig/rpc/v1/flow"
 )
@@ -14,50 +15,66 @@ import (
 func TestGetFlowActionAny(t *testing.T) {
 
 	actionData := []struct {
-		name        string
-		Type        string
-		Conf        []byte
-		expectedErr bool
-		expectedAny bool
+		name              string
+		Type              string
+		Conf              []byte
+		expectedErr       bool
+		expectedAny       bool
+		isCalledByWebhook bool
 	}{
 		{
 			name: "tc1",
 			Type: "RTE_FLOW_ACTION_TYPE_VF", Conf: []byte(`{ "id": 1 }`),
-			expectedErr: false, expectedAny: true,
+			expectedErr: false, expectedAny: true, isCalledByWebhook: false,
 		},
 		{
 			name: "tc2",
 			Type: "RTE_FLOW_ACTION_TYPE_END", Conf: []byte(`{}`),
-			expectedErr: false, expectedAny: true,
+			expectedErr: false, expectedAny: true, isCalledByWebhook: false,
 		},
 		{
 			name: "tc3",
 			Type: "RTE_FLOW_ACTION_TYPE_VFPCIADDR", Conf: []byte(`{}`),
-			expectedErr: true, expectedAny: false,
+			expectedErr: true, expectedAny: false, isCalledByWebhook: false,
 		},
 		{
 			name: "tc4",
 			Type: "RTE_FLOW_ACTION_TYPE_VFPCIADDR_OTHER", Conf: []byte(`{}`),
-			expectedErr: true, expectedAny: false,
+			expectedErr: true, expectedAny: false, isCalledByWebhook: false,
 		},
 		{
 			name: "tc5",
 			Type: "RTE_FLOW_ACTION_TYPE_VFPCIADDR", Conf: []byte(`{"addr":"0000:01:10.0"}`),
-			expectedErr: false, expectedAny: true,
+			expectedErr: false, expectedAny: true, isCalledByWebhook: false,
 		},
 		{
 			name: "tc6",
 			Type: "RTE_FLOW_ACTION_TYPE_VFPCIADDR", Conf: []byte(`{"addr":"0000:01:11.0"}`),
-			expectedErr: true, expectedAny: false,
+			expectedErr: true, expectedAny: false, isCalledByWebhook: false,
 		},
 		{
 			name: "tc7",
 			Type: "RTE_FLOW_ACTION_TYPE_VFPCIADDR", Conf: []byte(`{"ip":"0000:01:11.0"}`),
-			expectedErr: true, expectedAny: false,
+			expectedErr: true, expectedAny: false, isCalledByWebhook: false,
+		},
+		{
+			name: "tc5_webhook",
+			Type: "RTE_FLOW_ACTION_TYPE_VFPCIADDR", Conf: []byte(`{"addr":"0000:01:10.0"}`),
+			expectedErr: false, expectedAny: true, isCalledByWebhook: true,
+		},
+		{
+			name: "tc6_webhook",
+			Type: "RTE_FLOW_ACTION_TYPE_VFPCIADDR", Conf: []byte(`{"addr":"0000:01:11.0"}`),
+			expectedErr: true, expectedAny: false, isCalledByWebhook: true,
+		},
+		{
+			name: "tc7_webhook",
+			Type: "RTE_FLOW_ACTION_TYPE_VFPCIADDR", Conf: []byte(`{"ip":"0000:01:11.0"}`),
+			expectedErr: true, expectedAny: false, isCalledByWebhook: true,
 		},
 	}
 
-	fs := &sriovutils.FakeFilesystem{
+	fs := &sutils.FakeFilesystem{
 		Dirs: []string{"sys/bus/pci/devices/0000:01:10.0/", "sys/bus/pci/devices/0000:01:00.0/"},
 		Symlinks: map[string]string{"sys/bus/pci/devices/0000:01:10.0/physfn": "../0000:01:00.0",
 			"sys/bus/pci/devices/0000:01:00.0/virtfn0": "../0000:01:08.0",
@@ -65,11 +82,13 @@ func TestGetFlowActionAny(t *testing.T) {
 			"sys/bus/pci/devices/0000:01:00.0/virtfn2": "../0000:01:10.0",
 		},
 	}
-	defer fs.Use()()
+	tempRoot, tearDown := fs.Use()
+	defer tearDown()
+	sriovutils := sutils.GetSriovUtils(path.Join(tempRoot, "/sys"))
 
 	for _, item := range actionData {
 		t.Run(item.name, func(t *testing.T) {
-			any, err := GetFlowActionAny(item.Type, item.Conf)
+			any, err := GetFlowActionAny(item.Type, item.Conf, sriovutils)
 			if err != nil && !item.expectedErr {
 				t.Errorf("%v", err)
 			}

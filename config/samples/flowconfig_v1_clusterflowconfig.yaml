@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2021 Intel Corporation
+
+apiVersion: flowconfig.intel.com/v1
+kind: ClusterFlowConfig
+metadata:
+  name: clusterflowconfig-sample
+spec:
+  # Add fields here
+  foo: bar

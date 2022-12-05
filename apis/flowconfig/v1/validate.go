@@ -28,47 +28,44 @@ func validateRteFlowItemEth(itemName string, spec, item *any.Any) error {
 	}
 	var specDstAddrInt, specSrcAddrInt uint32 = 0, 0
 	var err error
-	if specItem != nil {
-		if ethItem.Type != 0 {
-			if err = validateUint32ItemField(itemName, "type", specItem.Type, ethItem.Type); err != nil {
-				return fmt.Errorf("validateUint32ItemField() error: %v", err)
-			}
-		}
-		if ethItem.Dst != nil {
-			if specItem.Dst != nil {
-				specDstAddrInt, err = encodeHexMacAddress(specItem.Dst.AddrBytes)
-				if err != nil {
-					return fmt.Errorf("invalid spec: %v, %v", specItem.Dst.AddrBytes, err)
-				}
-			}
-			dstAddrInt, err := encodeHexMacAddress(ethItem.Dst.AddrBytes)
-			if err != nil {
-				return fmt.Errorf("invalid %s: %v, %v", itemName, ethItem.Dst.AddrBytes, err)
-			}
-			if err := validateUint32ItemField(itemName, "dst", specDstAddrInt, dstAddrInt); err != nil {
-				return err
-			}
-		}
-		if ethItem.Src != nil {
-			if specItem.Src != nil {
-				specSrcAddrInt, err = encodeHexMacAddress(specItem.Src.AddrBytes)
-				if err != nil {
-					return fmt.Errorf("invalid spec: %v, %v", specItem.Src.AddrBytes, err)
-				}
-			}
-			srcAddrInt, err := encodeHexMacAddress(ethItem.Src.AddrBytes)
-			if err != nil {
-				return fmt.Errorf("invalid %s: %v, %v", itemName, ethItem.Src.AddrBytes, err)
-			}
-			if err := validateUint32ItemField(itemName, "src", specSrcAddrInt, srcAddrInt); err != nil {
-				return err
-			}
+	if ethItem.Type != 0 {
+		if err = validateUint32ItemField(itemName, "type", specItem.Type, ethItem.Type); err != nil {
+			return fmt.Errorf("validateUint32ItemField() error: %v", err)
 		}
 	}
-	if ethItem != nil {
-		if ethItem.Type > 0xFFFF {
-			return fmt.Errorf("invalid type (%d), must be equal or lower than 65,535", ethItem.Type)
+	if ethItem.Dst != nil {
+		if specItem.Dst != nil {
+			specDstAddrInt, err = encodeHexMacAddress(specItem.Dst.AddrBytes)
+			if err != nil {
+				return fmt.Errorf("invalid spec: %v, %v", specItem.Dst.AddrBytes, err)
+			}
 		}
+		dstAddrInt, err := encodeHexMacAddress(ethItem.Dst.AddrBytes)
+		if err != nil {
+			return fmt.Errorf("invalid %s: %v, %v", itemName, ethItem.Dst.AddrBytes, err)
+		}
+		if err := validateUint32ItemField(itemName, "dst", specDstAddrInt, dstAddrInt); err != nil {
+			return err
+		}
+	}
+	if ethItem.Src != nil {
+		if specItem.Src != nil {
+			specSrcAddrInt, err = encodeHexMacAddress(specItem.Src.AddrBytes)
+			if err != nil {
+				return fmt.Errorf("invalid spec: %v, %v", specItem.Src.AddrBytes, err)
+			}
+		}
+		srcAddrInt, err := encodeHexMacAddress(ethItem.Src.AddrBytes)
+		if err != nil {
+			return fmt.Errorf("invalid %s: %v, %v", itemName, ethItem.Src.AddrBytes, err)
+		}
+		if err := validateUint32ItemField(itemName, "src", specSrcAddrInt, srcAddrInt); err != nil {
+			return err
+		}
+	}
+
+	if ethItem.Type > 0xFFFF {
+		return fmt.Errorf("invalid type (%d), must be equal or lower than 65,535", ethItem.Type)
 	}
 
 	return nil
@@ -97,22 +94,22 @@ func validateRteFlowItemVlan(itemName string, spec, item *any.Any) error {
 		return fmt.Errorf("could not unmarshal %s: %s", itemName, err)
 	}
 
-	if specItem != nil {
-		if err := validateUint32ItemField(itemName, "tci", specItem.Tci, vlanItem.Tci); err != nil {
-			return err
-		}
-		if err := validateUint32ItemField(itemName, "inner_type", specItem.InnerType, vlanItem.InnerType); err != nil {
-			return err
-		}
+	if err := validateUint32ItemField(itemName, "tci", specItem.Tci, vlanItem.Tci); err != nil {
+		return err
 	}
-	if vlanItem != nil {
-		if vlanItem.Tci > 0xFFFF {
-			return fmt.Errorf("invalid tci (%d), must be equal or lower than 65,535", vlanItem.Tci)
-		}
-		if vlanItem.InnerType > 0xFFFF {
-			return fmt.Errorf("invalid inner_type (%d), must be equal or lower than 65,535", vlanItem.InnerType)
-		}
+
+	if err := validateUint32ItemField(itemName, "inner_type", specItem.InnerType, vlanItem.InnerType); err != nil {
+		return err
 	}
+
+	if vlanItem.Tci > 0xFFFF {
+		return fmt.Errorf("invalid tci (%d), must be equal or lower than 65,535", vlanItem.Tci)
+	}
+
+	if vlanItem.InnerType > 0xFFFF {
+		return fmt.Errorf("invalid inner_type (%d), must be equal or lower than 65,535", vlanItem.InnerType)
+	}
+
 	return nil
 }
 
@@ -129,66 +126,64 @@ func validateRteFlowItemIpv4(itemName string, spec, item *any.Any) error {
 		return fmt.Errorf("could not unmarshal %s: %s", itemName, err)
 	}
 
-	if specItem != nil {
-		if specItem.Hdr != nil {
-			if err := validateUint32ItemField(itemName, "version_ihl", specItem.Hdr.VersionIhl, ipv4Item.Hdr.VersionIhl); err != nil {
-				return err
-			}
-			if err := validateUint32ItemField(itemName, "type_of_service", specItem.Hdr.TypeOfService, ipv4Item.Hdr.TypeOfService); err != nil {
-				return err
-			}
-			if err := validateUint32ItemField(itemName, "total_length", specItem.Hdr.TotalLength, ipv4Item.Hdr.TotalLength); err != nil {
-				return err
-			}
-			if err := validateUint32ItemField(itemName, "packet_id", specItem.Hdr.PacketId, ipv4Item.Hdr.PacketId); err != nil {
-				return err
-			}
-			if err := validateUint32ItemField(itemName, "fragment_offset", specItem.Hdr.FragmentOffset, ipv4Item.Hdr.FragmentOffset); err != nil {
-				return err
-			}
-			if err := validateUint32ItemField(itemName, "time_to_live", specItem.Hdr.TimeToLive, ipv4Item.Hdr.TimeToLive); err != nil {
-				return err
-			}
-			if err := validateUint32ItemField(itemName, "next_proto_id", specItem.Hdr.NextProtoId, ipv4Item.Hdr.NextProtoId); err != nil {
-				return err
-			}
-			if err := validateUint32ItemField(itemName, "hdr_checksum", specItem.Hdr.HdrChecksum, ipv4Item.Hdr.HdrChecksum); err != nil {
-				return err
-			}
-			if err := validateUint32ItemField(itemName, "src_addr", specItem.Hdr.SrcAddr, ipv4Item.Hdr.SrcAddr); err != nil {
-				return err
-			}
-			if err := validateUint32ItemField(itemName, "dst_addr", specItem.Hdr.DstAddr, ipv4Item.Hdr.DstAddr); err != nil {
-				return err
-			}
+	if specItem.Hdr != nil {
+		if err := validateUint32ItemField(itemName, "version_ihl", specItem.Hdr.VersionIhl, ipv4Item.Hdr.VersionIhl); err != nil {
+			return err
+		}
+		if err := validateUint32ItemField(itemName, "type_of_service", specItem.Hdr.TypeOfService, ipv4Item.Hdr.TypeOfService); err != nil {
+			return err
+		}
+		if err := validateUint32ItemField(itemName, "total_length", specItem.Hdr.TotalLength, ipv4Item.Hdr.TotalLength); err != nil {
+			return err
+		}
+		if err := validateUint32ItemField(itemName, "packet_id", specItem.Hdr.PacketId, ipv4Item.Hdr.PacketId); err != nil {
+			return err
+		}
+		if err := validateUint32ItemField(itemName, "fragment_offset", specItem.Hdr.FragmentOffset, ipv4Item.Hdr.FragmentOffset); err != nil {
+			return err
+		}
+		if err := validateUint32ItemField(itemName, "time_to_live", specItem.Hdr.TimeToLive, ipv4Item.Hdr.TimeToLive); err != nil {
+			return err
+		}
+		if err := validateUint32ItemField(itemName, "next_proto_id", specItem.Hdr.NextProtoId, ipv4Item.Hdr.NextProtoId); err != nil {
+			return err
+		}
+		if err := validateUint32ItemField(itemName, "hdr_checksum", specItem.Hdr.HdrChecksum, ipv4Item.Hdr.HdrChecksum); err != nil {
+			return err
+		}
+		if err := validateUint32ItemField(itemName, "src_addr", specItem.Hdr.SrcAddr, ipv4Item.Hdr.SrcAddr); err != nil {
+			return err
+		}
+		if err := validateUint32ItemField(itemName, "dst_addr", specItem.Hdr.DstAddr, ipv4Item.Hdr.DstAddr); err != nil {
+			return err
 		}
 	}
-	if ipv4Item.Hdr != nil {
-		if ipv4Item.Hdr.VersionIhl > 0xFF {
-			return fmt.Errorf("invalid version_ihl (%d), must be equal or lower than 255", ipv4Item.Hdr.VersionIhl)
-		}
-		if ipv4Item.Hdr.TypeOfService > 0xFF {
-			return fmt.Errorf("invalid type_of_service (%d), must be equal or lower than 255", ipv4Item.Hdr.TypeOfService)
-		}
-		if ipv4Item.Hdr.TotalLength > 0xFFFF {
-			return fmt.Errorf("invalid total_length (%d), must be equal or lower than 65,535", ipv4Item.Hdr.TotalLength)
-		}
-		if ipv4Item.Hdr.PacketId > 0xFFFF {
-			return fmt.Errorf("invalid packet_id (%d), must be equal or lower than 65,535", ipv4Item.Hdr.PacketId)
-		}
-		if ipv4Item.Hdr.FragmentOffset > 0xFFFF {
-			return fmt.Errorf("invalid fragment_offset (%d), must be equal or lower than 65,535", ipv4Item.Hdr.FragmentOffset)
-		}
-		if ipv4Item.Hdr.TimeToLive > 0xFF {
-			return fmt.Errorf("invalid time_to_live (%d), must be equal or lower than 255", ipv4Item.Hdr.TimeToLive)
-		}
-		if ipv4Item.Hdr.NextProtoId > 0xFF {
-			return fmt.Errorf("invalid next_proto_id (%d), must be equal or lower than 255", ipv4Item.Hdr.NextProtoId)
-		}
-		if ipv4Item.Hdr.HdrChecksum > 0xFF {
-			return fmt.Errorf("invalid hdr_checksum (%d), must be equal or lower than 255", ipv4Item.Hdr.HdrChecksum)
-		}
+
+	if ipv4Item.Hdr.VersionIhl > 0xFF {
+		return fmt.Errorf("invalid version_ihl (%d), must be equal or lower than 255", ipv4Item.Hdr.VersionIhl)
 	}
+	if ipv4Item.Hdr.TypeOfService > 0xFF {
+		return fmt.Errorf("invalid type_of_service (%d), must be equal or lower than 255", ipv4Item.Hdr.TypeOfService)
+	}
+	if ipv4Item.Hdr.TotalLength > 0xFFFF {
+		return fmt.Errorf("invalid total_length (%d), must be equal or lower than 65,535", ipv4Item.Hdr.TotalLength)
+	}
+	if ipv4Item.Hdr.PacketId > 0xFFFF {
+		return fmt.Errorf("invalid packet_id (%d), must be equal or lower than 65,535", ipv4Item.Hdr.PacketId)
+	}
+	if ipv4Item.Hdr.FragmentOffset > 0xFFFF {
+		return fmt.Errorf("invalid fragment_offset (%d), must be equal or lower than 65,535", ipv4Item.Hdr.FragmentOffset)
+	}
+	if ipv4Item.Hdr.TimeToLive > 0xFF {
+		return fmt.Errorf("invalid time_to_live (%d), must be equal or lower than 255", ipv4Item.Hdr.TimeToLive)
+	}
+	if ipv4Item.Hdr.NextProtoId > 0xFF {
+		return fmt.Errorf("invalid next_proto_id (%d), must be equal or lower than 255", ipv4Item.Hdr.NextProtoId)
+	}
+	if ipv4Item.Hdr.HdrChecksum > 0xFF {
+		return fmt.Errorf("invalid hdr_checksum (%d), must be equal or lower than 255", ipv4Item.Hdr.HdrChecksum)
+	}
+
 	return nil
 }
 
@@ -205,30 +200,29 @@ func validateRteFlowItemUdp(itemName string, spec, item *any.Any) error {
 		return fmt.Errorf("could not unmarshal %s: %s", itemName, err)
 	}
 
-	if specItem != nil {
-		if specItem.Hdr != nil {
-			if udpItem.Hdr.SrcPort != 0 {
-				if err := validateUint32ItemField(itemName, "src_port", specItem.Hdr.SrcPort, udpItem.Hdr.SrcPort); err != nil {
-					return err
-				}
+	if specItem.Hdr != nil {
+		if udpItem.Hdr.SrcPort != 0 {
+			if err := validateUint32ItemField(itemName, "src_port", specItem.Hdr.SrcPort, udpItem.Hdr.SrcPort); err != nil {
+				return err
 			}
-			if udpItem.Hdr.DstPort != 0 {
-				if err := validateUint32ItemField(itemName, "dst_port", specItem.Hdr.DstPort, udpItem.Hdr.DstPort); err != nil {
-					return err
-				}
+		}
+		if udpItem.Hdr.DstPort != 0 {
+			if err := validateUint32ItemField(itemName, "dst_port", specItem.Hdr.DstPort, udpItem.Hdr.DstPort); err != nil {
+				return err
 			}
-			if udpItem.Hdr.DgramLen != 0 {
-				if err := validateUint32ItemField(itemName, "dgram_len", specItem.Hdr.DgramLen, udpItem.Hdr.DgramLen); err != nil {
-					return err
-				}
+		}
+		if udpItem.Hdr.DgramLen != 0 {
+			if err := validateUint32ItemField(itemName, "dgram_len", specItem.Hdr.DgramLen, udpItem.Hdr.DgramLen); err != nil {
+				return err
 			}
-			if udpItem.Hdr.DgramCksum != 0 {
-				if err := validateUint32ItemField(itemName, "dgram_cksum", specItem.Hdr.DgramCksum, udpItem.Hdr.DgramCksum); err != nil {
-					return err
-				}
+		}
+		if udpItem.Hdr.DgramCksum != 0 {
+			if err := validateUint32ItemField(itemName, "dgram_cksum", specItem.Hdr.DgramCksum, udpItem.Hdr.DgramCksum); err != nil {
+				return err
 			}
 		}
 	}
+
 	if udpItem.Hdr != nil {
 		if udpItem.Hdr.SrcPort > 0xFFFF {
 			return fmt.Errorf("invalid src_port (%d), must be equal or lower than 65,535", udpItem.Hdr.SrcPort)
@@ -260,43 +254,40 @@ func validateRteFlowItemPppoe(itemName string, spec, item *any.Any) error {
 		return fmt.Errorf("could not unmarshal %s: %s", itemName, err)
 	}
 
-	if specItem != nil {
-		if specItem.VersionType != 0 {
-			if err := validateUint32ItemField(itemName, "version_type", specItem.VersionType, pppoeItem.VersionType); err != nil {
-				return err
-			}
+	if specItem.VersionType != 0 {
+		if err := validateUint32ItemField(itemName, "version_type", specItem.VersionType, pppoeItem.VersionType); err != nil {
+			return err
 		}
-		if specItem.Code != 0 {
-			if err := validateUint32ItemField(itemName, "code", specItem.Code, pppoeItem.Code); err != nil {
-				return err
-			}
+	}
+	if specItem.Code != 0 {
+		if err := validateUint32ItemField(itemName, "code", specItem.Code, pppoeItem.Code); err != nil {
+			return err
 		}
-		if specItem.SessionId != 0 {
-			if err := validateUint32ItemField(itemName, "session_id", specItem.SessionId, pppoeItem.SessionId); err != nil {
-				return err
-			}
+	}
+	if specItem.SessionId != 0 {
+		if err := validateUint32ItemField(itemName, "session_id", specItem.SessionId, pppoeItem.SessionId); err != nil {
+			return err
 		}
-		if specItem.Length != 0 {
-			if err := validateUint32ItemField(itemName, "length", specItem.Length, pppoeItem.Length); err != nil {
-				return err
-			}
+	}
+	if specItem.Length != 0 {
+		if err := validateUint32ItemField(itemName, "length", specItem.Length, pppoeItem.Length); err != nil {
+			return err
 		}
 	}
 
-	if pppoeItem != nil {
-		if pppoeItem.VersionType > 0xFF {
-			return fmt.Errorf("invalid version_type (%d), must be equal or lower than 255", pppoeItem.VersionType)
-		}
-		if pppoeItem.Code > 0xFF {
-			return fmt.Errorf("invalid code (%d), must be equal or lower than 255", pppoeItem.Code)
-		}
-		if pppoeItem.SessionId > 0xFFFF {
-			return fmt.Errorf("invalid session_id (%d), must be equal or lower than 65,535", pppoeItem.SessionId)
-		}
-		if pppoeItem.Length > 0xFFFF {
-			return fmt.Errorf("invalid length (%d), must be equal or lower than 65,535", pppoeItem.Length)
-		}
+	if pppoeItem.VersionType > 0xFF {
+		return fmt.Errorf("invalid version_type (%d), must be equal or lower than 255", pppoeItem.VersionType)
 	}
+	if pppoeItem.Code > 0xFF {
+		return fmt.Errorf("invalid code (%d), must be equal or lower than 255", pppoeItem.Code)
+	}
+	if pppoeItem.SessionId > 0xFFFF {
+		return fmt.Errorf("invalid session_id (%d), must be equal or lower than 65,535", pppoeItem.SessionId)
+	}
+	if pppoeItem.Length > 0xFFFF {
+		return fmt.Errorf("invalid length (%d), must be equal or lower than 65,535", pppoeItem.Length)
+	}
+
 	return nil
 }
 
@@ -313,16 +304,12 @@ func validateRteFlowItemPppoeProtoId(itemName string, spec, item *any.Any) error
 		return fmt.Errorf("could not unmarshal %s: %v", itemName, err)
 	}
 
-	if specItem != nil {
-		if err := validateUint32ItemField(itemName, "proto_id", specItem.ProtoId, pppoeProtoIdItem.ProtoId); err != nil {
-			return err
-		}
+	if err := validateUint32ItemField(itemName, "proto_id", specItem.ProtoId, pppoeProtoIdItem.ProtoId); err != nil {
+		return err
 	}
 
-	if pppoeProtoIdItem != nil {
-		if pppoeProtoIdItem.ProtoId > 0xFFFF {
-			return fmt.Errorf("invalid proto_id (%d), must be equal or lower than 65,535", pppoeProtoIdItem.ProtoId)
-		}
+	if pppoeProtoIdItem.ProtoId > 0xFFFF {
+		return fmt.Errorf("invalid proto_id (%d), must be equal or lower than 65,535", pppoeProtoIdItem.ProtoId)
 	}
 
 	return nil

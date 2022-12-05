@@ -7,12 +7,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"path"
 	"strings"
 	"time"
 
-	sriovutils "github.com/k8snetworkplumbingwg/sriov-network-device-plugin/pkg/utils"
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/otcshare/intel-ethernet-operator/pkg/flowconfig/sriovutils"
 	mock "github.com/stretchr/testify/mock"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -34,7 +35,7 @@ var _ = Describe("NodeFlowConfig controller", func() {
 
 		timeout   = time.Second * 20
 		interval  = time.Millisecond * 250
-		maxportId = invalidPortId
+		maxportId = automaticPortId
 	)
 
 	Context("when the controller is reconciling", func() {
@@ -130,8 +131,6 @@ var _ = Describe("NodeFlowConfig controller", func() {
 					err := k8sClient.Create(ctx, policy)
 					return err == nil
 				}, timeout, interval).Should(BeTrue())
-				// Add delays after creating api object before retrieving it again
-				time.Sleep(time.Second * 2)
 
 				/*
 					After the policy spec is created, we expect the controller should update its internal state in its flowSets field and also update
@@ -140,16 +139,23 @@ var _ = Describe("NodeFlowConfig controller", func() {
 				policyObjLookupKey := types.NamespacedName{Name: nodeName, Namespace: nodeFlowConfigNamespace}
 				createdPolicyObj = &flowconfigv1.NodeFlowConfig{}
 
-				Eventually(func() bool {
-					err := k8sClient.Get(ctx, policyObjLookupKey, createdPolicyObj)
-					return err == nil
-				}, timeout, interval).Should(BeTrue())
-
 				By("updating its Status with DCF port info")
-				Expect(len(createdPolicyObj.Status.PortInfo)).Should(Equal(1))
+				Eventually(func() int {
+					err := k8sClient.Get(ctx, policyObjLookupKey, createdPolicyObj)
+					if err != nil {
+						return 0
+					}
+					return len(createdPolicyObj.Status.PortInfo)
+				}, timeout, interval).Should(Equal(1))
 
 				By("updating its flowSets with the new NodeFlowConfig")
-				Expect(nodeFlowConfigRc.flowSets.Size()).Should(Equal(1))
+				Eventually(func() int {
+					err := k8sClient.Get(ctx, policyObjLookupKey, createdPolicyObj)
+					if err != nil {
+						return 0
+					}
+					return nodeFlowConfigRc.flowSets.Size()
+				}, timeout, interval).Should(Equal(1))
 			})
 		})
 
@@ -177,13 +183,13 @@ var _ = Describe("NodeFlowConfig controller", func() {
 					return err == nil
 				}, timeout, interval).Should(BeTrue())
 
-				// Add delays after deleting api object before validating the controller's default config
-				time.Sleep(time.Second * 2)
 				/*
 					When a NodeFlowConfig object is deleted, we expect the controller to delete all rules from its default config.
 				*/
 				By("deleting the spec from the controller's flowSets")
-				Expect(nodeFlowConfigRc.flowSets.Size()).Should(Equal(0))
+				Eventually(func() int {
+					return nodeFlowConfigRc.flowSets.Size()
+				}, timeout, interval).Should(Equal(0))
 			})
 		})
 	})
@@ -672,7 +678,7 @@ spec:
 					{
 						PortId:   0,
 						PortMode: "dcf",
-						PortPci:  "0000:01.01",
+						PortPci:  "0000:01:08.0",
 					},
 				},
 			}
@@ -699,7 +705,11 @@ spec:
 				return err == nil
 			}, timeout, interval).Should(BeTrue())
 
-			time.Sleep(2 * time.Second)
+			policyObjLookupKey := types.NamespacedName{Name: nodeName, Namespace: nodeFlowConfigNamespace}
+			Eventually(func() error {
+				return k8sClient.Get(context.Background(), policyObjLookupKey, policy)
+			}, timeout, interval).Should(BeNil())
+
 			defer func() {
 				Eventually(func() bool {
 					err := k8sClient.Delete(context.Background(), policy)
@@ -717,7 +727,10 @@ spec:
 					"sys/bus/pci/devices/0000:01:00.0/virtfn2": "../0000:01:10.0",
 				},
 			}
-			defer fs.Use()()
+			// defer fs.Use()()
+			tempRoot, tearDown := fs.Use()
+			defer tearDown()
+			nodeFlowConfigRc.sriovUtils = sriovutils.GetSriovUtils(path.Join(tempRoot, "/sys"))
 
 			action := []*flowconfigv1.FlowAction{
 				{
@@ -756,7 +769,9 @@ spec:
 					"sys/bus/pci/devices/0000:01:00.0/virtfn2": "../0000:01:10.0",
 				},
 			}
-			defer fs.Use()()
+			tempRoot, tearDown := fs.Use()
+			defer tearDown()
+			nodeFlowConfigRc.sriovUtils = sriovutils.GetSriovUtils(path.Join(tempRoot, "/sys"))
 
 			action := []*flowconfigv1.FlowAction{
 				{
@@ -828,7 +843,9 @@ spec:
 					"sys/bus/pci/devices/0000:01:00.0/virtfn2": "../0000:01:10.0",
 				},
 			}
-			defer fs.Use()()
+			tempRoot, tearDown := fs.Use()
+			defer tearDown()
+			nodeFlowConfigRc.sriovUtils = sriovutils.GetSriovUtils(path.Join(tempRoot, "/sys"))
 
 			action := []*flowconfigv1.FlowAction{
 				{
@@ -841,7 +858,7 @@ spec:
 
 			flowRules := &flowconfigv1.FlowRules{
 				Action: action,
-				PortId: invalidPortId,
+				PortId: automaticPortId,
 			}
 
 			flowReqs, err := nodeFlowConfigRc.getFlowCreateRequests(flowRules)
@@ -853,18 +870,21 @@ spec:
 		It("DCF ports are not available", func() {
 			fs := &sriovutils.FakeFilesystem{
 				Dirs: []string{
-					"sys/bus/pci/devices/0000:01:10.0/",
 					"sys/bus/pci/devices/0000:01:00.0/",
-					"sys/bus/pci/devices/net/ens1000"},
+					"sys/bus/pci/devices/0000:01:00.0/net/fakePF",
+					"sys/bus/pci/devices/0000:01:10.0/",
+					"sys/bus/pci/devices/0000:01:10.1/",
+				},
 				Symlinks: map[string]string{
+					"sys/bus/pci/devices/0000:01:00.0/virtfn0": "../0000:01:10.0",
+					"sys/bus/pci/devices/0000:01:00.0/virtfn1": "../0000:01:10.1",
 					"sys/bus/pci/devices/0000:01:10.0/physfn":  "../0000:01:00.0",
-					"sys/bus/pci/devices/0000:01:00.0/virtfn0": "../0000:01:08.0",
-					"sys/bus/pci/devices/0000:01:00.0/virtfn1": "../0000:01:09.0",
-					"sys/bus/pci/devices/0000:01:00.0/virtfn2": "../0000:01:10.0",
-					"sys/bus/pci/devices/0000:01:10.0/net":     "../net",
+					"sys/bus/pci/devices/0000:01:10.1/physfn":  "../0000:01:00.0",
 				},
 			}
-			defer fs.Use()()
+			tempRoot, tearDown := fs.Use()
+			defer tearDown()
+			nodeFlowConfigRc.sriovUtils = sriovutils.GetSriovUtils(path.Join(tempRoot, "/sys"))
 
 			mockDCF := &mocks.FlowServiceClient{}
 			nodeFlowConfigRc.flowClient = mockDCF
@@ -874,14 +894,14 @@ spec:
 				{
 					Type: "RTE_FLOW_ACTION_TYPE_VFPCIADDR",
 					Conf: &runtime.RawExtension{
-						Raw: []byte(`{ "addr": "0000:01:10.0" }`),
+						Raw: []byte(`{ "addr": "0000:01:10.1" }`),
 					},
 				},
 			}
 
 			flowRules := &flowconfigv1.FlowRules{
 				Action: action,
-				PortId: invalidPortId,
+				PortId: automaticPortId,
 			}
 
 			flowReqs, err := nodeFlowConfigRc.getFlowCreateRequests(flowRules)
@@ -893,18 +913,20 @@ spec:
 		It("unable to get pfName of the VF that is trusted", func() {
 			fs := &sriovutils.FakeFilesystem{
 				Dirs: []string{
-					"sys/bus/pci/devices/0000:01:10.0/",
 					"sys/bus/pci/devices/0000:01:00.0/",
-					"sys/bus/pci/devices/net/ens1000"},
+					"sys/bus/pci/devices/0000:01:00.0/net/fakePF",
+					"sys/bus/pci/devices/0000:01:10.0/",
+				},
 				Symlinks: map[string]string{
 					"sys/bus/pci/devices/0000:01:10.0/physfn":  "../0000:01:00.0",
 					"sys/bus/pci/devices/0000:01:00.0/virtfn0": "../0000:01:08.0",
 					"sys/bus/pci/devices/0000:01:00.0/virtfn1": "../0000:01:09.0",
 					"sys/bus/pci/devices/0000:01:00.0/virtfn2": "../0000:01:10.0",
-					"sys/bus/pci/devices/0000:01:10.0/net":     "../net",
 				},
 			}
-			defer fs.Use()()
+			tempRoot, tearDown := fs.Use()
+			defer tearDown()
+			nodeFlowConfigRc.sriovUtils = sriovutils.GetSriovUtils(path.Join(tempRoot, "/sys"))
 
 			mockDCF := &mocks.FlowServiceClient{}
 			nodeFlowConfigRc.flowClient = mockDCF
@@ -930,7 +952,7 @@ spec:
 
 			flowRules := &flowconfigv1.FlowRules{
 				Action: action,
-				PortId: invalidPortId,
+				PortId: automaticPortId,
 			}
 
 			flowReqs, err := nodeFlowConfigRc.getFlowCreateRequests(flowRules)
@@ -942,24 +964,23 @@ spec:
 		It("pfName that handles traffic is not on a list of DCF ports", func() {
 			fs := &sriovutils.FakeFilesystem{
 				Dirs: []string{
-					"sys/bus/pci/devices/0000:01:10.0/",
 					"sys/bus/pci/devices/0000:01:00.0/",
-					"sys/bus/pci/devices/0000:01:01.0/",
+					"sys/bus/pci/devices/0000:01:00.0/net/fakePF",
+					"sys/bus/pci/devices/0000:01:10.0/",
 					"sys/bus/pci/devices/0000:20:00.0/",
-					"sys/bus/pci/devices/net1/ens1000",
-					"sys/bus/pci/devices/net2/ens2000"},
+					"sys/bus/pci/devices/0000:20:00.0/net/fakePF2",
+					"sys/bus/pci/devices/0000:20:10.0/",
+				},
 				Symlinks: map[string]string{
+					"sys/bus/pci/devices/0000:01:00.0/virtfn0": "../0000:01:10.0",
 					"sys/bus/pci/devices/0000:01:10.0/physfn":  "../0000:01:00.0",
-					"sys/bus/pci/devices/0000:01:00.0/virtfn0": "../0000:01:08.0",
-					"sys/bus/pci/devices/0000:01:00.0/virtfn1": "../0000:01:09.0",
-					"sys/bus/pci/devices/0000:01:00.0/virtfn2": "../0000:01:10.0",
-					"sys/bus/pci/devices/0000:01:10.0/net":     "../net1",
-					"sys/bus/pci/devices/0000:01:01.0/physfn":  "../0000:20:00.0",
-					"sys/bus/pci/devices/0000:20:00.0/virtfn0": "../0000:01:01.0",
-					"sys/bus/pci/devices/0000:01:01.0/net":     "../net2",
+					"sys/bus/pci/devices/0000:20:00.0/virtfn0": "../0000:20:10.0",
+					"sys/bus/pci/devices/0000:20:10.0/physfn":  "../0000:20:00.0",
 				},
 			}
-			defer fs.Use()()
+			tempRoot, tearDown := fs.Use()
+			defer tearDown()
+			nodeFlowConfigRc.sriovUtils = sriovutils.GetSriovUtils(path.Join(tempRoot, "/sys"))
 
 			mockDCF := &mocks.FlowServiceClient{}
 			nodeFlowConfigRc.flowClient = mockDCF
@@ -968,7 +989,7 @@ spec:
 					{
 						PortId:   0,
 						PortMode: "dcf",
-						PortPci:  "0000:01:01.0",
+						PortPci:  "0000:01:10.0",
 					},
 				},
 			}
@@ -978,14 +999,14 @@ spec:
 				{
 					Type: "RTE_FLOW_ACTION_TYPE_VFPCIADDR",
 					Conf: &runtime.RawExtension{
-						Raw: []byte(`{ "addr": "0000:01:10.0" }`),
+						Raw: []byte(`{ "addr": "0000:20:10.0" }`),
 					},
 				},
 			}
 
 			flowRules := &flowconfigv1.FlowRules{
 				Action: action,
-				PortId: invalidPortId,
+				PortId: automaticPortId,
 			}
 
 			flowReqs, err := nodeFlowConfigRc.getFlowCreateRequests(flowRules)
@@ -997,20 +1018,21 @@ spec:
 		It("pfName of traffic VF matches pfName of DCF VF - return portId", func() {
 			fs := &sriovutils.FakeFilesystem{
 				Dirs: []string{
-					"sys/bus/pci/devices/0000:01:10.0/",
-					"sys/bus/pci/devices/0000:01:08.0/",
 					"sys/bus/pci/devices/0000:01:00.0/",
-					"sys/bus/pci/devices/net/ens1000"},
+					"sys/bus/pci/devices/0000:01:00.0/net/fakePF",
+					"sys/bus/pci/devices/0000:01:10.0/",
+					"sys/bus/pci/devices/0000:01:10.1/",
+				},
 				Symlinks: map[string]string{
+					"sys/bus/pci/devices/0000:01:00.0/virtfn0": "../0000:01:10.0",
+					"sys/bus/pci/devices/0000:01:00.0/virtfn1": "../0000:01:10.1",
 					"sys/bus/pci/devices/0000:01:10.0/physfn":  "../0000:01:00.0",
-					"sys/bus/pci/devices/0000:01:00.0/virtfn0": "../0000:01:08.0",
-					"sys/bus/pci/devices/0000:01:00.0/virtfn1": "../0000:01:09.0",
-					"sys/bus/pci/devices/0000:01:00.0/virtfn2": "../0000:01:10.0",
-					"sys/bus/pci/devices/0000:01:10.0/net":     "../net",
-					"sys/bus/pci/devices/0000:01:08.0/net":     "../net",
+					"sys/bus/pci/devices/0000:01:10.1/physfn":  "../0000:01:00.0",
 				},
 			}
-			defer fs.Use()()
+			tempRoot, tearDown := fs.Use()
+			defer tearDown()
+			nodeFlowConfigRc.sriovUtils = sriovutils.GetSriovUtils(path.Join(tempRoot, "/sys"))
 
 			mockDCF := &mocks.FlowServiceClient{}
 			nodeFlowConfigRc.flowClient = mockDCF
@@ -1019,7 +1041,7 @@ spec:
 					{
 						PortId:   3,
 						PortMode: "dcf",
-						PortPci:  "0000:01:08.0",
+						PortPci:  "0000:01:10.0",
 					},
 				},
 			}
@@ -1029,14 +1051,14 @@ spec:
 				{
 					Type: "RTE_FLOW_ACTION_TYPE_VFPCIADDR",
 					Conf: &runtime.RawExtension{
-						Raw: []byte(`{ "addr": "0000:01:10.0" }`),
+						Raw: []byte(`{ "addr": "0000:01:10.1" }`),
 					},
 				},
 			}
 
 			flowRules := &flowconfigv1.FlowRules{
 				Action: action,
-				PortId: invalidPortId,
+				PortId: automaticPortId,
 			}
 
 			flowReqs, err := nodeFlowConfigRc.getFlowCreateRequests(flowRules)

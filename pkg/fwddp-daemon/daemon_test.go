@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"io/ioutil"
+	"net/http"
 	"os"
 	"os/exec"
 	"path"
@@ -16,7 +17,7 @@ import (
 	gerrors "errors"
 
 	"github.com/go-logr/logr"
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	ethernetv1 "github.com/otcshare/intel-ethernet-operator/apis/ethernet/v1"
 	core "k8s.io/api/core/v1"
@@ -106,7 +107,7 @@ var _ = Describe("DaemonTests", func() {
 		getInventory = func(_ logr.Logger) ([]ethernetv1.Device, error) {
 			return data.Inventory, nil
 		}
-		downloadFile = func(path, url, checksum string) error {
+		downloadFile = func(path, url, checksum string, client *http.Client) error {
 			return nil
 		}
 		untarFile = func(srcPath string, dstPath string, log logr.Logger) error {
@@ -254,7 +255,7 @@ var _ = Describe("DaemonTests", func() {
 			data.Inventory[0].PCIAddress = "0000:00:00.1"
 
 			downloadErr := gerrors.New("unable to download")
-			downloadFile = func(path, url, checksum string) error {
+			downloadFile = func(path, url, checksum string, client *http.Client) error {
 				return downloadErr
 			}
 
@@ -283,7 +284,7 @@ var _ = Describe("DaemonTests", func() {
 
 			data.Inventory[0].PCIAddress = "0000:00:00.1"
 
-			downloadFile = func(localpath, url, checksum string) error {
+			downloadFile = func(localpath, url, checksum string, client *http.Client) error {
 
 				updateDir := path.Join(artifactsFolder, data.Inventory[0].PCIAddress)
 				updatePath := updateResultPath(updateDir)
@@ -345,7 +346,7 @@ var _ = Describe("DaemonTests", func() {
 
 			data.Inventory[0].PCIAddress = "0000:00:00.1"
 
-			downloadFile = func(localpath, url, checksum string) error {
+			downloadFile = func(localpath, url, checksum string, client *http.Client) error {
 
 				updateDir := path.Join(artifactsFolder, data.Inventory[0].PCIAddress)
 				updatePath := updateResultPath(updateDir)
@@ -406,7 +407,7 @@ var _ = Describe("DaemonTests", func() {
 
 			data.Inventory[0].PCIAddress = "0000:00:00.1"
 
-			downloadFile = func(localpath, url, checksum string) error {
+			downloadFile = func(localpath, url, checksum string, client *http.Client) error {
 
 				updateDir := path.Join(artifactsFolder, data.Inventory[0].PCIAddress)
 				updatePath := updateResultPath(updateDir)
@@ -560,7 +561,7 @@ var _ = Describe("DaemonTests", func() {
 				return nil
 			}
 
-			downloadFile = func(localpath, url, checksum string) error {
+			downloadFile = func(localpath, url, checksum string, client *http.Client) error {
 
 				updateDir := path.Join(artifactsFolder, data.Inventory[0].PCIAddress)
 				updatePath := updateResultPath(updateDir)
@@ -644,7 +645,7 @@ var _ = Describe("DaemonTests", func() {
 			Expect(nodeConfigs.Items[0].Status.Conditions[0].Message).To(ContainSubstring("failed to get MAC for device 0000:00:00.1. Device not found"))
 		})
 
-		var _ = It("if FWUrl is empty then FW update is skipped and status updated to UpdateSucceeded", func() {
+		var _ = It("if FWUrl is empty (empty device config) then FW update is skipped and status updated to NotRequested", func() {
 
 			data.NodeConfig.Spec.Config[0].DeviceConfig.FWURL = ""
 
@@ -674,8 +675,8 @@ var _ = Describe("DaemonTests", func() {
 			Expect(k8sClient.List(context.TODO(), nodeConfigs)).To(Succeed())
 			Expect(nodeConfigs.Items).To(HaveLen(1))
 			Expect(nodeConfigs.Items[0].Status.Conditions).To(HaveLen(1))
-			Expect(nodeConfigs.Items[0].Status.Conditions[0].Reason).To(Equal(string(UpdateSucceeded)))
-			Expect(nodeConfigs.Items[0].Status.Conditions[0].Message).To(Equal("Updated successfully"))
+			Expect(nodeConfigs.Items[0].Status.Conditions[0].Reason).To(Equal(string(UpdateNotRequested)))
+			Expect(nodeConfigs.Items[0].Status.Conditions[0].Message).To(Equal("Inventory up to date"))
 		})
 
 		var _ = It("will fail because of PCIAddress not matching pattern", func() {
@@ -687,42 +688,42 @@ var _ = Describe("DaemonTests", func() {
 			data.NodeConfig.Spec.Config[0].PCIAddress = "0:00:00.1"
 			err := k8sClient.Create(context.TODO(), &data.NodeConfig)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("spec.config.PCIAddress: Invalid value:"))
+			Expect(err.Error()).To(ContainSubstring("spec.config[0].PCIAddress: Invalid value:"))
 
 			data.NodeConfig.Spec.Config[0].PCIAddress = "0000:00:00.a"
 			err = k8sClient.Create(context.TODO(), &data.NodeConfig)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("spec.config.PCIAddress: Invalid value:"))
+			Expect(err.Error()).To(ContainSubstring("spec.config[0].PCIAddress: Invalid value:"))
 
 			data.NodeConfig.Spec.Config[0].PCIAddress = "0:00:00"
 			err = k8sClient.Create(context.TODO(), &data.NodeConfig)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("spec.config.PCIAddress: Invalid value:"))
+			Expect(err.Error()).To(ContainSubstring("spec.config[0].PCIAddress: Invalid value:"))
 
 			data.NodeConfig.Spec.Config[0].PCIAddress = "0:00:00"
 			err = k8sClient.Create(context.TODO(), &data.NodeConfig)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("spec.config.PCIAddress: Invalid value:"))
+			Expect(err.Error()).To(ContainSubstring("spec.config[0].PCIAddress: Invalid value:"))
 
 			data.NodeConfig.Spec.Config[0].PCIAddress = "0000:00:20.1"
 			err = k8sClient.Create(context.TODO(), &data.NodeConfig)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("spec.config.PCIAddress: Invalid value:"))
+			Expect(err.Error()).To(ContainSubstring("spec.config[0].PCIAddress: Invalid value:"))
 
 			data.NodeConfig.Spec.Config[0].PCIAddress = "0000:00:0.1"
 			err = k8sClient.Create(context.TODO(), &data.NodeConfig)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("spec.config.PCIAddress: Invalid value:"))
+			Expect(err.Error()).To(ContainSubstring("spec.config[0].PCIAddress: Invalid value:"))
 
 			data.NodeConfig.Spec.Config[0].PCIAddress = "0000:0:00.1"
 			err = k8sClient.Create(context.TODO(), &data.NodeConfig)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("spec.config.PCIAddress: Invalid value:"))
+			Expect(err.Error()).To(ContainSubstring("spec.config[0].PCIAddress: Invalid value:"))
 
 			data.NodeConfig.Spec.Config[0].PCIAddress = "0000:00:00.*"
 			err = k8sClient.Create(context.TODO(), &data.NodeConfig)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("spec.config.PCIAddress: Invalid value:"))
+			Expect(err.Error()).To(ContainSubstring("spec.config[0].PCIAddress: Invalid value:"))
 		})
 
 		var _ = It("will update condition to UpdateFailed if not able to download DDP", func() {
@@ -735,7 +736,7 @@ var _ = Describe("DaemonTests", func() {
 			data.Inventory[0].PCIAddress = "0000:00:00.1"
 
 			downloadErr := gerrors.New("unable to download DDP")
-			downloadFile = func(path, url, checksum string) error {
+			downloadFile = func(path, url, checksum string, client *http.Client) error {
 				return downloadErr
 			}
 

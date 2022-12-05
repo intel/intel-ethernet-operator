@@ -17,21 +17,23 @@ Copyright (c) 2021 Intel Corporation
     - [Unified Flow Tool](#unified-flow-tool)
   - [Prerequisites](#prerequisites)
     - [Intel Ethernet Operator - SRIOV](#intel-ethernet-operator---sriov)
-    - [Intel Ethernet Operator - OOT ICE driver update](#intel-ethernet-operator---oot-ice-driver-update)
-- [Technical Requirements and Dependencies](#technical-requirements-and-dependencies)
+    - [Node Feature Discovery](#node-feature-discovery)
 - [Deploying the Operator](#deploying-the-operator)
+  - [Installing Go](#installing-go)
+  - [Installing Operator SDK](#installing-operator-sdk)
   - [Applying custom resources](#applying-custom-resources)
     - [Webserver for disconnected environment](#webserver-for-disconnected-environment)
-    - [Updating Firmware](#updating-firmware)
+    - [Certificate validation](#certificate-validation)
     - [Updating DDP](#updating-ddp)
-    - [Deploy Flow Configuration agent](#deploy-flow-configuration-agent)
+    - [Deploying Flow Configuration Agent](#deploying-flow-configuration-agent)
       - [Creating Trusted VF using SRIOV Network Operator](#creating-trusted-vf-using-sriov-network-operator)
       - [Check node status](#check-node-status)
       - [Create DCF capable SRIOV Network](#create-dcf-capable-sriov-network)
       - [Build UFT image](#build-uft-image)
-      - [Create FlowConfig Node Agent deployment CR](#create-flowconfig-node-agent-deployment-cr)
-      - [Verify that FlowConfig Daemon is running on available nodes:](#verify-that-flowconfig-daemon-is-running-on-available-nodes)
+      - [Creating FlowConfig Node Agent Deployment CR](#creating-flowconfig-node-agent-deployment-cr)
+      - [Verifying that FlowConfig Daemon is running on available nodes:](#verifying-that-flowconfig-daemon-is-running-on-available-nodes)
       - [Creating Flow Configuration rules with Intel Ethernet Operator](#creating-flow-configuration-rules-with-intel-ethernet-operator)
+      - [Creating Flow Configuration rules with Intel Ethernet Operator (NodeFlowConfig)](#creating-flow-configuration-rules-with-intel-ethernet-operator-nodeflowconfig)
       - [Update a sample Node Flow Configuration rule](#update-a-sample-node-flow-configuration-rule)
 - [Hardware Validation Environment](#hardware-validation-environment)
 - [Summary](#summary)
@@ -95,7 +97,7 @@ The FW/DDP daemon pod is a DaemonSet deployed as part of the operator. It is dep
 
 Once the operator/daemon detects a change to a CR related to the update of the Intel® E810 NIC firmware, it tries to perform an update. The firmware for the Intel® E810 NICs is expected to be provided by the user in form of a `tar.gz` file. The user is also responsible to verify that the firmware version is compatible with the device. The user is required to place the firmware on an accessible HTTP server and provide an URL for it in the CR. If the file is provided correctly and the firmware is to be updated, the Ethernet Configuration Daemon will update the Intel® E810 NICs with the NVM utility provided.
 
-To update the NVM firmware of the Intel® E810 cards' NICs user must create a CR containing the information about which card should be programmed. The Physical Functions of the NICs will be updated in logical pairs. The user needs to provide the FW URL and checksum (md5) in the CR.
+To update the NVM firmware of the Intel® E810 cards' NICs user must create a CR containing the information about which card should be programmed. The Physical Functions of the NICs will be updated in logical pairs. The user needs to provide the FW URL and checksum (SHA-1) in the CR.
 
 For a sample CR go to [Updating Firmware](#updating-firmware).
 
@@ -135,6 +137,14 @@ One way of creating and providing this trusted VF and application VFs is to conf
 In OCP environments the SRIOV Network Operator will be deployed as a dependency to Intel Ethernet Operator automatically.
 The configuration and creation of the trusted VFs and application is out of scope of this Operator and is users responsibility.
 
+#### Node Feature Discovery
+
+Install node feature discovery using the following command:
+
+```shell
+	kubectl apply -k https://github.com/kubernetes-sigs/node-feature-discovery/deployment/overlays/default?ref=v0.11.1
+```
+
 
 ## Deploying the Operator
 
@@ -143,12 +153,14 @@ Building the operator bundle images will require Go and Operator SDK to be insta
 ### Installing Go
 You can install Go following the steps [here](https://go.dev/doc/install).
 
+> Note: Intel Ethernet Operator is not compatible with Go versions below 1.19
+
 ### Installing Operator SDK
-Please install Operator SDK v1.7.2 following the steps below:
+Please install Operator SDK v1.25.0 following the steps below:
 ```
 export ARCH=$(case $(uname -m) in x86_64) echo -n amd64 ;; aarch64) echo -n arm64 ;; *) echo -n $(uname -m) ;; esac)
 export OS=$(uname | awk '{print tolower($0)}')
-export SDK_VERSION=v1.7.2
+export SDK_VERSION=v1.25.0
 export OPERATOR_SDK_DL_URL=https://github.com/operator-framework/operator-sdk/releases/download/${SDK_VERSION}
 curl -LO ${OPERATOR_SDK_DL_URL}/operator-sdk_${OS}_${ARCH}
 chmod +x operator-sdk_${OS}_${ARCH} && sudo mv operator-sdk_${OS}_${ARCH} /usr/local/bin/operator-sdk
@@ -168,7 +180,7 @@ Note: Example code below uses `kubectl` and the client binary. You can substitut
 #### Webserver for disconnected environment
 
 If cluster is running in disconnected environment, then user has to create local cache (e.g webserver) which will serve required files.
-Cache should be created on machine with access to Internet.  
+Cache should be created on machine with access to Internet.
 Start by creating dedicated folder for webserver.
 ```shell
 mkdir webserver
@@ -240,8 +252,28 @@ spec:
   selector:
     run: ice-cache
 ```
-After that package will be available in cluster under following path:   
+After that package will be available in cluster under following path:
 ```http://ice-cache.default.svc.cluster.local/E810_NVMUpdatePackage_v3_10_Linux.tar.gz```
+#### Certificate validation
+To update FW or DDP on CLV card, you have to download corresponding packages for them. For security reasons, you might want to validate certificate that is exposed by server before downloading and this optional step describes how to add trusted certificate.
+
+Those steps must be done when operator is not installed. If operator is installed, you can apply new configuration by manually restarting `fwddp-daemon` pods.
+
+Prepare trusted X509 certificate `certificate.der` that will be added to trusted store. It could be either root CA certificate or intermediate certificate. It must contain `Subject Alternative Name` or `IPAdresses` identical to path from which packages will be downloaded.
+
+```shell
+kubectl create secret generic tls-cert --from-file=tls.crt=certificate.der -n <namespace>
+```
+
+Restart `fwddp-daemon` pods or install operator
+
+Check that certificate is correctly loaded in `fwddp-daemon` pods
+
+```shell
+kubectl logs -n <namespace> pod/fwddp-daemon|grep -i "found certificate - using HTTPS client"
+{"level":"info","logger":"daemon","msg": "found certificate - using HTTPS client"}
+````
+
 #### Updating Firmware
 
 To find the NIC devices belonging to the Intel® E810 NIC run following command, the user can detect the device information of the NICs from the output:
@@ -252,7 +284,7 @@ To find the NIC devices belonging to the Intel® E810 NIC run following command,
 
 To update the Firmware of the supported device run following steps:
 
->Note: The Physical Functions of the NICs will be updated in logical pairs. The user needs to provide the FW URL and checksum (md5).
+>Note: The Physical Functions of the NICs will be updated in logical pairs. The user needs to provide the FW URL and checksum (SHA-1).
 
 Create a CR `yaml` file:
 
@@ -269,7 +301,7 @@ spec:
     pciAddress: "<pci-address>"
   deviceConfig:
     fwURL: "<URL_to_firmware>"
-    fwChecksum: "<file_checksum_md5_hash>"
+    fwChecksum: "<file_checksum_SHA-1_hash>"
 ```
 
 The CR can be applied by running:
@@ -304,8 +336,8 @@ The user can observe the change of the cards' NICs firmware:
 }
 ```
 
-If `fwUrl` points to external location, then you might need to configure proxy on cluster. You can configure it by using [OCP cluster-wide proxy](https://docs.openshift.com/container-platform/4.9/networking/enable-cluster-wide-proxy.html) 
-or by setting HTTP_PROXY, HTTPS_PROXY and NO_PROXY environmental variables in [operator's subscription](https://docs.openshift.com/container-platform/4.9/operators/admin/olm-configuring-proxy-support.html). 
+If `fwUrl` points to external location, then you might need to configure proxy on cluster. You can configure it by using [OCP cluster-wide proxy](https://docs.openshift.com/container-platform/4.9/networking/enable-cluster-wide-proxy.html)
+or by setting HTTP_PROXY, HTTPS_PROXY and NO_PROXY environmental variables in [operator's subscription](https://docs.openshift.com/container-platform/4.9/operators/admin/olm-configuring-proxy-support.html).
 Be aware that operator will ignore lowercase `http_proxy` variables and will accept only uppercase variables.
 
 #### Updating DDP
@@ -327,7 +359,7 @@ spec:
     pciAddress: "<pci-address>"
   deviceConfig:
     ddpURL: "<URL_to_DDP>"
-    ddpChecksum: "<file_checksum_md5_hash>"
+    ddpChecksum: "<file_checksum_SHA-1_hash>"
 ```
 
 The CR can be applied by running:
@@ -365,7 +397,7 @@ The user can observe the change of the cards' NICs DDP:
 
 #### Deploying Flow Configuration Agent
 
-The Flow Configuration Agent Pod runs Unified Flow Tool (UFT) to configure Flow rules for a PF. UFT requires that trust mode is enabled for the first VF (VF0) of a PF so that it has the capability of creating/modifying flow rules for that PF. This VF also needs to be bound to `vfio-pci` driver. The SRIOV VFs pools are K8s extended resources that are exposed via SRIOV Network Operator. 
+The Flow Configuration Agent Pod runs Unified Flow Tool (UFT) to configure Flow rules for a PF. UFT requires that trust mode is enabled for the first VF (VF0) of a PF so that it has the capability of creating/modifying flow rules for that PF. This VF also needs to be bound to `vfio-pci` driver. The SRIOV VFs pools are K8s extended resources that are exposed via SRIOV Network Operator.
 
 The VF pool consists of VF0 from all available Intel E810 series NICs PF which, in this context, we call the **Admin VF pool**. The **Admin VF pool** is associated with a NetworkAttachmentDefinition that enables these VFs trust mode 'on'. The SRIOV Network Operator can be used to create the **Admin VF pool** and the **NetworkAttachmentDefinition** needed by UFT. You can find more information on creating VF pools with SRIOV Network Operator [here](https://docs.openshift.com/container-platform/4.10/networking/hardware_networks/configuring-sriov-device.html) and creating NetworkAttachmentDefinition [here](https://docs.openshift.com/container-platform/4.10/networking/hardware_networks/configuring-sriov-net-attach.html).
 
@@ -460,7 +492,7 @@ By looking at the sriovnetworknodestates status we can find the NIC information 
 
 For example, the following three `SriovNetworkNodePolicy` CRs will create a trusted VF pool name with resourceName `cvl_uft_admin` along with two additional VF pools for application.
 
-> Please note that, the "uft-admin-policy" SriovNetworkNodePolicy below uses `pfNames:` with VF index range selectors to target VF0 only of Intel E810 series NIC. More information on using VF partitioning can be found [here](https://docs.openshift.com/container-platform/4.10/networking/hardware_networks/configuring-sriov-device.html#nw-sriov-nic-partitioning_configuring-sriov-device). 
+> Please note that, the "uft-admin-policy" SriovNetworkNodePolicy below uses `pfNames:` with VF index range selectors to target VF0 only of Intel E810 series NIC. More information on using VF partitioning can be found [here](https://docs.openshift.com/container-platform/4.10/networking/hardware_networks/configuring-sriov-device.html#nw-sriov-nic-partitioning_configuring-sriov-device).
 
 ```yaml
 apiVersion: sriovnetwork.openshift.io/v1
@@ -567,6 +599,12 @@ spec:
 EOF
 ```
 
+Note if the above does not successfully set trust mode to on for vf 0, you can do it manually using this command:
+
+```shell
+# ip link set <PF_NAME> vf 0 trust on
+```
+
 
 ##### Build UFT image
 
@@ -575,13 +613,13 @@ EOF
 
 # git clone https://github.com/intel/UFT.git
 
-# git checkout v22.03
+# git checkout v22.07
 
 # make dcf-image
 
-# docker tag dcf-tool:v21.08 $IMAGE_REGISTRY/dcf-tool:v22.03
+# docker tag uft:v22.07 $IMAGE_REGISTRY/uft:v22.07
 
-# docker push $IMAGE_REGISTRY/dcf-tool:v22.03
+# docker push $IMAGE_REGISTRY/uft:v22.07
 
 ```
 
@@ -648,9 +686,131 @@ now in server cycle
 ```
 ##### Creating Flow Configuration rules with Intel Ethernet Operator
 
-With trusted VFs and application VFs ready to be configured, program the Flow Configuration by running:
+With trusted VFs and application VFs ready to be configured, create a sample ClusterFlowConfig CR:
 
-Create a sample Node specific NodeFlowConfig CR named same as a target node with empty spec:
+Please see the [ClusterFlowConfig Spec](flowconfig-daemon/creating-rules.md) for detailed specification of supported rules.
+Also, please note that this ClusterFlowConfig CR will create NodeFlowConfig with rules on nodes that meet the podSelector criteria
+
+```shell
+cat <<EOF | kubectl apply -f -
+apiVersion: flowconfig.intel.com/v1
+kind: ClusterFlowConfig
+metadata:
+  name: pppoes-sample
+  namespace: intel-ethernet-operator
+spec:
+  rules:
+    - pattern:
+        - type: RTE_FLOW_ITEM_TYPE_ETH
+        - type: RTE_FLOW_ITEM_TYPE_IPV4
+          spec:
+            hdr:
+              src_addr: 10.56.217.9
+          mask:
+            hdr:
+              src_addr: 255.255.255.255
+        - type: RTE_FLOW_ITEM_TYPE_END
+      action:
+        - type: to-pod-interface
+          conf:
+            podInterface: net1
+      attr:
+        ingress: 1
+        priority: 0
+  podSelector:
+      matchLabels:
+        app: vagf
+        role: controlplane
+
+EOF
+```
+
+Validate that Flow Rules are applied by the controller from UFT logs.
+
+```shell
+kubectl logs flowconfig-daemon-worker uft
+Generating server_conf.yaml file...
+Done!
+server :
+    ld_lib : "/usr/local/lib64"
+ports_info :
+    - pci  : "0000:18:01.0"
+      mode : dcf
+do eal init ...
+[{'pci': '0000:18:01.0', 'mode': 'dcf'}]
+[{'pci': '0000:18:01.0', 'mode': 'dcf'}]
+the dcf cmd line is: a.out -c 0x30 -n 4 -a 0000:18:01.0,cap=dcf -d /usr/local/lib64 --file-prefix=dcf --
+EAL: Detected 96 lcore(s)
+EAL: Detected 2 NUMA nodes
+EAL: Detected shared linkage of DPDK
+EAL: Multi-process socket /var/run/dpdk/dcf/mp_socket
+EAL: Selected IOVA mode 'VA'
+EAL: No available 1048576 kB hugepages reported
+EAL: VFIO support initialized
+EAL: Using IOMMU type 1 (Type 1)
+EAL: Probe PCI driver: net_iavf (8086:1889) device: 0000:18:01.0 (socket 0)
+EAL: Releasing PCI mapped resource for 0000:18:01.0
+EAL: Calling pci_unmap_resource for 0000:18:01.0 at 0x2101000000
+EAL: Calling pci_unmap_resource for 0000:18:01.0 at 0x2101020000
+EAL: Using IOMMU type 1 (Type 1)
+EAL: Probe PCI driver: net_ice_dcf (8086:1889) device: 0000:18:01.0 (socket 0)
+ice_load_pkg_type(): Active package is: 1.3.30.0, ICE COMMS Package (double VLAN mode)
+TELEMETRY: No legacy callbacks, legacy socket not created
+grpc server start ...
+now in server cycle
+flow.rte_flow_attr
+flow.rte_flow_item
+flow.rte_flow_item
+flow.rte_flow_item_ipv4
+flow.rte_ipv4_hdr
+flow.rte_flow_item_ipv4
+flow.rte_ipv4_hdr
+flow.rte_flow_item
+flow.rte_flow_action
+flow.rte_flow_action_vf
+flow.rte_flow_action
+rte_flow_attr(group=0, priority=0, ingress=1, egress=0, transfer=0, reserved=0) [rte_flow_item(type_=9, spec=None, last=None, mask=None), rte_flow_item(type_=11, spec=rte_flow_item_ipv4(hdr=rte_ipv4_hdr(version_ihl=0, type_of_service=0, total_length=0, packet_id=0, fragment_offset=0, time_to_live=0, next_proto_id=0, hdr_checksum=0, src_addr=171497737, dst_addr=0)), last=None, mask=rte_flow_item_ipv4(hdr=rte_ipv4_hdr(version_ihl=0, type_of_service=0, total_length=0, packet_id=0, fragment_offset=0, time_to_live=0, next_proto_id=0, hdr_checksum=0, src_addr=4294967295, dst_addr=0))), rte_flow_item(type_=0, spec=None, last=None, mask=None)] [rte_flow_action(type_=11, conf=rte_flow_action_vf(reserved=0, original=0, id=2)), rte_flow_action(type_=0, conf=None)]
+rte_flow_attr(group=0, priority=0, ingress=1, egress=0, transfer=0, reserved=0)
+1
+Finish ipv4: {'hdr': {'version_ihl': 0, 'type_of_service': 0, 'total_length': 0, 'packet_id': 0, 'fragment_offset': 0, 'time_to_live': 0, 'next_proto_id': 0, 'hdr_checksum': 0, 'src_addr': 165230602, 'dst_addr': 0}}
+Finish ipv4: {'hdr': {'version_ihl': 0, 'type_of_service': 0, 'total_length': 0, 'packet_id': 0, 'fragment_offset': 0, 'time_to_live': 0, 'next_proto_id': 0, 'hdr_checksum': 0, 'src_addr': 4294967295, 'dst_addr': 0}}
+rte_flow_action(type_=11, conf=rte_flow_action_vf(reserved=0, original=0, id=2))
+rte_flow_action_vf(reserved=0, original=0, id=2)
+Action vf:  {'reserved': 0, 'original': 0, 'id': 2}
+rte_flow_action(type_=0, conf=None)
+Validate ok...
+flow.rte_flow_attr
+flow.rte_flow_item
+flow.rte_flow_item
+flow.rte_flow_item_ipv4
+flow.rte_ipv4_hdr
+flow.rte_flow_item_ipv4
+flow.rte_ipv4_hdr
+flow.rte_flow_item
+flow.rte_flow_action
+flow.rte_flow_action_vf
+flow.rte_flow_action
+rte_flow_attr(group=0, priority=0, ingress=1, egress=0, transfer=0, reserved=0) [rte_flow_item(type_=9, spec=None, last=None, mask=None), rte_flow_item(type_=11, spec=rte_flow_item_ipv4(hdr=rte_ipv4_hdr(version_ihl=0, type_of_service=0, total_length=0, packet_id=0, fragment_offset=0, time_to_live=0, next_proto_id=0, hdr_checksum=0, src_addr=171497737, dst_addr=0)), last=None, mask=rte_flow_item_ipv4(hdr=rte_ipv4_hdr(version_ihl=0, type_of_service=0, total_length=0, packet_id=0, fragment_offset=0, time_to_live=0, next_proto_id=0, hdr_checksum=0, src_addr=4294967295, dst_addr=0))), rte_flow_item(type_=0, spec=None, last=None, mask=None)] [rte_flow_action(type_=11, conf=rte_flow_action_vf(reserved=0, original=0, id=2)), rte_flow_action(type_=0, conf=None)]
+rte_flow_attr(group=0, priority=0, ingress=1, egress=0, transfer=0, reserved=0)
+rte_flow_attr(group=0, priority=0, ingress=1, egress=0, transfer=0, reserved=0)
+1
+Finish ipv4: {'hdr': {'version_ihl': 0, 'type_of_service': 0, 'total_length': 0, 'packet_id': 0, 'fragment_offset': 0, 'time_to_live': 0, 'next_proto_id': 0, 'hdr_checksum': 0, 'src_addr': 165230602, 'dst_addr': 0}}
+Finish ipv4: {'hdr': {'version_ihl': 0, 'type_of_service': 0, 'total_length': 0, 'packet_id': 0, 'fragment_offset': 0, 'time_to_live': 0, 'next_proto_id': 0, 'hdr_checksum': 0, 'src_addr': 4294967295, 'dst_addr': 0}}
+rte_flow_action(type_=11, conf=rte_flow_action_vf(reserved=0, original=0, id=2))
+rte_flow_action_vf(reserved=0, original=0, id=2)
+Action vf:  {'reserved': 0, 'original': 0, 'id': 2}
+rte_flow_action(type_=0, conf=None)
+free attr
+free item ipv4
+free item ipv4
+free list item
+free action vf conf
+free list action
+Flow rule #0 created on port 0
+```
+
+##### Creating Flow Configuration rules with Intel Ethernet Operator (NodeFlowConfig)
+If ClusterFlowConfig does not satisfy your use case, you can use NodeFlowConfig. Create a sample Node specific NodeFlowConfig CR named same as a target node with empty spec:
 
 ```shell
 cat <<EOF | kubectl apply -f -
@@ -718,84 +878,6 @@ spec:
         ingress: 1
 EOF
 ```
-
-Validate that Flow Rules are applied by the controller from UFT logs.
-
-```shell
-kubectl logs flowconfig-daemon-worker uft
-Generating server_conf.yaml file...
-Done!
-server :
-    ld_lib : "/usr/local/lib64"
-ports_info :
-    - pci  : "0000:18:01.0"
-      mode : dcf
-do eal init ...
-[{'pci': '0000:18:01.0', 'mode': 'dcf'}]
-[{'pci': '0000:18:01.0', 'mode': 'dcf'}]
-the dcf cmd line is: a.out -c 0x30 -n 4 -a 0000:18:01.0,cap=dcf -d /usr/local/lib64 --file-prefix=dcf --
-EAL: Detected 96 lcore(s)
-EAL: Detected 2 NUMA nodes
-EAL: Detected shared linkage of DPDK
-EAL: Multi-process socket /var/run/dpdk/dcf/mp_socket
-EAL: Selected IOVA mode 'VA'
-EAL: No available 1048576 kB hugepages reported
-EAL: VFIO support initialized
-EAL: Using IOMMU type 1 (Type 1)
-EAL: Probe PCI driver: net_iavf (8086:1889) device: 0000:18:01.0 (socket 0)
-EAL: Releasing PCI mapped resource for 0000:18:01.0
-EAL: Calling pci_unmap_resource for 0000:18:01.0 at 0x2101000000
-EAL: Calling pci_unmap_resource for 0000:18:01.0 at 0x2101020000
-EAL: Using IOMMU type 1 (Type 1)
-EAL: Probe PCI driver: net_ice_dcf (8086:1889) device: 0000:18:01.0 (socket 0)
-ice_load_pkg_type(): Active package is: 1.3.30.0, ICE COMMS Package (double VLAN mode)
-TELEMETRY: No legacy callbacks, legacy socket not created
-grpc server start ...
-now in server cycle
-flow.rte_flow_attr
-flow.rte_flow_item
-flow.rte_flow_item
-flow.rte_flow_item_ipv4
-flow.rte_ipv4_hdr
-flow.rte_flow_item_ipv4
-flow.rte_ipv4_hdr
-flow.rte_flow_item
-flow.rte_flow_action
-flow.rte_flow_action
-rte_flow_attr(group=0, priority=0, ingress=1, egress=0, transfer=0, reserved=0) [rte_flow_item(type_=9, spec=None, last=None, mask=None), rte_flow_item(type_=11, spec=rte_flow_item_ipv4(hdr=rte_ipv4_hdr(version_ihl=0, type_of_service=0, total_length=0, packet_id=0, fragment_offset=0, time_to_live=0, next_proto_id=0, hdr_checksum=0, src_addr=171497737, dst_addr=0)), last=None, mask=rte_flow_item_ipv4(hdr=rte_ipv4_hdr(version_ihl=0, type_of_service=0, total_length=0, packet_id=0, fragment_offset=0, time_to_live=0, next_proto_id=0, hdr_checksum=0, src_addr=4294967295, dst_addr=0))), rte_flow_item(type_=0, spec=None, last=None, mask=None)] [rte_flow_action(type_=7, conf=None), rte_flow_action(type_=0, conf=None)]
-rte_flow_attr(group=0, priority=0, ingress=1, egress=0, transfer=0, reserved=0)
-1
-Finish ipv4: {'hdr': {'version_ihl': 0, 'type_of_service': 0, 'total_length': 0, 'packet_id': 0, 'fragment_offset': 0, 'time_to_live': 0, 'next_proto_id': 0, 'hdr_checksum': 0, 'src_addr': 165230602, 'dst_addr': 0}}
-Finish ipv4: {'hdr': {'version_ihl': 0, 'type_of_service': 0, 'total_length': 0, 'packet_id': 0, 'fragment_offset': 0, 'time_to_live': 0, 'next_proto_id': 0, 'hdr_checksum': 0, 'src_addr': 4294967295, 'dst_addr': 0}}
-rte_flow_action(type_=7, conf=None)
-rte_flow_action(type_=0, conf=None)
-Validate ok...
-flow.rte_flow_attr
-flow.rte_flow_item
-flow.rte_flow_item
-flow.rte_flow_item_ipv4
-flow.rte_ipv4_hdr
-flow.rte_flow_item_ipv4
-flow.rte_ipv4_hdr
-flow.rte_flow_item
-flow.rte_flow_action
-flow.rte_flow_action
-rte_flow_attr(group=0, priority=0, ingress=1, egress=0, transfer=0, reserved=0) [rte_flow_item(type_=9, spec=None, last=None, mask=None), rte_flow_item(type_=11, spec=rte_flow_item_ipv4(hdr=rte_ipv4_hdr(version_ihl=0, type_of_service=0, total_length=0, packet_id=0, fragment_offset=0, time_to_live=0, next_proto_id=0, hdr_checksum=0, src_addr=171497737, dst_addr=0)), last=None, mask=rte_flow_item_ipv4(hdr=rte_ipv4_hdr(version_ihl=0, type_of_service=0, total_length=0, packet_id=0, fragment_offset=0, time_to_live=0, next_proto_id=0, hdr_checksum=0, src_addr=4294967295, dst_addr=0))), rte_flow_item(type_=0, spec=None, last=None, mask=None)] [rte_flow_action(type_=7, conf=None), rte_flow_action(type_=0, conf=None)]
-rte_flow_attr(group=0, priority=0, ingress=1, egress=0, transfer=0, reserved=0)
-rte_flow_attr(group=0, priority=0, ingress=1, egress=0, transfer=0, reserved=0)
-1
-Finish ipv4: {'hdr': {'version_ihl': 0, 'type_of_service': 0, 'total_length': 0, 'packet_id': 0, 'fragment_offset': 0, 'time_to_live': 0, 'next_proto_id': 0, 'hdr_checksum': 0, 'src_addr': 165230602, 'dst_addr': 0}}
-Finish ipv4: {'hdr': {'version_ihl': 0, 'type_of_service': 0, 'total_length': 0, 'packet_id': 0, 'fragment_offset': 0, 'time_to_live': 0, 'next_proto_id': 0, 'hdr_checksum': 0, 'src_addr': 4294967295, 'dst_addr': 0}}
-rte_flow_action(type_=7, conf=None)
-rte_flow_action(type_=0, conf=None)
-free attr
-free item ipv4
-free item ipv4
-free list item
-free list action
-Flow rule #0 created on port 0
-```
-
 ## Hardware Validation Environment
 
 - Intel® Ethernet Network Adapter E810-XXVDA2

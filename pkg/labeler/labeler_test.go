@@ -6,14 +6,16 @@ package labeler
 import (
 	"context"
 	"fmt"
-	"k8s.io/client-go/kubernetes/scheme"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
+
+	"k8s.io/client-go/kubernetes/scheme"
 
 	"github.com/jaypipes/ghw"
 	"github.com/jaypipes/pcidb"
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	"github.com/otcshare/intel-ethernet-operator/pkg/utils"
@@ -37,7 +39,7 @@ func fakeGetInclusterConfig() (*rest.Config, error) {
 	return config, fakeGetInclusterConfigReturn
 }
 
-var _ = BeforeSuite(func(done Done) {
+var _ = BeforeSuite(func(ctx SpecContext) {
 	var err error
 	By("bootstrapping test environment")
 	testEnv = &envtest.Environment{
@@ -52,8 +54,7 @@ var _ = BeforeSuite(func(done Done) {
 	Expect(err).ToNot(HaveOccurred())
 	Expect(k8sClient).ToNot(BeNil())
 
-	close(done)
-}, 60)
+}, NodeTimeout(60*time.Second))
 
 var _ = AfterSuite(func() {
 	By("tearing down the test environment")

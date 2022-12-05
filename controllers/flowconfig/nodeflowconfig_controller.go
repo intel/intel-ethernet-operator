@@ -11,7 +11,6 @@ import (
 	"reflect"
 
 	"github.com/go-logr/logr"
-	resourceUtils "github.com/k8snetworkplumbingwg/sriov-network-device-plugin/pkg/utils"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -22,6 +21,7 @@ import (
 	flowconfigv1 "github.com/otcshare/intel-ethernet-operator/apis/flowconfig/v1"
 	"github.com/otcshare/intel-ethernet-operator/pkg/flowconfig/flowsets"
 	flowapi "github.com/otcshare/intel-ethernet-operator/pkg/flowconfig/rpc/v1/flow"
+	"github.com/otcshare/intel-ethernet-operator/pkg/flowconfig/sriovutils"
 	"github.com/otcshare/intel-ethernet-operator/pkg/flowconfig/utils"
 )
 
@@ -33,6 +33,7 @@ type NodeFlowConfigReconciler struct {
 	nodeName   string
 	flowSets   *flowsets.FlowSets
 	flowClient flowapi.FlowServiceClient
+	sriovUtils sriovutils.SriovUtils
 }
 
 //+kubebuilder:rbac:groups=flowconfig.intel.com,resources=nodeflowconfigs,verbs=get;list;watch;create;update;patch;delete
@@ -41,7 +42,7 @@ type NodeFlowConfigReconciler struct {
 
 // GetNodeFlowConfigReconciler returns an instance of NodeFlowConfigReconciler
 func GetNodeFlowConfigReconciler(k8sClient client.Client, logger logr.Logger, scheme *runtime.Scheme, fs *flowsets.FlowSets,
-	fc flowapi.FlowServiceClient, nodeName string) *NodeFlowConfigReconciler {
+	fc flowapi.FlowServiceClient, nodeName string, sysFs string) *NodeFlowConfigReconciler {
 
 	return &NodeFlowConfigReconciler{
 		Client:     k8sClient,
@@ -50,6 +51,7 @@ func GetNodeFlowConfigReconciler(k8sClient client.Client, logger logr.Logger, sc
 		nodeName:   nodeName,
 		flowSets:   fs,
 		flowClient: fc,
+		sriovUtils: sriovutils.GetSriovUtils(sysFs),
 	}
 }
 
@@ -115,7 +117,7 @@ func (r *NodeFlowConfigReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 
 	err = r.syncFlowConfig(instance)
 	if err != nil {
-		reqLogger.Info("syncPolicy returned error", "error message", err)
+		reqLogger.Info("syncPolicy returned error", "error message", err.Error())
 		// Even though we have encountered syncPolicy error we are returning error nil to avoid requeuing
 		// TO-DO: log such error in object Status
 	}
@@ -196,8 +198,8 @@ func (r *NodeFlowConfigReconciler) deleteRules(toDelete map[string]*flowsets.Flo
 
 	logger := r.Log.WithName("deleteRules()")
 	for k, fr := range toDelete {
-		delReq := &flowapi.RequestFlowofPort{PortId: 0, FlowId: fr.FlowID}
-		logger.Info("deleting rule", "flow ID:", fr.FlowID)
+		delReq := &flowapi.RequestFlowofPort{PortId: fr.FlowRule.PortId, FlowId: fr.FlowID}
+		logger.Info("deleting rule", "port ID:", fr.FlowRule.PortId, "flow ID:", fr.FlowID)
 		res, err := r.flowClient.Destroy(context.TODO(), delReq)
 		if err != nil {
 			logger.Info("DCF returned error while deleting rules", "flow ID:", fr.FlowID, "ErrorInfo:", res.ErrorInfo)
@@ -337,7 +339,7 @@ func (r *NodeFlowConfigReconciler) getFlowCreateRequests(fr *flowconfigv1.FlowRu
 
 		rteFlowAction.Type = flowapi.RteFlowActionType(val)
 		if action.Conf != nil {
-			actionAny, err := utils.GetFlowActionAny(action.Type, action.Conf.Raw)
+			actionAny, err := utils.GetFlowActionAny(action.Type, action.Conf.Raw, r.sriovUtils)
 			if err != nil {
 				return nil, fmt.Errorf("error getting Spec pattern for flowtype %s : %v", actionAny, err)
 			}
@@ -380,8 +382,10 @@ func (r *NodeFlowConfigReconciler) getFlowCreateRequests(fr *flowconfigv1.FlowRu
 		rteFlowCreateRequests.Attr = fAttr
 	}
 
-	// 4 - Get port information - ClusterFlowConfig controller should assing defined value to portId if not specified by user in CR
-	if fr.PortId != invalidPortId {
+	// 4 - Get port information
+	// - ClusterFlowConfig controller will always assing invalid value to portId, so in result NodeFlowConfig is responsible for filling in portID
+	// - if NodeFlowConfig will be created manually, user has option to set portID, controller will not get it from DCF
+	if fr.PortId != automaticPortId {
 		rteFlowCreateRequests.PortId = fr.PortId
 	} else {
 		portId, err := r.getPortIdFromDCFPort(podPciAddress)
@@ -400,20 +404,20 @@ func (r *NodeFlowConfigReconciler) getFlowCreateRequests(fr *flowconfigv1.FlowRu
 // - getting the pfName of the trusted VF (DCF)
 // - and compare those names. If matches, we can get portId from DCF.
 func (r *NodeFlowConfigReconciler) getPortIdFromDCFPort(otherVfPciAddress string) (uint32, error) {
-	pfName, err := resourceUtils.GetPfName(otherVfPciAddress)
+	pfName, err := r.sriovUtils.GetPfName(otherVfPciAddress)
 	if err != nil {
-		return invalidPortId, fmt.Errorf("unable to get pfName of VF that handles traffic. Err %v", err)
+		return automaticPortId, fmt.Errorf("unable to get pfName of VF that handles traffic. Err %v", err)
 	}
 
 	dcfPorts, err := r.listDCFPorts()
 	if err != nil {
-		return invalidPortId, fmt.Errorf("unable to get list of DCF ports. Err %v", err)
+		return automaticPortId, fmt.Errorf("unable to get list of DCF ports. Err %v", err)
 	}
 
 	for _, dcfPort := range dcfPorts {
-		dcfPfName, err := resourceUtils.GetPfName(dcfPort.PortPci)
+		dcfPfName, err := r.sriovUtils.GetPfName(dcfPort.PortPci)
 		if err != nil {
-			return invalidPortId, fmt.Errorf("unable to get pfName of VF that handles DCF. Err %v", err)
+			return automaticPortId, fmt.Errorf("unable to get pfName of VF that handles DCF. Err %v", err)
 		}
 
 		if pfName == dcfPfName {
@@ -421,7 +425,7 @@ func (r *NodeFlowConfigReconciler) getPortIdFromDCFPort(otherVfPciAddress string
 		}
 	}
 
-	return invalidPortId, fmt.Errorf("unable to find DCF port that matches to traffic. Err %v", err)
+	return automaticPortId, fmt.Errorf("unable to find DCF port that matches to traffic. Err %v", err)
 }
 
 func (r *NodeFlowConfigReconciler) listDCFPorts() ([]flowconfigv1.PortsInformation, error) {

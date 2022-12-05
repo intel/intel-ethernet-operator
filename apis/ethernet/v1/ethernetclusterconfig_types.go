@@ -21,15 +21,15 @@ type DeviceConfig struct {
 	// Path to .zip DDP package to be applied
 	// +kubebuilder:validation:Pattern=[a-zA-Z0-9\.\-\/]+
 	DDPURL string `json:"ddpURL,omitempty"`
-	// MD5 checksum of .zip DDP package
-	// +kubebuilder:validation:Pattern=`^[a-fA-F0-9]{32}$`
+	// SHA-1 checksum of .zip DDP package
+	// +kubebuilder:validation:Pattern=`^[a-fA-F0-9]{40}$`
 	DDPChecksum string `json:"ddpChecksum,omitempty"`
 
 	// Path to .tar.gz Firmware (NVMUpdate package) to be applied
 	// +kubebuilder:validation:Pattern=[a-zA-Z0-9\.\-\/]+
 	FWURL string `json:"fwURL,omitempty"`
-	// +kubebuilder:validation:Pattern=`^[a-fA-F0-9]{32}$`
-	// MD5 checksum of .tar.gz Firmware
+	// +kubebuilder:validation:Pattern=`^[a-fA-F0-9]{40}$`
+	// SHA-1 checksum of .tar.gz Firmware
 	FWChecksum string `json:"fwChecksum,omitempty"`
 }
 

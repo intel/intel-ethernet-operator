@@ -4,20 +4,21 @@
 package fwddp_manager
 
 import (
+	"path/filepath"
+	"testing"
+	"time"
+
 	"github.com/go-logr/logr"
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	configv1 "github.com/openshift/api/config/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
-	"path/filepath"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
-	"sigs.k8s.io/controller-runtime/pkg/envtest/printer"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
-	"testing"
 
 	ethernetv1 "github.com/otcshare/intel-ethernet-operator/apis/ethernet/v1"
 	//+kubebuilder:scaffold:imports
@@ -34,12 +35,10 @@ var err error
 func TestAPIs(t *testing.T) {
 	RegisterFailHandler(Fail)
 
-	RunSpecsWithDefaultAndCustomReporters(t,
-		"Controller Suite",
-		[]Reporter{printer.NewlineReporter{}})
+	RunSpecs(t, "Controller Suite")
 }
 
-var _ = BeforeSuite(func() {
+var _ = BeforeSuite(func(ctx SpecContext) {
 	logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
 
 	By("bootstrapping test environment")
@@ -67,7 +66,7 @@ var _ = BeforeSuite(func() {
 	Expect(err).NotTo(HaveOccurred())
 	Expect(k8sClient).NotTo(BeNil())
 
-}, 60)
+}, NodeTimeout(60*time.Second))
 
 var _ = AfterSuite(func() {
 	By("tearing down the test environment")
