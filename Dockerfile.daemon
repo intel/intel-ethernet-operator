@@ -19,7 +19,7 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GO111MODULE=on go build -a -o fwddp_da
 # Manually update zlib library
 FROM registry.access.redhat.com/ubi9/ubi-minimal:9.0.0-1644.1666621587 as package_installer
 
-RUN microdnf install -y ethtool iproute kmod pciutils tar gzip gcc make && microdnf clean all
+RUN microdnf install -y ethtool iproute kmod pciutils tar gzip gcc make grep && microdnf clean all
 
 RUN curl -L -o zlib-1.2.13.tar.gz https://github.com/madler/zlib/releases/download/v1.2.13/zlib-1.2.13.tar.gz && \ 
     tar xzvf zlib-1.2.13.tar.gz
@@ -45,15 +45,17 @@ COPY --from=package_installer /lib64/libm.so.6 /lib64/libmnl.so.0 /lib64/libc.so
     /lib64/libpci.so.3 /lib64/libkmod.so.2 /lib64/libbpf.so.0 \
     /lib64/libmnl.so.0 /lib64/libtinfo.so.6  /lib64/libsigsegv.so.2.0.6 /lib64/libsigsegv.so.2  \
     /lib64/libreadline.so.8.1 /lib64/libreadline.so.8 /lib64/libmpfr.so.6.1.0 /lib64/libmpfr.so.6 \
-    /lib64/libgmp.so.10.4.0 /lib64/libgmp.so.10 /lib64/
+    /lib64/libgmp.so.10.4.0 /lib64/libgmp.so.10 /lib64/libpcre.so.1.2.12 /lib64/libsigsegv.so.2.0.6 /lib64/
 RUN ln -sf /usr/lib64/libsigsegv.so.2.0.6 /usr/lib64/libsigsegv.so.2 && \
     ln -sf /usr/lib64/libreadline.so.8.1  /usr/lib64/libreadline.so.8 && \
     ln -sf /usr/lib64/libmpfr.so.6.1.0  /usr/lib64/libmpfr.so.6 && \
-    ln -sf /usr/lib64/libgmp.so.10.4.0  /usr/lib64/libgmp.so.10
+    ln -sf /usr/lib64/libgmp.so.10.4.0  /usr/lib64/libgmp.so.10 && \
+    ln -sf /lib64/libpcre.so.1.2.12 /lib64/libpcre.so.1 && \
+    ln -sf /lib64/libsigsegv.so.2.0.6 /lib64/libsigsegv.so.2
 COPY --from=package_installer /usr/local/lib/libz.so.1.2.13 /lib64/libz.so.1
 COPY --from=package_installer /usr/sbin/ethtool /usr/sbin/lspci \
-    /usr/sbin/setpci /usr/sbin/update-pciids /usr/sbin/ip /usr/sbin/devlink /usr/sbin/
-COPY --from=package_installer /usr/bin/kmod /usr/bin/
+    /usr/sbin/setpci /usr/sbin/update-pciids /usr/sbin/ip /usr/sbin/devlink /usr/sbin/modinfo /usr/sbin/
+COPY --from=package_installer /usr/bin/kmod /usr/bin/grep /usr/bin/
 COPY --from=package_installer /bin/awk /bin/sed /bin/
 RUN mkdir /usr/share/hwdata
 COPY --from=package_installer /usr/share/hwdata /usr/share/hwdata
