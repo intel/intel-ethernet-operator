@@ -13,7 +13,7 @@ COPY apis apis/
 
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GO111MODULE=on go build -a -o node_labeler cmd/labeler/main.go
 
-RUN apk update && apk add --no-cache curl=7.83.1-r4
+RUN apk update && apk add --no-cache curl
 RUN curl https://pci-ids.ucw.cz/v2.2/pci.ids.gz -o pci.ids.gz && gunzip pci.ids.gz
 
 FROM registry.access.redhat.com/ubi9/ubi-micro:9.1.0-6
