@@ -35,6 +35,7 @@ Copyright (c) 2021 Intel Corporation
       - [Creating Flow Configuration rules with Intel Ethernet Operator](#creating-flow-configuration-rules-with-intel-ethernet-operator)
       - [Creating Flow Configuration rules with Intel Ethernet Operator (NodeFlowConfig)](#creating-flow-configuration-rules-with-intel-ethernet-operator-nodeflowconfig)
       - [Update a sample Node Flow Configuration rule](#update-a-sample-node-flow-configuration-rule)
+- [Uninstalling operator](#uninstalling-operator)
 - [Hardware Validation Environment](#hardware-validation-environment)
 - [Summary](#summary)
 
@@ -878,6 +879,19 @@ spec:
         ingress: 1
 EOF
 ```
+
+## Uninstalling operator
+
+Uninstalling of the operator should be done be deleting OLM subscription CR from ```intel-ethernet-operator``` namespace. Depending on the type of installation this can be achieved by either deleting resources from file
+```shell
+# kubectl delete -f subscription.yaml
+```
+or by directly deleting resources from cluster (replace resources names if necessary)
+```shell
+# kubectl delete subscription -n intel-ethernet-operator intel-ethernet-subscription
+```
+Deleting namespace without prior deleting of resources inside it can lead to namespace being stuck at termination state.
+
 ## Hardware Validation Environment
 
 - Intel® Ethernet Network Adapter E810-XXVDA2
