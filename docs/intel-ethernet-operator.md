@@ -882,15 +882,21 @@ EOF
 
 ## Uninstalling operator
 
-Uninstalling of the operator should be done be deleting OLM subscription CR from ```intel-ethernet-operator``` namespace. Depending on the type of installation this can be achieved by either deleting resources from file
+Uninstalling of the operator should be done by deleting OLM ```ClusterServiceVersion``` and ```Subscription``` CRs from ```intel-ethernet-operator``` namespace. In case flowconfig-daemon was deployed ```FlowConfigNodeAgentDeployment``` CR also needs to be deleted prior to uninstalling of operator itself
 ```shell
-# kubectl delete -f subscription.yaml
+kubectl -n intel-ethernet-operator delete flowconfignodeagentdeployments flowconfig-daemon-flowconfig-daemon
 ```
-or by directly deleting resources from cluster (replace resources names if necessary)
+To uninstall operator execute following commands:
 ```shell
-# kubectl delete subscription -n intel-ethernet-operator intel-ethernet-subscription
+CSV=$(kubectl get subscription intel-ethernet-subscription -n intel-ethernet-operator -o json | jq -r '.status.installedCSV')
+kubectl delete subscription intel-ethernet-subscription -n intel-ethernet-operator
+kubectl delete csv $CSV -n intel-ethernet-operator
 ```
-Deleting namespace without prior deleting of resources inside it can lead to namespace being stuck at termination state.
+Replace names of resources according to ones that were used. Deleting namespace without prior deleting of resources inside it can lead to namespace being stuck at termination state. To delete namespace:
+```shell
+kubectl delete ns intel-ethernet-operator
+```
+More information can be found here https://olm.operatorframework.io/docs/tasks/uninstall-operator/
 
 ## Hardware Validation Environment
 
