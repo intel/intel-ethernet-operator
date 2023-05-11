@@ -42,7 +42,7 @@ COPY --from=builder /workspace/fwddp_daemon .
 
 COPY --from=package_installer /lib64/libm.so.6 /lib64/libmnl.so.0 /lib64/libc.so.6 /lib64/ld-linux-x86-64.so.2 \ 
     /lib64/libzstd.so.1 /lib64/liblzma.so.5 /lib64/libcrypto.so.3 /lib64/libgcc_s.so.1 \
-    /lib64/libpci.so.3 /lib64/libkmod.so.2 /lib64/libbpf.so.0 \
+    /lib64/libpci.so.3 /lib64/libkmod.so.2 /lib64/libbpf.so.1 \
     /lib64/libmnl.so.0 /lib64/libtinfo.so.6  /lib64/libsigsegv.so.2.0.6 /lib64/libsigsegv.so.2  \
     /lib64/libreadline.so.8.1 /lib64/libreadline.so.8 /lib64/libmpfr.so.6.1.0 /lib64/libmpfr.so.6 \
     /lib64/libgmp.so.10.4.0 /lib64/libgmp.so.10 /lib64/
