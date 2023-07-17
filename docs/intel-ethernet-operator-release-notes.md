@@ -97,6 +97,11 @@ This document provides high-level system features, issues, and limitations infor
  
 - The creation of trusted VFs to be used by the Flow Configuration controller of the operator and the creation of VFs to be used by the applications is out of scope for this operator. The user is required to create necessary VFs.
 
+
+DDP packages installed to targetted NICs fail to reload after restart. 
+When a DDP is installed targetting a particular NIC the filename of DDP package is associated with that NIC. This unique file however fails to be included in initramfs. As a workaround a machineconfig with suitable script is supplied in the ice-driver-reload folder which runs after restart to reload the ice module and its dependencies.  On reload of the module, post restart , the correct named file is available. This is not a problem   when a node has all NICS using the same package.  The workaround script is not installed as a default as it adds some restart and reload actions, which are best used only in the case where absolutely needed. 
+
+
 # Release Content
 
 - Intel Ethernet Operator
