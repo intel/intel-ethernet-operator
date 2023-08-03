@@ -4,7 +4,7 @@
 package flowsets
 
 import (
-	flowapi "github.com/otcshare/intel-ethernet-operator/pkg/flowconfig/rpc/v1/flow"
+	flowapi "github.com/intel-collab/applications.orchestration.operators.intel-ethernet-operator/pkg/flowconfig/rpc/v1/flow"
 )
 
 type FlowCreateRecord struct {

@@ -7,7 +7,7 @@ import (
 	"context"
 	"os"
 
-	"github.com/otcshare/intel-ethernet-operator/pkg/utils"
+	"github.com/intel-collab/applications.orchestration.operators.intel-ethernet-operator/pkg/utils"
 
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
@@ -18,7 +18,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	ethernetv1 "github.com/otcshare/intel-ethernet-operator/apis/ethernet/v1"
+	ethernetv1 "github.com/intel-collab/applications.orchestration.operators.intel-ethernet-operator/apis/ethernet/v1"
 )
 
 var getDrainSkip = utils.GetDrainSkip
@@ -155,6 +155,7 @@ func (pm *clusterConfigMatcher) prepareDeviceConfigContext(nodeConfig *ethernetv
 			}
 		}
 	}
+
 	return deviceConfigContext
 }
 
@@ -179,6 +180,7 @@ func (r *EthernetClusterConfigReconciler) getOrInitializeEthernetNodeConfig(name
 		nc.Namespace = NAMESPACE
 		nc.Spec.Config = []ethernetv1.DeviceNodeConfig{}
 	}
+
 	return nc, nil
 }
 
@@ -194,6 +196,8 @@ func (r *EthernetClusterConfigReconciler) synchronizeNodeConfigSpec(ncc NodeConf
 	for pciAddress, cc := range deviceConfigContext {
 		dnc := ethernetv1.DeviceNodeConfig{PCIAddress: pciAddress}
 		dnc.DeviceConfig = cc.Spec.DeviceConfig
+
+		newNodeConfig.Spec.RetryOnFail = cc.Spec.RetryOnFail
 		newNodeConfig.Spec.Config = append(newNodeConfig.Spec.Config, dnc)
 		newNodeConfig.Spec.DrainSkip = newNodeConfig.Spec.DrainSkip || drainSkip
 	}

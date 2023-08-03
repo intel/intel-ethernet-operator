@@ -21,16 +21,19 @@ type DeviceConfig struct {
 	// Path to .zip DDP package to be applied
 	// +kubebuilder:validation:Pattern=[a-zA-Z0-9\.\-\/]+
 	DDPURL string `json:"ddpURL,omitempty"`
-	// MD5 checksum of .zip DDP package
-	// +kubebuilder:validation:Pattern=`^[a-fA-F0-9]{32}$`
+	// SHA-1 checksum of .zip DDP package
+	// +kubebuilder:validation:Pattern=`^[a-fA-F0-9]{40}$`
 	DDPChecksum string `json:"ddpChecksum,omitempty"`
 
 	// Path to .tar.gz Firmware (NVMUpdate package) to be applied
 	// +kubebuilder:validation:Pattern=[a-zA-Z0-9\.\-\/]+
 	FWURL string `json:"fwURL,omitempty"`
-	// +kubebuilder:validation:Pattern=`^[a-fA-F0-9]{32}$`
-	// MD5 checksum of .tar.gz Firmware
+	// SHA-1 checksum of .tar.gz Firmware
+	// +kubebuilder:validation:Pattern=`^[a-fA-F0-9]{40}$`
 	FWChecksum string `json:"fwChecksum,omitempty"`
+	// Additional arguments for NVMUpdate utility
+	// e.g. "./nvmupdate64e -u -m 40a6b79ee660 -c ./nvmupdate.cfg -o update.xml -l <fwUpdateParam>"
+	FWUpdateParam string `json:"fwUpdateParam,omitempty"`
 }
 
 // EthernetClusterConfigSpec defines the desired state of EthernetClusterConfig
@@ -43,8 +46,12 @@ type EthernetClusterConfigSpec struct {
 	DeviceConfig DeviceConfig `json:"deviceConfig"`
 
 	// Higher priority policies can override lower ones.
-	//If several ClusterConfigs have same Priority, then operator will apply ClusterConfig with highest CreationTimestamp (newest one)
+	// If several ClusterConfigs have same Priority, then operator will apply ClusterConfig with highest CreationTimestamp (newest one)
 	Priority int `json:"priority,omitempty"`
+
+	// Set to true to retry update every 5 minutes
+	// Default is set to false - no retries will occur
+	RetryOnFail bool `json:"retryOnFail,omitempty"`
 }
 
 // EthernetClusterConfigStatus defines the observed state of EthernetClusterConfig

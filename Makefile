@@ -372,5 +372,5 @@ endef
 .PHONY: gen-proto
 gen-proto:
 	protoc --go_out=. --go_opt=paths=source_relative \
-	--go_opt=Mpkg/flowconfig/rpc/v1/flow/flow.proto=github.com/otcshare/intel-ethernet-operator/apis/flowconfig/v1/flow \
+	--go_opt=Mpkg/flowconfig/rpc/v1/flow/flow.proto=github.com/intel-collab/applications.orchestration.operators.intel-ethernet-operator/apis/flowconfig/v1/flow \
 	--go-grpc_out=. --go-grpc_opt=paths=source_relative pkg/flowconfig/rpc/v1/flow/flow.proto

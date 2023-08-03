@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/otcshare/intel-ethernet-operator/pkg/labeler"
+	"github.com/intel-collab/applications.orchestration.operators.intel-ethernet-operator/pkg/labeler"
 )
 
 func main() {

@@ -1,6 +1,6 @@
 ```text
 SPDX-License-Identifier: Apache-2.0
-Copyright (c) 2020-2022 Intel Corporation
+Copyright (c) 2020-2023 Intel Corporation
 ```
 
 <!-- omit in toc -->
@@ -20,20 +20,36 @@ This document provides high-level system features, issues, and limitations infor
 
 # Release history
 
-| Version   | Release Date   | Cluster Compatibility        | Verified on OCP          |
-| --------- | ---------------| ---------------------------- | -------------------------|
-| 0.0.1     | January 2022   | OCP 4.9                      | 4.9.7                    |
-| 0.0.2     | April 2022     | BMRA 22.01(K8S v1.22.3)      | BMRA 22.01 (K8S v1.22.3) |
-|           |                | OCP 4.10                     | 4.10.3                   |
-| 0.1.0     | December 2022  | OCP 4.9, 4.10, 4.11          | 4.9.51, 4.10.34,  4.11.13|
-|           |                |       |
+| Version   | Release Date   | Cluster Compatibility                          | Verified on OCP          |
+| --------- | ---------------| -----------------------------------------------| -------------------------|
+| 0.0.1     | January 2022   | OCP 4.9                                        | 4.9.7                    |
+| 0.0.2     | April 2022     | BMRA 22.01(K8S v1.22.3)<br>OCP 4.10            |  4.10.3                  |
+| 0.1.0     | December 2022  | OCP 4.9, 4.10, 4.11                            | 4.9.51, 4.10.34,  4.11.13|
+| v22.11    | December 2022  | OCP 4.9, 4.10, 4.11<br>BMRA 22.11(K8S v1.25.3) | 4.9.51, 4.10.34,  4.11.13|
+| v23.07    | July 2023      | OCP 4.9, 4.10, 4.11, 4.12, 4.13                | 4.12.21, 4.13.3          |
 
 
 # Features for Release
 
+***v23.07***
+
+- Add support for DDP profile with in-tree
+- Certification on OCP 4.12 and 4.13
+- Allow retries after a FW/DDP update failure to be switched on or off through the `retryOnFail` field in the EthernetClusterConfig CR
+- Allow additional parameters to be added to the nvmupdate tool through the `fwUpdateParam` field in the EthernetClusterConfig CR
+
+***v22.11***
+- Introduced new API `ClusterFlowConfig` for cluster level Flow configuration
+- Improved stability for NodeFlowConfig daemon
+- Add user provided certificate validation during FW/DDP package download
+- Operator is updated with Operator SDK v1.25.0
+- Set Min TLS v1.3 for validation webhook for improved security
+
 ***v0.1.0 (certified on OCP)***
+
 - FW update supported on in-tree driver
 - DDP profile update and traffic flow configuration are not supported when using in-tree
+- Operator is updated with Operator SDK v1.25.0
 
 ***v0.0.2***
 
@@ -48,7 +64,18 @@ This document provides high-level system features, issues, and limitations infor
 
 # Changes to Existing Features
 
+***v23.07***
+
+- DDP update is now possible on in-tree driver
+- Nvmupdate tool error codes 50 & 51 are no longer treated as update failures
+- Reboots after a fw update no longer take place by default
+
+***v22.11***
+- Use SHA-1 instead of MD5 checksum for FW/DDP update
+- Default UFT image version has been updated v22.03 -> v22.07
+
 ***v0.1.0***
+
 - FW update is now possible on in-tree driver
 
 ***v0.0.2***
@@ -56,7 +83,7 @@ This document provides high-level system features, issues, and limitations infor
 - Any update of DDP packages causes node reboot
 - DCF Tool has been updated v21.08 -> v22.03
 - Proxy configuration for FWDDP Daemon app has been added
-- Updated documentation for CRDs (EthernetClusterConfig, EthernetNodeConfig) 
+- Updated documentation for CRDs (EthernetClusterConfig, EthernetNodeConfig)
 - Replicas of Controller Manager are now distributed accross a cluster
 - EthernetClusterConfig.DrainSkip flag has been removed, IEO detects cluster type automatically and decides if drain is needed.
 
@@ -66,7 +93,14 @@ This document provides high-level system features, issues, and limitations infor
 
 # Fixed Issues
 
+***v22.11***
+
+- Fixed checksum verification for FW and DDP update
+- FlowConfig daemon pod cleanup correctly
+- Fixed an incorrect flow rules deletion issue
+
 ***v0.0.2***
+
 - fixed DCF tool image registry URL reference issue. The DCF tool registry URL will be read from `IMAGE_REGISTRY` env variable during operator image build
 
 ***v0.0.1***
@@ -75,10 +109,35 @@ This document provides high-level system features, issues, and limitations infor
 
 # Known Issues and Limitations
 
+***v23.07***
+- If your cluster already has SR-IOV Network Operator deployed, please deploy Intel Ethernet Operator in the same namespace to avoid any issues
+- Operator support updates to firmware versions 3.0 or newer
+- To perform fw update to 4.2 `fwUpdateParam: -if ioctl` needs to be added to `EthernetClusterConfig` CR
+
+  ```yaml
+  apiVersion: ethernet.intel.com/v1
+  kind: EthernetClusterConfig
+  metadata:
+    name: <name>
+    namespace: <namespace>
+  spec:
+    nodeSelectors:
+      kubernetes.io/hostname: <hostname>
+    deviceSelector:
+      pciAddress: "<pci-address>"
+    deviceConfig:
+      fwURL: "<URL_to_firmware>"
+      fwChecksum: "<file_checksum_SHA-1_hash>"
+      fwUpdateParam: "-if ioctl"
+
+  ```
+- Traffic flow configuration is not supported on in-tree driver
+
+***v.0.1***
 - The certified version 0.1.0 only functionality is fw update, DDP and traffic flow configuration is not possible on in-tree driver
- 
-- The installation of the Out Of Tree [ICE driver](https://www.intel.com/content/www/us/en/download/19630/29746/) is necessary for full functionality of the operator. The provision/installation of this driver is out of scope for this operator, the user is required to provide/install the [OOT ICE driver](https://www.intel.com/content/www/us/en/download/19630/29746/intel-network-adapter-driver-for-e810-series-devices-under-linux.html) on the desired platforms. **BMRA distribution comes with required version of ICE driver and no additional steps are required.**
- 
+
+- The installation of the Out Of Tree [ICE driver](https://www.intel.com/content/www/us/en/download/19630/29746/) is necessary to leverage certain features of the operator. The provisioning/installation of this driver is out of scope for this operator, the user is required to provide/install the [OOT ICE driver](https://www.intel.com/content/www/us/en/download/19630/29746/intel-network-adapter-driver-for-e810-series-devices-under-linux.html) on the desired platforms. **BMRA distribution comes with required version of ICE driver and no additional steps are required.**
+
 - The creation of trusted VFs to be used by the Flow Configuration controller of the operator and the creation of VFs to be used by the applications is out of scope for this operator. The user is required to create necessary VFs.
 
 # Release Content
@@ -96,6 +155,14 @@ This document provides high-level system features, issues, and limitations infor
 
 # Supported Operating Systems
 
+***v23.07*** was tested using the following
+  - Openshift
+    - 4.12.21
+    - 4.13.3
+
+***v22.11***
+- Intel BMRA v22.11 (Ubuntu 20.04 & 22.04)
+
 ***v0.1.0*** was tested using the following:
   - OpenShift
     - 4.9.51
@@ -104,7 +171,7 @@ This document provides high-level system features, issues, and limitations infor
 
 ***v0.0.2*** was tested using the following:
 
-- BMRA 22.01 
+- BMRA 22.01
 - Kubernetes v1.22.3
 - OS: Ubuntu 20.04.3 LTS (Focal Fossa)
 - NVM Package:  v1.37.13.5
@@ -122,6 +189,15 @@ This document provides high-level system features, issues, and limitations infor
 - NVM Package:  v1.37.13.5
 
 # Package Versions
+***v23.07***
+- Kubernetes: v1.22.2+5e38c72
+- Golang: v1.19
+- DCF Tool: v22.07
+
+***v22.11***
+- Kubernetes: v1.22.2+5e38c72
+- Golang: v1.17.3
+- DCF Tool: v22.07
 
 ***v0.0.2 Packages***
 - Kubernetes: v1.22.2+5e38c72

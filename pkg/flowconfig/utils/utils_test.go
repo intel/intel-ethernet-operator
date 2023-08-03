@@ -8,7 +8,7 @@ import (
 
 	sriovutils "github.com/k8snetworkplumbingwg/sriov-network-device-plugin/pkg/utils"
 
-	flowapi "github.com/otcshare/intel-ethernet-operator/pkg/flowconfig/rpc/v1/flow"
+	flowapi "github.com/intel-collab/applications.orchestration.operators.intel-ethernet-operator/pkg/flowconfig/rpc/v1/flow"
 )
 
 func TestGetFlowActionAny(t *testing.T) {

@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
-# Copyright (c) 2020-2022 Intel Corporation
+# Copyright (c) 2020-2023 Intel Corporation
 
 # Build the manager binary
-FROM docker.io/golang:alpine3.16 as builder
+FROM docker.io/golang:alpine3.18 as builder
 
 WORKDIR /workspace
 
@@ -20,7 +20,7 @@ COPY pkg/ pkg/
 
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GO111MODULE=on go build -a -o manager main.go
 
-FROM registry.access.redhat.com/ubi9/ubi-micro:9.1.0-6
+FROM registry.access.redhat.com/ubi9/ubi-micro:9.2-9
 
 ARG VERSION
 ### Required OpenShift Labels

@@ -16,9 +16,9 @@ import (
 	gerrors "errors"
 
 	"github.com/go-logr/logr"
+	ethernetv1 "github.com/intel-collab/applications.orchestration.operators.intel-ethernet-operator/apis/ethernet/v1"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	ethernetv1 "github.com/otcshare/intel-ethernet-operator/apis/ethernet/v1"
 	core "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -232,6 +232,10 @@ var _ = Describe("DaemonTests", func() {
 			Expect(k8sClient.Create(context.TODO(), &data.NodeConfig)).To(Succeed())
 			Expect(initReconciler(reconciler, data.NodeConfig.Name, data.NodeConfig.Namespace)).To(Succeed())
 
+			nvmupdateExec = func(cmd *exec.Cmd, log logr.Logger) error {
+				return fmt.Errorf("FAILING NVME UPDATE ON PURPOSE")
+			}
+
 			_, err := reconciler.Reconcile(context.TODO(), ctrl.Request{NamespacedName: types.NamespacedName{
 				Namespace: data.NodeConfig.Namespace,
 				Name:      data.NodeConfig.Name,
@@ -244,7 +248,7 @@ var _ = Describe("DaemonTests", func() {
 			Expect(nodeConfigs.Items[0].Status.Conditions).To(HaveLen(1))
 			Expect(nodeConfigs.Items[0].Status.Conditions[0].Status).To(Equal(metav1.ConditionFalse))
 			Expect(nodeConfigs.Items[0].Status.Conditions[0].Reason).To(Equal(string(UpdateFailed)))
-			Expect(nodeConfigs.Items[0].Status.Conditions[0].Message).To(Equal("failed to get MAC for device 0000:00:00.1. Device not found"))
+			Expect(nodeConfigs.Items[0].Status.Conditions[0].Message).To(Equal("FAILING NVME UPDATE ON PURPOSE"))
 		})
 
 		var _ = It("will update condition to UpdateFailed if not able to download firmware", func() {
@@ -369,7 +373,6 @@ var _ = Describe("DaemonTests", func() {
 			}
 
 			wasRebootCalled := false
-
 			execCmd = func(args []string, log logr.Logger) (string, error) {
 				for _, part := range args {
 					if strings.Contains(part, "reboot") {
@@ -386,7 +389,6 @@ var _ = Describe("DaemonTests", func() {
 				Name:      data.NodeConfig.Name,
 			}})
 			Expect(err).ToNot(HaveOccurred())
-
 			Expect(wasRebootCalled).To(Equal(false))
 
 			nodeConfigs := &ethernetv1.EthernetNodeConfigList{}
@@ -496,7 +498,7 @@ var _ = Describe("DaemonTests", func() {
 			data.Inventory[0].PCIAddress = "0000:00:00.1"
 
 			nvmupdateExec = func(cmd *exec.Cmd, log logr.Logger) error {
-				return fmt.Errorf("FAILING NVME UPDATE BY PURPOSE")
+				return fmt.Errorf("FAILING NVME UPDATE ON PURPOSE")
 			}
 
 			Expect(initReconciler(reconciler, data.NodeConfig.Name, data.NodeConfig.Namespace)).To(Succeed())
@@ -514,7 +516,7 @@ var _ = Describe("DaemonTests", func() {
 			Expect(nodeConfigs.Items[0].Status.Conditions[0].Status).To(Equal(metav1.ConditionFalse))
 			Expect(nodeConfigs.Items[0].Status.Conditions[0].Reason).To(Equal(string(UpdateFailed)))
 			Expect(nodeConfigs.Items[0].Status.Conditions[0].Message).To(SatisfyAny(
-				ContainSubstring("FAILING NVME UPDATE BY PURPOSE")))
+				ContainSubstring("FAILING NVME UPDATE ON PURPOSE")))
 		})
 
 		var _ = It("will update condition to UpdateFailed if firmware update fails", func() {
@@ -544,12 +546,21 @@ var _ = Describe("DaemonTests", func() {
 			Expect(nodeConfigs.Items[0].Status.Conditions[0].Reason).To(Equal(string(UpdateFailed)))
 			Expect(nodeConfigs.Items[0].Status.Conditions[0].Message).To(Equal(fwErr.Error()))
 		})
-
 		var _ = It("will update condition to UpdateSucceeded after successful firmware update", func() {
 			Expect(k8sClient.Create(context.TODO(), &data.Node)).To(Succeed())
 			Expect(k8sClient.Create(context.TODO(), &data.NodeConfig)).To(Succeed())
 
 			data.Inventory[0].PCIAddress = "0000:00:00.1"
+
+			wasRebootCalled := false
+			execCmd = func(args []string, log logr.Logger) (string, error) {
+				for _, part := range args {
+					if strings.Contains(part, "reboot") {
+						wasRebootCalled = true
+					}
+				}
+				return "", nil
+			}
 
 			rootAttr := &syscall.SysProcAttr{
 				Credential: &syscall.Credential{Uid: 0, Gid: 0},
@@ -589,8 +600,9 @@ var _ = Describe("DaemonTests", func() {
 				Namespace: data.NodeConfig.Namespace,
 				Name:      data.NodeConfig.Name,
 			}})
-			Expect(err).ToNot(HaveOccurred())
 
+			Expect(err).ToNot(HaveOccurred())
+			Expect(wasRebootCalled).To(Equal(false))
 			nodeConfigs := &ethernetv1.EthernetNodeConfigList{}
 			Expect(k8sClient.List(context.TODO(), nodeConfigs)).To(Succeed())
 			Expect(nodeConfigs.Items).To(HaveLen(1))
@@ -598,50 +610,20 @@ var _ = Describe("DaemonTests", func() {
 			Expect(nodeConfigs.Items[0].Status.Conditions[0].Status).To(Equal(metav1.ConditionTrue))
 			Expect(nodeConfigs.Items[0].Status.Conditions[0].Reason).To(Equal(string(UpdateSucceeded)))
 			Expect(nodeConfigs.Items[0].Status.Conditions[0].Message).To(Equal("Updated successfully"))
-		})
 
-		var _ = It("will update update condition to UpdateFailed because of no MAC", func() {
-			Expect(k8sClient.Create(context.TODO(), &data.Node)).To(Succeed())
-			Expect(k8sClient.Create(context.TODO(), &data.NodeConfig)).To(Succeed())
-
-			data.Inventory[0].Firmware.MAC = ""
-			data.Inventory[0].PCIAddress = "0000:00:00.1"
-
-			rootAttr := &syscall.SysProcAttr{
-				Credential: &syscall.Credential{Uid: 0, Gid: 0},
-			}
-			nvmupdateExec = func(cmd *exec.Cmd, log logr.Logger) error {
-				Expect(cmd.SysProcAttr).To(Equal(rootAttr))
-				Expect(cmd.Dir).To(Equal(path.Join(artifactsFolder, data.NodeConfig.Spec.Config[0].PCIAddress)))
-				return nil
-			}
-
-			invCnt := 2
-
-			getInventory = func(_ logr.Logger) ([]ethernetv1.Device, error) {
-				if invCnt > 0 {
-					invCnt--
-					return data.Inventory, nil
-				} else {
-					return nil, nil
-				}
-			}
-
-			Expect(initReconciler(reconciler, data.NodeConfig.Name, data.NodeConfig.Namespace)).To(Succeed())
-
-			_, err := reconciler.Reconcile(context.TODO(), ctrl.Request{NamespacedName: types.NamespacedName{
+			_, err = reconciler.Reconcile(context.TODO(), ctrl.Request{NamespacedName: types.NamespacedName{
 				Namespace: data.NodeConfig.Namespace,
 				Name:      data.NodeConfig.Name,
 			}})
-			Expect(err).ToNot(HaveOccurred())
 
-			nodeConfigs := &ethernetv1.EthernetNodeConfigList{}
+			Expect(err).ToNot(HaveOccurred())
+			nodeConfigs = &ethernetv1.EthernetNodeConfigList{}
 			Expect(k8sClient.List(context.TODO(), nodeConfigs)).To(Succeed())
 			Expect(nodeConfigs.Items).To(HaveLen(1))
 			Expect(nodeConfigs.Items[0].Status.Conditions).To(HaveLen(1))
-			Expect(nodeConfigs.Items[0].Status.Conditions[0].Status).To(Equal(metav1.ConditionFalse))
-			Expect(nodeConfigs.Items[0].Status.Conditions[0].Reason).To(Equal(string(UpdateFailed)))
-			Expect(nodeConfigs.Items[0].Status.Conditions[0].Message).To(ContainSubstring("failed to get MAC for device 0000:00:00.1. Device not found"))
+			Expect(nodeConfigs.Items[0].Status.Conditions[0].Status).To(Equal(metav1.ConditionTrue))
+			Expect(nodeConfigs.Items[0].Status.Conditions[0].Reason).To(Equal(string(UpdateSucceeded)))
+			Expect(nodeConfigs.Items[0].Status.Conditions[0].Message).To(Equal("Updated successfully"))
 		})
 
 		var _ = It("if FWUrl is empty then FW update is skipped and status updated to UpdateSucceeded", func() {

@@ -8,7 +8,7 @@ import (
 	"archive/zip"
 	"compress/gzip"
 	"context"
-	"crypto/md5"
+	"crypto/sha1"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -19,6 +19,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"syscall"
 
@@ -58,6 +59,45 @@ func GetDrainSkip(nodes *corev1.NodeList, client client.Client, log logr.Logger)
 func IsK8sDeployment() bool {
 	value := os.Getenv(IeoPrefix + "GENERIC_K8S")
 	return strings.ToLower(value) == "true"
+}
+
+func GetAltFwSearchPath() (string, error) {
+	fwPathFile := "/sys/module/firmware_class/parameters/path"
+	fwPathBytes, err := os.ReadFile(fwPathFile)
+	fwPath := string(fwPathBytes)
+	if err != nil {
+		return "", fmt.Errorf("cannot read file %s", fwPathFile)
+	}
+	fwPath = strings.ReplaceAll(fwPath, "\n", "")
+	fwPath = strings.ReplaceAll(fwPath, " ", "")
+
+	return fwPath, nil
+}
+
+func CreateFullDdpPath(fwPath string, log logr.Logger) (string, error) {
+	// get ddp path from driver, depending on driver version it can be
+	// "updates/intel/ice/ddp" or "intel/ice/ddp"
+	modinfoOut, err := ExecCmd([]string{"sh", "-c", "modinfo ice"}, log)
+	if err != nil {
+		return "", fmt.Errorf("cannot execute \"modinfo ice\" command on host")
+	}
+
+	r := regexp.MustCompile(`firmware:\s+([a-zA-Z]+)`)
+	icePathPrefix := r.FindString(string(modinfoOut))
+	icePathPrefix = strings.Fields(icePathPrefix)[1]
+
+	var ddpPath string
+	if icePathPrefix == "intel" {
+		ddpPath = icePathPrefix + "/ice/ddp"
+	} else {
+		ddpPath = icePathPrefix + "/intel/ice/ddp"
+	}
+
+	if strings.HasSuffix(fwPath, "/") {
+		return fwPath + ddpPath, nil
+	}
+
+	return fwPath + "/" + ddpPath, nil
 }
 
 func IsOpenshiftSno(c client.Client, log logr.Logger) (bool, error) {
@@ -118,14 +158,14 @@ func verifyChecksum(path, expected string) (bool, error) {
 	}
 	f, err := OpenNoLinks(path)
 	if err != nil {
-		return false, errors.New("Failed to open file to calculate md5")
+		return false, errors.New("Failed to open file to calculate sha-1")
 	}
 	defer f.Close()
-	h := md5.New()
+	h := sha1.New()
 	if _, err := io.Copy(h, f); err != nil {
-		return false, errors.New("Failed to copy file to calculate md5")
+		return false, errors.New("Failed to copy file to calculate sha-1")
 	}
-	if hex.EncodeToString(h.Sum(nil)) != expected {
+	if hex.EncodeToString(h.Sum(nil)) != strings.ToLower(expected) {
 		return false, nil
 	}
 

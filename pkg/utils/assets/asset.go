@@ -16,7 +16,7 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
-	"github.com/otcshare/intel-ethernet-operator/pkg/utils"
+	"github.com/intel-collab/applications.orchestration.operators.intel-ethernet-operator/pkg/utils"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"

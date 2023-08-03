@@ -5,6 +5,7 @@ package daemon
 
 import (
 	"context"
+	"fmt"
 
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/retry"
@@ -16,8 +17,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/event"
 
 	"github.com/go-logr/logr"
-	ethernetv1 "github.com/otcshare/intel-ethernet-operator/apis/ethernet/v1"
-	"github.com/otcshare/intel-ethernet-operator/pkg/utils"
+	ethernetv1 "github.com/intel-collab/applications.orchestration.operators.intel-ethernet-operator/apis/ethernet/v1"
+	"github.com/intel-collab/applications.orchestration.operators.intel-ethernet-operator/pkg/utils"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -27,11 +28,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	dh "github.com/otcshare/intel-ethernet-operator/pkg/drainhelper"
+	dh "github.com/intel-collab/applications.orchestration.operators.intel-ethernet-operator/pkg/drainhelper"
 )
 
 const (
-	requeueAfter = 15 * time.Minute
+	requeueAfter = 5 * time.Minute
 )
 
 var (
@@ -42,7 +43,7 @@ var (
 	untarFile        = utils.Untar
 	unpackDDPArchive = utils.UnpackDDPArchive
 
-	artifactsFolder  = "/run/nvmeupdate/"
+	artifactsFolder  = "/tmp/nvmupdate"
 	compatMapPath    = "./devices.json"
 	compatibilityMap *CompatibilityMap
 )
@@ -67,8 +68,9 @@ const (
 )
 
 type deviceUpdateArtifacts struct {
-	fwPath  string
-	ddpPath string
+	fwPath        string
+	ddpPath       string
+	fwUpdateParam string
 }
 type deviceUpdateQueue map[string]deviceUpdateArtifacts
 
@@ -252,13 +254,14 @@ func (r *NodeConfigReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	updateQueue, err := r.prepareUpdateQueue(nodeConfig)
 	if err != nil {
 		r.updateCondition(nodeConfig, metav1.ConditionFalse, UpdateFailed, err.Error())
-		return requeueLater()
+		return r.retryOnFail(nodeConfig)
 	}
 
 	rebootRequired, err := r.configureNode(updateQueue, nodeConfig)
 	if err != nil {
 		r.updateCondition(nodeConfig, metav1.ConditionFalse, UpdateFailed, err.Error())
-		return requeueLater()
+		return r.retryOnFail(nodeConfig)
+
 	}
 
 	if !rebootRequired {
@@ -267,6 +270,15 @@ func (r *NodeConfigReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	}
 
 	return doNotRequeue()
+}
+
+func (r *NodeConfigReconciler) retryOnFail(nodeConfig *ethernetv1.EthernetNodeConfig) (ctrl.Result, error) {
+	if nodeConfig.Spec.RetryOnFail {
+		return requeueLater()
+	}
+
+	return doNotRequeue()
+
 }
 
 func (r *NodeConfigReconciler) configureNode(updateQueue deviceUpdateQueue, nodeConfig *ethernetv1.EthernetNodeConfig) (bool, error) {
@@ -279,7 +291,7 @@ func (r *NodeConfigReconciler) configureNode(updateQueue deviceUpdateQueue, node
 		ddpReboot := false
 
 		for pciAddr, artifacts := range updateQueue {
-			fwReboot, nodeActionErr = r.fwUpdater.handleFWUpdate(pciAddr, artifacts.fwPath)
+			fwReboot, nodeActionErr = r.fwUpdater.handleFWUpdate(pciAddr, artifacts.fwPath, artifacts.fwUpdateParam)
 			if nodeActionErr != nil {
 				return true
 			}
@@ -290,6 +302,11 @@ func (r *NodeConfigReconciler) configureNode(updateQueue deviceUpdateQueue, node
 			}
 
 			rebootRequired = fwReboot || ddpReboot
+
+			err := os.RemoveAll(artifactsFolder)
+			if err != nil {
+				r.log.Info("Error deleting artifacts folder", "error", err)
+			}
 		}
 
 		if rebootRequired {
@@ -347,6 +364,10 @@ func (r *NodeConfigReconciler) prepareArtifacts(config ethernetv1.DeviceNodeConf
 		log.Error(err, "Failed to prepare firmware")
 		return deviceUpdateArtifacts{}, err
 	}
+	fwUpdateParam := config.DeviceConfig.FWUpdateParam
+	if fwUpdateParam != "" {
+		log.V(4).Info(fmt.Sprintf("Found NVM Update parameter: %s", config.DeviceConfig.FWUpdateParam))
+	}
 
 	ddpPath, err := r.ddpUpdater.prepareDDP(config)
 	if err != nil {
@@ -354,7 +375,7 @@ func (r *NodeConfigReconciler) prepareArtifacts(config ethernetv1.DeviceNodeConf
 		return deviceUpdateArtifacts{}, err
 	}
 
-	return deviceUpdateArtifacts{fwPath, ddpPath}, nil
+	return deviceUpdateArtifacts{fwPath, ddpPath, fwUpdateParam}, nil
 }
 
 func (r *NodeConfigReconciler) CreateEmptyNodeConfigIfNeeded(c client.Client) error {

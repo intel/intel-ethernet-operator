@@ -7,10 +7,10 @@ import (
 	"flag"
 	"os"
 
+	ethernetv1 "github.com/intel-collab/applications.orchestration.operators.intel-ethernet-operator/apis/ethernet/v1"
 	configv1 "github.com/openshift/api/config/v1"
-	ethernetv1 "github.com/otcshare/intel-ethernet-operator/apis/ethernet/v1"
 
-	daemon "github.com/otcshare/intel-ethernet-operator/pkg/fwddp-daemon"
+	daemon "github.com/intel-collab/applications.orchestration.operators.intel-ethernet-operator/pkg/fwddp-daemon"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"

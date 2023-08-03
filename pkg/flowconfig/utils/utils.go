@@ -8,8 +8,8 @@ import (
 	"fmt"
 	"strings"
 
+	flowapi "github.com/intel-collab/applications.orchestration.operators.intel-ethernet-operator/pkg/flowconfig/rpc/v1/flow"
 	sriovutils "github.com/k8snetworkplumbingwg/sriov-network-device-plugin/pkg/utils"
-	flowapi "github.com/otcshare/intel-ethernet-operator/pkg/flowconfig/rpc/v1/flow"
 	"google.golang.org/protobuf/proto"
 	any "google.golang.org/protobuf/types/known/anypb"
 )

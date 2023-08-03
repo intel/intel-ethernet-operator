@@ -10,7 +10,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/otcshare/intel-ethernet-operator/pkg/utils"
+	"github.com/intel-collab/applications.orchestration.operators.intel-ethernet-operator/pkg/utils"
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/rest"
 
@@ -28,11 +28,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	ethernetv1 "github.com/otcshare/intel-ethernet-operator/apis/ethernet/v1"
-	flowconfigv1 "github.com/otcshare/intel-ethernet-operator/apis/flowconfig/v1"
-	flowconfigcontrollers "github.com/otcshare/intel-ethernet-operator/controllers/flowconfig"
-	fwddp_manager "github.com/otcshare/intel-ethernet-operator/pkg/fwddp-manager"
-	"github.com/otcshare/intel-ethernet-operator/pkg/utils/assets"
+	ethernetv1 "github.com/intel-collab/applications.orchestration.operators.intel-ethernet-operator/apis/ethernet/v1"
+	flowconfigv1 "github.com/intel-collab/applications.orchestration.operators.intel-ethernet-operator/apis/flowconfig/v1"
+	flowconfigcontrollers "github.com/intel-collab/applications.orchestration.operators.intel-ethernet-operator/controllers/flowconfig"
+	fwddp_manager "github.com/intel-collab/applications.orchestration.operators.intel-ethernet-operator/pkg/fwddp-manager"
+	"github.com/intel-collab/applications.orchestration.operators.intel-ethernet-operator/pkg/utils/assets"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -144,9 +144,6 @@ func main() {
 	assetsToDeploy := []assets.Asset{
 		{ConfigMapName: "labeler-config", Path: "assets/100-labeler.yaml"},
 		{ConfigMapName: "daemon-config", Path: "assets/200-daemon.yaml", BlockingReadiness: assets.ReadinessPollConfig{Retries: 30, Delay: 20 * time.Second}},
-	}
-	if !utils.IsK8sDeployment() {
-		assetsToDeploy = append(assetsToDeploy, assets.Asset{ConfigMapName: "machine-config", Path: "assets/300-machine-config.yaml"})
 	}
 
 	assetsManager := &assets.Manager{

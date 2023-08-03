@@ -21,6 +21,9 @@ type EthernetNodeConfigSpec struct {
 	Config []DeviceNodeConfig `json:"config,omitempty"`
 	// Skips drain process when true; default false. Should be true if operator is running on SNO
 	DrainSkip bool `json:"drainSkip,omitempty"`
+	// Set to true to retry update every 5 minutes
+	// Default is set to false - no retries will occur
+	RetryOnFail bool `json:"retryOnFail,omitempty"`
 }
 
 type FirmwareInfo struct {

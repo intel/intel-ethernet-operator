@@ -19,10 +19,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
-	flowconfigv1 "github.com/otcshare/intel-ethernet-operator/apis/flowconfig/v1"
-	"github.com/otcshare/intel-ethernet-operator/pkg/flowconfig/flowsets"
-	flowapi "github.com/otcshare/intel-ethernet-operator/pkg/flowconfig/rpc/v1/flow"
-	"github.com/otcshare/intel-ethernet-operator/pkg/flowconfig/utils"
+	flowconfigv1 "github.com/intel-collab/applications.orchestration.operators.intel-ethernet-operator/apis/flowconfig/v1"
+	"github.com/intel-collab/applications.orchestration.operators.intel-ethernet-operator/pkg/flowconfig/flowsets"
+	flowapi "github.com/intel-collab/applications.orchestration.operators.intel-ethernet-operator/pkg/flowconfig/rpc/v1/flow"
+	"github.com/intel-collab/applications.orchestration.operators.intel-ethernet-operator/pkg/flowconfig/utils"
 )
 
 // NodeFlowConfigReconciler reconciles a NodeFlowConfig object

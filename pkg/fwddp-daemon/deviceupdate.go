@@ -11,7 +11,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/otcshare/intel-ethernet-operator/pkg/utils"
+	"github.com/intel-collab/applications.orchestration.operators.intel-ethernet-operator/pkg/utils"
 )
 
 var (

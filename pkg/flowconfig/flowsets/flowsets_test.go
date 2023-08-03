@@ -6,9 +6,9 @@ package flowsets
 import (
 	"testing"
 
+	flowapi "github.com/intel-collab/applications.orchestration.operators.intel-ethernet-operator/pkg/flowconfig/rpc/v1/flow"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	flowapi "github.com/otcshare/intel-ethernet-operator/pkg/flowconfig/rpc/v1/flow"
 )
 
 func TestFlowSets(t *testing.T) {

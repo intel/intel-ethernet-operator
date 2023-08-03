@@ -7,8 +7,8 @@ import (
 	"fmt"
 
 	"github.com/golang/protobuf/ptypes/any"
-	"github.com/otcshare/intel-ethernet-operator/pkg/flowconfig/rpc/v1/flow"
-	"github.com/otcshare/intel-ethernet-operator/pkg/flowconfig/utils"
+	"github.com/intel-collab/applications.orchestration.operators.intel-ethernet-operator/pkg/flowconfig/rpc/v1/flow"
+	"github.com/intel-collab/applications.orchestration.operators.intel-ethernet-operator/pkg/flowconfig/utils"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"

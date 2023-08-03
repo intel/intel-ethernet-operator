@@ -8,6 +8,7 @@ Copyright (c) 2020-2022 Intel Corporation
 - [Overview](#overview)
 - [Intel Ethernet Operator](#intel-ethernet-operator)
   - [Intel Ethernet Operator - Controller-Manager](#intel-ethernet-operator---controller-manager)
+    - [Alternative firmware search path on nodes with /lib/firmware read-only](#alternative-firmware-search-path-on-nodes-with-libfirmware-read-only)
   - [Intel Ethernet Operator - Device Discovery](#intel-ethernet-operator---device-discovery)
   - [Intel Ethernet Operator - FW/DDP Daemon](#intel-ethernet-operator---fwddp-daemon)
     - [Firmware Update (FW) Functionality](#firmware-update-fw-functionality)
@@ -17,20 +18,21 @@ Copyright (c) 2020-2022 Intel Corporation
     - [Unified Flow Tool](#unified-flow-tool)
   - [Prerequisites](#prerequisites)
     - [Intel Ethernet Operator - SRIOV](#intel-ethernet-operator---sriov)
-    - [Intel Ethernet Operator - OOT ICE driver update](#intel-ethernet-operator---oot-ice-driver-update)
-- [Technical Requirements and Dependencies](#technical-requirements-and-dependencies)
+    - [Node Feature Discovery](#node-feature-discovery)
 - [Deploying the Operator](#deploying-the-operator)
+  - [Installing Go](#installing-go)
+  - [Installing Operator SDK](#installing-operator-sdk)
   - [Applying custom resources](#applying-custom-resources)
     - [Webserver for disconnected environment](#webserver-for-disconnected-environment)
     - [Updating Firmware](#updating-firmware)
     - [Updating DDP](#updating-ddp)
-    - [Deploy Flow Configuration agent](#deploy-flow-configuration-agent)
+    - [Deploying Flow Configuration Agent](#deploying-flow-configuration-agent)
       - [Creating Trusted VF using SRIOV Network Operator](#creating-trusted-vf-using-sriov-network-operator)
       - [Check node status](#check-node-status)
       - [Create DCF capable SRIOV Network](#create-dcf-capable-sriov-network)
       - [Build UFT image](#build-uft-image)
-      - [Create FlowConfig Node Agent deployment CR](#create-flowconfig-node-agent-deployment-cr)
-      - [Verify that FlowConfig Daemon is running on available nodes:](#verify-that-flowconfig-daemon-is-running-on-available-nodes)
+      - [Creating FlowConfig Node Agent Deployment CR](#creating-flowconfig-node-agent-deployment-cr)
+      - [Verifying that FlowConfig Daemon is running on available nodes:](#verifying-that-flowconfig-daemon-is-running-on-available-nodes)
       - [Creating Flow Configuration rules with Intel Ethernet Operator](#creating-flow-configuration-rules-with-intel-ethernet-operator)
       - [Update a sample Node Flow Configuration rule](#update-a-sample-node-flow-configuration-rule)
 - [Hardware Validation Environment](#hardware-validation-environment)
@@ -38,10 +40,9 @@ Copyright (c) 2020-2022 Intel Corporation
 
 ## Overview
 
-This document provides the instructions for using the Intel Ethernet Operator on supported Kubernetes clusters (Vanilla K8s installed with Intel Container Experience Kits (CEK) or Red Hat's OpenShift Container Platform). This operator was developed with aid of the Operator SDK project.
+This document provides the instructions for using the Intel Ethernet Operator on supported Kubernetes clusters (Vanilla K8s or Red Hat's OpenShift Container Platform). This operator was developed with aid of the Operator SDK project.
 
 ## Intel Ethernet Operator
-
 
 The role of the Intel Ethernet Operator is to orchestrate and manage the configuration of the capabilities exposed by the Intel E810 Series network interface cards (NICs). The operator is a state machine which will configure certain functions of the card and then monitor the status and act autonomously based on the user interaction.
 The operator design of the Intel Ethernet Operator supports the following E810 series cards:
@@ -58,13 +59,17 @@ The Intel Ethernet Operator provides functionality for:
 
 Upon deployment the operator provides APIs, Controllers and Daemons responsible for management and execution of the supported features. A number of dependencies (ICE driver, SRIOV Network Operator, NFD) must be fulfilled before the deployment of this operator - these dependencies are listed in the [prerequisites section](#prerequisites). The user interacts with the operator by providing CRs (CustomResources). The operator constantly monitors the state of the CRs to detect any changes and acts based on the changes detected. There is a separate CR to be provided for the FW/DDP update functionality and the Flow Configuration functionality. Once the CR is applied or updated, the operator/daemon checks if the configuration is already applied and if it is not, it applies the configuration.
 
-![SRIOV FEC Operator Design](images/Diagram1.png)
+![Intel Ethernet Operator Design](images/Diagram1.png)
 
 ### Intel Ethernet Operator - Controller-Manager
 
 The controller manager pod is the first pod of the operator, it is responsible for deployment of other assets, exposing the APIs, handling of the CRs and executing the validation webhook. It contains the logic for accepting and splitting the FW/DDP CRs into node CRs and reconciling the status of each CR.
 
 The validation webhook of the controller manager is responsible for checking each CR for invalid arguments.
+
+#### Alternative firmware search path on nodes with /lib/firmware read-only
+
+Some orchestration platforms based on kubernetes have /lib/firmware directory immutable. Intel Ethernet Operator needs read and write permissions in this directory to perform FW and DDP updates. Solution to this problem is [alternative firmware search path](https://docs.kernel.org/driver-api/firmware/fw_search_path.html#:~:text=There%20is%20an%20alternative%20to,module%2Ffirmware_class%2Fparameters%2Fpath). Custom firmware path needs be set up on all nodes in the cluster. Controller manager pod checks content of `/sys/module/firmware_class/parameters/path` on node on which it was deployed and takes that path into consideration while managing rest of the operator resources.
 
 ### Intel Ethernet Operator - Device Discovery
 
@@ -94,7 +99,7 @@ The FW/DDP daemon pod is a DaemonSet deployed as part of the operator. It is dep
 
 Once the operator/daemon detects a change to a CR related to the update of the Intel® E810 NIC firmware, it tries to perform an update. The firmware for the Intel® E810 NICs is expected to be provided by the user in form of a `tar.gz` file. The user is also responsible to verify that the firmware version is compatible with the device. The user is required to place the firmware on an accessible HTTP server and provide an URL for it in the CR. If the file is provided correctly and the firmware is to be updated, the Ethernet Configuration Daemon will update the Intel® E810 NICs with the NVM utility provided.
 
-To update the NVM firmware of the Intel® E810 cards' NICs user must create a CR containing the information about which card should be programmed. The Physical Functions of the NICs will be updated in logical pairs. The user needs to provide the FW URL and checksum (md5) in the CR.
+To update the NVM firmware of the Intel® E810 cards' NICs user must create a CR containing the information about which card should be programmed. The Physical Functions of the NICs will be updated in logical pairs. The user needs to provide the FW URL and checksum (SHA-1) in the CR.
 
 For a sample CR go to [Updating Firmware](#updating-firmware).
 
@@ -106,11 +111,31 @@ To update the DDP profile of the Intel® E810 NIC user must create a CR containi
 
 For a sample CR go to [Updating DDP](#updating-ddp).
 
+Take note that for DDP profile update to take effect ICE driver needs to be reloaded after reboot. Reboot is performed by operator after updating DDP profile to one requested in `EthernetClusterConfig`, but reloading of ICE driver is responsibility of user. Such reload can be achieved by creating systemd service that executes reload [script](../ice-driver-reload/ice-driver-reload.sh) on boot. If working on OCP a sample [MachineConfig](../ice-driver-reload/ice-driver-reload-machine-config.yaml) is provided that can be used as reference.
+
+```shell
+[Unit]
+Description=ice driver reload
+# Start after the network is up
+Wants=network-online.target
+After=network-online.target
+# Also after docker.service (no effect on systems without docker)
+After=docker.service
+# Before kubelet.service (no effect on systems without kubernetes)
+Before=kubelet.service
+[Service]
+Type=oneshot
+TimeoutStartSec=25m
+RemainAfterExit=true
+ExecStart=/usr/bin/sh <path to reload script>
+StandardOutput=journal+console
+[Install]
+WantedBy=default.target
+```
+
 ### Intel Ethernet Operator - Flow Configuration
 
-
-The Flow Configuration pod is a DaemonSet deployed with a CRD `FlowConfigNodeAgentDeployment` provided by Ethernet operator once it is up and running and the required DCF VF pools and their *`network attachement definitions`* are created with SRIOV Network Operator APIs. It is deployed on each node that exposes DCF VF pool as extended node resource. It is a reconcile loop which monitors the changes in each node's CR and acts on the changes. The logic implemented into this Daemon takes care of updating the cards' NIC traffic flow configuration. It consists of two components Flow Config controller container and UFT container.
-
+The Flow Configuration pod is a DaemonSet deployed with a CRD `FlowConfigNodeAgentDeployment` provided by Ethernet operator once it is up and running and the required DCF VF pools and their *`network attachment definitions`* are created with SRIOV Network Operator APIs. It is deployed on each node that exposes DCF VF pool as extended node resource. It is a reconcile loop which monitors the changes in each node's CR and acts on the changes. The logic implemented into this Daemon takes care of updating the cards' NIC traffic flow configuration. It consists of two components Flow Config controller container and UFT container.
 
 #### Node Flow Configuration Controller
 
@@ -134,30 +159,38 @@ One way of creating and providing this trusted VF and application VFs is to conf
 In OCP environments the SRIOV Network Operator will be deployed as a dependency to Intel Ethernet Operator automatically.
 The configuration and creation of the trusted VFs and application is out of scope of this Operator and is users responsibility.
 
+#### Node Feature Discovery
+
+To detect SRIOV capable nodes usage of Node Feature Discovery is needed. NFD detects hardware features available on each node in a Kubernetes cluster, and advertises those features using node labels and optionally node extended resources and node taints.
 
 ## Deploying the Operator
 
 Building the operator bundle images will require Go and Operator SDK to be installed.
 
 ### Installing Go
+
 You can install Go following the steps [here](https://go.dev/doc/install).
 
+> Note: Intel Ethernet Operator is not compatible with Go versions below 1.19
+
 ### Installing Operator SDK
-Please install Operator SDK v1.7.2 following the steps below:
-```
+
+Please install Operator SDK v1.25.0 following the steps below:
+
+```shell
 export ARCH=$(case $(uname -m) in x86_64) echo -n amd64 ;; aarch64) echo -n arm64 ;; *) echo -n $(uname -m) ;; esac)
 export OS=$(uname | awk '{print tolower($0)}')
-export SDK_VERSION=v1.7.2
+export SDK_VERSION=v1.25.0
 export OPERATOR_SDK_DL_URL=https://github.com/operator-framework/operator-sdk/releases/download/${SDK_VERSION}
 curl -LO ${OPERATOR_SDK_DL_URL}/operator-sdk_${OS}_${ARCH}
 chmod +x operator-sdk_${OS}_${ARCH} && sudo mv operator-sdk_${OS}_${ARCH} /usr/local/bin/operator-sdk
 ```
 
-
 Based on target cluster please follow one of the deployment steps from list below.
 
 - [Deploy on OCP](deployment/ocp-deployment.md)
 - [Deploy on Vanilla K8s](deployment/k8s-deployment.md)
+
 ### Applying custom resources
 
 Once the operator is successfully deployed, the user interacts with it by creating CRs which will be interpreted by the operator.
@@ -167,39 +200,51 @@ Note: Example code below uses `kubectl` and the client binary. You can substitut
 #### Webserver for disconnected environment
 
 If cluster is running in disconnected environment, then user has to create local cache (e.g webserver) which will serve required files.
-Cache should be created on machine with access to Internet.  
+Cache should be created on machine with access to Internet.
 Start by creating dedicated folder for webserver.
+
 ```shell
 mkdir webserver
 cd webserver
 ```
+
 Create nginx Dockerfile
+
 ```shell
 echo "
 FROM nginx
 COPY files /usr/share/nginx/html
 " >> Dockerfile
 ```
+
 Create `files` folder
-```
+
+```shell
 mkdir files
 cd files
 ```
+
 Download required packages into `files` directory
-```
-curl -OjL https://downloadmirror.intel.com/709692/E810_NVMUpdatePackage_v3_10_Linux.tar.gz
+
+```shell
+curl -OjL https://downloadmirror.intel.com/769278/E810_NVMUpdatePackage_v4_20_Linux.tar.gz
 ```
 
 Build image with packages
+
 ```shell
 cd ..
 podman build -t webserver:1.0.0 .
 ```
+
 Push image to registry that is available in disconnected environment (or copy binary image to machine via USB flash driver by using `podman save` and `podman load` commands)
+
 ```shell
 podman push localhost/webserver:1.0.0 $IMAGE_REGISTRY/webserver:1.0.0
 ```
+
 Create Deployment on cluster that will expose packages
+
 ```shell
 apiVersion: apps/v1
 kind: Deployment
@@ -224,6 +269,7 @@ spec:
 ```
 
 And Service to make it accessible within cluster
+
 ```shell
 apiVersion: v1
 kind: Service
@@ -239,19 +285,24 @@ spec:
   selector:
     run: ice-cache
 ```
-After that package will be available in cluster under following path:   
+
+After that package will be available in cluster under following path:
 ```http://ice-cache.default.svc.cluster.local/E810_NVMUpdatePackage_v3_10_Linux.tar.gz```
 #### Updating Firmware
 
 To find the NIC devices belonging to the Intel® E810 NIC run following command, the user can detect the device information of the NICs from the output:
 
 ```shell
-# kubectl get enc <nodename> -o jsonpath={.status}
+  kubectl get enc <nodename> -o jsonpath={.status}
 ```
 
 To update the Firmware of the supported device run following steps:
 
->Note: The Physical Functions of the NICs will be updated in logical pairs. The user needs to provide the FW URL and checksum (md5).
+>Note: The Physical Functions of the NICs will be updated in logical pairs. The user needs to provide the FW URL and checksum (SHA-1).
+
+>Note: If nodeSelectors and deviceSelector are both left empty, the EthernetClusterConfig will target all compatible NICs on all available nodes.
+
+>retryOnFail field defaults to false. If you want update to retry 5 minutes after it encounters a failure, please set to true.
 
 Create a CR `yaml` file:
 
@@ -262,25 +313,32 @@ metadata:
   name: config
   namespace: <namespace>
 spec:
+  retryOnFail: true
   nodeSelectors:
     kubernetes.io/hostname: <hostname>
   deviceSelector:
     pciAddress: "<pci-address>"
   deviceConfig:
     fwURL: "<URL_to_firmware>"
-    fwChecksum: "<file_checksum_md5_hash>"
+    fwChecksum: "<file_checksum_SHA-1_hash>"
+    fwUpdateParam: "<nvmupdate_tool_additional_params>"
 ```
 
 The CR can be applied by running:
 
 ```shell
-# kubectl apply -f <filename>
+  kubectl apply -f <filename>
 ```
 
-Once the NVM firmware update is complete, the following status is reported:
+The firmware update status can be checked by running:
 
 ```shell
-# kubectl get enc <nodename> -o jsonpath={.status.conditions}
+  kubectl get enc <nodename> -o jsonpath={.status.conditions}
+```
+
+The following status is reported:
+
+```shell
 [
   {
     "lastTransitionTime": "2021-12-17T15:25:32Z",
@@ -303,11 +361,13 @@ The user can observe the change of the cards' NICs firmware:
 }
 ```
 
-If `fwUrl` points to external location, then you might need to configure proxy on cluster. You can configure it by using [OCP cluster-wide proxy](https://docs.openshift.com/container-platform/4.9/networking/enable-cluster-wide-proxy.html) 
-or by setting HTTP_PROXY, HTTPS_PROXY and NO_PROXY environmental variables in [operator's subscription](https://docs.openshift.com/container-platform/4.9/operators/admin/olm-configuring-proxy-support.html). 
+If `fwUrl` points to external location, then you might need to configure proxy on cluster. You can configure it by using [OCP cluster-wide proxy](https://docs.openshift.com/container-platform/4.9/networking/enable-cluster-wide-proxy.html)
+or by setting HTTP_PROXY, HTTPS_PROXY and NO_PROXY environmental variables in [operator's subscription](https://docs.openshift.com/container-platform/4.9/operators/admin/olm-configuring-proxy-support.html).
 Be aware that operator will ignore lowercase `http_proxy` variables and will accept only uppercase variables.
 
 #### Updating DDP
+
+>Note: If nodeSelectors and deviceSelector are both left empty, the EthernetClusterConfig will target all compatible NICs on all available nodes
 
 To update the DDP profile of the supported device run following steps:
 
@@ -326,13 +386,13 @@ spec:
     pciAddress: "<pci-address>"
   deviceConfig:
     ddpURL: "<URL_to_DDP>"
-    ddpChecksum: "<file_checksum_md5_hash>"
+    ddpChecksum: "<file_checksum_SHA-1_hash>"
 ```
 
 The CR can be applied by running:
 
 ```shell
-# kubectl apply -f <filename>
+  kubectl apply -f <filename>
 ```
 
 Once the DDP profile update is complete, the following status is reported:
@@ -364,7 +424,7 @@ The user can observe the change of the cards' NICs DDP:
 
 #### Deploying Flow Configuration Agent
 
-The Flow Configuration Agent Pod runs Unified Flow Tool (UFT) to configure Flow rules for a PF. UFT requires that trust mode is enabled for the first VF (VF0) of a PF so that it has the capability of creating/modifying flow rules for that PF. This VF also needs to be bound to `vfio-pci` driver. The SRIOV VFs pools are K8s extended resources that are exposed via SRIOV Network Operator. 
+The Flow Configuration Agent Pod runs Unified Flow Tool (UFT) to configure Flow rules for a PF. UFT requires that trust mode is enabled for the first VF (VF0) of a PF so that it has the capability of creating/modifying flow rules for that PF. This VF also needs to be bound to `vfio-pci` driver. The SRIOV VFs pools are K8s extended resources that are exposed via SRIOV Network Operator.
 
 The VF pool consists of VF0 from all available Intel E810 series NICs PF which, in this context, we call the **Admin VF pool**. The **Admin VF pool** is associated with a NetworkAttachmentDefinition that enables these VFs trust mode 'on'. The SRIOV Network Operator can be used to create the **Admin VF pool** and the **NetworkAttachmentDefinition** needed by UFT. You can find more information on creating VF pools with SRIOV Network Operator [here](https://docs.openshift.com/container-platform/4.10/networking/hardware_networks/configuring-sriov-device.html) and creating NetworkAttachmentDefinition [here](https://docs.openshift.com/container-platform/4.10/networking/hardware_networks/configuring-sriov-net-attach.html).
 
@@ -459,7 +519,7 @@ By looking at the sriovnetworknodestates status we can find the NIC information 
 
 For example, the following three `SriovNetworkNodePolicy` CRs will create a trusted VF pool name with resourceName `cvl_uft_admin` along with two additional VF pools for application.
 
-> Please note that, the "uft-admin-policy" SriovNetworkNodePolicy below uses `pfNames:` with VF index range selectors to target VF0 only of Intel E810 series NIC. More information on using VF partitioning can be found [here](https://docs.openshift.com/container-platform/4.10/networking/hardware_networks/configuring-sriov-device.html#nw-sriov-nic-partitioning_configuring-sriov-device). 
+> Please note that, the "uft-admin-policy" SriovNetworkNodePolicy below uses `pfNames:` with VF index range selectors to target VF0 only of Intel E810 series NIC. More information on using VF partitioning can be found [here](https://docs.openshift.com/container-platform/4.10/networking/hardware_networks/configuring-sriov-device.html#nw-sriov-nic-partitioning_configuring-sriov-device).
 
 ```yaml
 apiVersion: sriovnetwork.openshift.io/v1
@@ -523,7 +583,7 @@ Save the above yaml in file name `sriov-network-policy.yaml` and then apply this
 The CR can be applied by running:
 
 ```shell
-# kubectl create -f sriov-network-policy.yaml
+  kubectl create -f sriov-network-policy.yaml
 ```
 
 ##### Check node status
@@ -548,7 +608,6 @@ Allocatable:
   pods:                                    250
 ```
 
-
 ##### Create DCF capable SRIOV Network
 
 Next, we will need to create SRIOV network attachment definition for the DCF VF pool as shown below:
@@ -566,25 +625,36 @@ spec:
 EOF
 ```
 
+Note if the above does not successfully set trust mode to on for vf 0, you can do it manually using this command:
+
+```shell
+  ip link set <PF_NAME> vf 0 trust on
+```
 
 ##### Build UFT image
 
 ```shell
-# export IMAGE_REGISTRY=<OCP Image registry>
+  export IMAGE_REGISTRY=<OCP Image registry>
 
-# git clone https://github.com/intel/UFT.git
+  git clone https://github.com/intel/UFT.git
 
-# git checkout v22.03
+  git checkout v22.07
 
-# make dcf-image
+  make dcf-image
 
-# docker tag dcf-tool:v21.08 $IMAGE_REGISTRY/dcf-tool:v22.03
+  docker tag uft:v22.07 $IMAGE_REGISTRY/uft:v22.07
 
-# docker push $IMAGE_REGISTRY/dcf-tool:v22.03
+  docker push $IMAGE_REGISTRY/uft:v22.07
+```
 
+**NOTE:** If you are using a version of [sriov-network-device-plugin](https://github.com/k8snetworkplumbingwg/sriov-network-device-plugin) newer than v3.5.1, you will need to apply the "``patches/uft-fix.patch``" file from the IEO repository on "``images/entrypoint.sh``" located in the UFT repository before building the uft image (running ``make dcf-image``).
+
+```shell
+patch -u <UFT_repo>/images/entrypoint.sh < <IEO_repo>/patches/uft-fix.patch
 ```
 
 ##### Creating FlowConfig Node Agent Deployment CR
+
 > Note: The Admin VF pool prefix in `DCFVfPoolName` should match how it is shown on node description in [Check node status](#check-node-status) section.
 
 ```shell
@@ -645,6 +715,7 @@ TELEMETRY: No legacy callbacks, legacy socket not created
 grpc server start ...
 now in server cycle
 ```
+
 ##### Creating Flow Configuration rules with Intel Ethernet Operator
 
 With trusted VFs and application VFs ready to be configured, program the Flow Configuration by running:

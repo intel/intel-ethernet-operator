@@ -8,8 +8,8 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/intel-collab/applications.orchestration.operators.intel-ethernet-operator/pkg/utils"
 	"github.com/jaypipes/ghw"
-	"github.com/otcshare/intel-ethernet-operator/pkg/utils"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"

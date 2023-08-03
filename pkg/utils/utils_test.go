@@ -7,7 +7,7 @@ import (
 	"archive/tar"
 	"archive/zip"
 	"compress/gzip"
-	"crypto/md5"
+	"crypto/sha1"
 	"encoding/hex"
 	"fmt"
 	"io"
@@ -109,7 +109,7 @@ var _ = Describe("Utils", func() {
 
 			f, _ := os.Open(tmpfile.Name())
 
-			h := md5.New()
+			h := sha1.New()
 			_, err = io.Copy(h, f)
 			Expect(err).ToNot(HaveOccurred())
 
