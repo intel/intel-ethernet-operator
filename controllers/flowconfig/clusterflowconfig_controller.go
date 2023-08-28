@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// Copyright (c) 2021 Intel Corporation
+// Copyright (c) 2020-2023 Intel Corporation
 
 package flowconfig
 
@@ -27,8 +27,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	flowconfigv1 "github.com/otcshare/intel-ethernet-operator/apis/flowconfig/v1"
-	flowapi "github.com/otcshare/intel-ethernet-operator/pkg/flowconfig/rpc/v1/flow"
+	flowconfigv1 "github.com/intel-collab/applications.orchestration.operators.intel-ethernet-operator/apis/flowconfig/v1"
+	flowapi "github.com/intel-collab/applications.orchestration.operators.intel-ethernet-operator/pkg/flowconfig/rpc/v1/flow"
 )
 
 // ClusterFlowConfigReconciler reconciles a ClusterFlowConfig object
@@ -47,6 +47,16 @@ type ClusterFlowConfigReconciler struct {
 //+kubebuilder:rbac:groups=flowconfig.intel.com,resources=clusterflowconfigs,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=flowconfig.intel.com,resources=clusterflowconfigs/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=flowconfig.intel.com,resources=clusterflowconfigs/finalizers,verbs=update
+
+// GetClusterFlowConfigReconciler returns an instance of ClusterFlowConfigReconciler
+func GetClusterFlowConfigReconciler(k8sClient client.Client, logger logr.Logger, scheme *runtime.Scheme) *ClusterFlowConfigReconciler {
+	return &ClusterFlowConfigReconciler{
+		Client:                   k8sClient,
+		Log:                      logger,
+		Scheme:                   scheme,
+		Cluster2NodeRulesHashMap: make(map[types.NamespacedName]map[types.NamespacedName][]string),
+	}
+}
 
 func (r *ClusterFlowConfigReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	cfcLogger := r.Log.WithValues("Reconcile", req.NamespacedName)

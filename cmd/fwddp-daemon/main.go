@@ -1,15 +1,16 @@
 // SPDX-License-Identifier: Apache-2.0
-// Copyright (c) 2021 Intel Corporation
+// Copyright (c) 2020-2023 Intel Corporation
 
 package main
 
 import (
 	"flag"
-	configv1 "github.com/openshift/api/config/v1"
-	ethernetv1 "github.com/otcshare/intel-ethernet-operator/apis/ethernet/v1"
 	"os"
 
-	daemon "github.com/otcshare/intel-ethernet-operator/pkg/fwddp-daemon"
+	ethernetv1 "github.com/intel-collab/applications.orchestration.operators.intel-ethernet-operator/apis/ethernet/v1"
+	configv1 "github.com/openshift/api/config/v1"
+
+	daemon "github.com/intel-collab/applications.orchestration.operators.intel-ethernet-operator/pkg/fwddp-daemon"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"

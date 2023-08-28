@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// Copyright (c) 2021 Intel Corporation
+// Copyright (c) 2020-2023 Intel Corporation
 
 package utils
 
@@ -16,7 +16,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"os/exec"
@@ -60,6 +59,36 @@ func GetDrainSkip(nodes *corev1.NodeList, client client.Client, log logr.Logger)
 func IsK8sDeployment() bool {
 	value := os.Getenv(IeoPrefix + "GENERIC_K8S")
 	return strings.ToLower(value) == "true"
+}
+
+func GetFwSearchPath() (string, error) {
+	var defaultFwPath = "/lib/firmware"
+
+	fwPathFile := "/sys/module/firmware_class/parameters/path"
+	fwPathBytes, err := os.ReadFile(fwPathFile)
+	if err != nil {
+		// use default value
+		return defaultFwPath, fmt.Errorf("cannot read file %s", fwPathFile)
+	}
+
+	fwPath := string(fwPathBytes)
+	fwPath = strings.ReplaceAll(fwPath, "\n", "")
+	if fwPath == "" {
+		fwPath = defaultFwPath
+	}
+
+	return fwPath, nil
+}
+
+func CreateFullDdpPaths(fwPath string) (string, string) {
+	const ddpPath = "intel/ice/ddp"
+	const updatesDdpPath = "updates/intel/ice/ddp"
+
+	if strings.HasSuffix(fwPath, "/") {
+		return fwPath + ddpPath, fwPath + updatesDdpPath
+	}
+
+	return fwPath + "/" + ddpPath, fwPath + "/" + updatesDdpPath
 }
 
 func IsOpenshiftSno(c client.Client, log logr.Logger) (bool, error) {
@@ -422,11 +451,11 @@ func ExecCmd(args []string, log logr.Logger) (string, error) {
 }
 
 func CopyFile(src string, dst string) error {
-	data, err := ioutil.ReadFile(src)
+	data, err := os.ReadFile(src)
 	if err != nil {
 		return err
 	}
-	return ioutil.WriteFile(dst, data, 0644)
+	return os.WriteFile(dst, data, 0644)
 }
 
 func RunExecWithLog(cmd *exec.Cmd, log logr.Logger) error {

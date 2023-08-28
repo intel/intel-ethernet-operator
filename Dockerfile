@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
-# Copyright (c) 2021 Intel Corporation
+# Copyright (c) 2020-2023 Intel Corporation
 
 # Build the manager binary
-FROM golang:alpine3.16 as builder
+FROM golang:alpine3.18 as builder
 
 WORKDIR /workspace
 
@@ -18,10 +18,18 @@ COPY apis/ apis/
 COPY controllers/ controllers/
 COPY pkg/ pkg/
 
-
+# Build
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GO111MODULE=on go build -a -o manager main.go
 
-FROM registry.access.redhat.com/ubi9/ubi-micro:9.1.0-6
+# Install packages in clean filesystem
+FROM registry.access.redhat.com/ubi9/ubi:9.2-489 AS package_installer
+RUN mkdir -p /mnt/rootfs && \
+    yum install --installroot /mnt/rootfs coreutils-single glibc-minimal-langpack kmod \
+        --releasever 9 --setopt install_weak_deps=false --nodocs -y && \
+    yum --installroot /mnt/rootfs clean all && \
+    rm -rf /mnt/rootfs/var/cache/* /mnt/rootfs/var/log/dnf* /mnt/rootfs/var/log/yum.*
+
+FROM registry.access.redhat.com/ubi9/ubi-micro:9.2-5
 
 ARG VERSION
 ### Required OpenShift Labels
@@ -34,6 +42,7 @@ LABEL name="Intel Ethernet Operator" \
 
 USER 1001
 WORKDIR /
+COPY --from=package_installer /mnt/rootfs/ /
 COPY --from=builder /workspace/manager .
 COPY assets/ assets/
 

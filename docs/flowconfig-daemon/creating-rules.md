@@ -1,6 +1,6 @@
 ```text
 SPDX-License-Identifier: Apache-2.0
-Copyright (c) 2020-2021 Intel Corporation
+Copyright (c) 2020-2023 Intel Corporation
 ```
 
 There are two API available for use configuration of flow rules: ClusterFlowConfig and NodeFlowConfig.
@@ -9,13 +9,15 @@ ClusterFlowConfig supports cluster wide configuration of flow rules using a sing
 NodeFlowConfig supports node specific configuration of flow rules using a CRD per node that the user would like to configure flow rules on(see example NodeFlowConfig section below).
 
 # Creating ClusterFlowConfig Spec
+
 To apply flow rules, a resource of type ClusterFlowConfig needs to be created. At the moment the Intel Ethernet Operator gives only partial support of the Generic flow API. All the supported options are described below.
 
 NOTE: Most of the objects parameters names are consistent with the names given in the [official dpdk rte flow documentation](https://doc.dpdk.org/guides/prog_guide/rte_flow.html).
 
-For the full description of Generic flow API see https://doc.dpdk.org/guides/prog_guide/rte_flow.html.
+For the full description of Generic flow API see <https://doc.dpdk.org/guides/prog_guide/rte_flow.html>.
 
 ## Example ClusterFlowConfig
+
 A correct ClusterFlowConfig should be similar to this:
 
 ```yaml
@@ -55,14 +57,16 @@ NOTE: Make sure to use the correct names of the types and their parameters.
 NOTE: podSelector should be set to target pods. Flow rules will then be configured on nodes that meet the podSelector criteria.
 
 # Creating NodeFlowConfig Spec
+
 If ClusterFlowConfig does not satisfy your use case, you can use NodeFlowConfig.
 To apply flow rules, a resource of type NodeFlowConfig needs to be created. At the moment the Intel Ethernet Operator gives only partial support of the Generic flow API. All the supported options are described below.
 
 NOTE: Most of the objects parameters names are consistent with the names given in the [official dpdk rte flow documentation](https://doc.dpdk.org/guides/prog_guide/rte_flow.html).
 
-For the full description of Generic flow API see https://doc.dpdk.org/guides/prog_guide/rte_flow.html.
+For the full description of Generic flow API see <https://doc.dpdk.org/guides/prog_guide/rte_flow.html>.
 
 ## Example NodeFlowConfig
+
 A correct NodeFlowConfig should be similar to this:
 
 ```yaml
@@ -96,21 +100,26 @@ spec:
 NOTE: Make sure to use the correct names of the types and their parameters.
 
 ## Flow Rules
+
 A flow rule is a set of attributes, matching pattern and a list of actions. Port Id is the port identifier of the used Ethernet device.
+
 - PortId
--	Attributes
--	Pattern
--	Action
+- Attributes
+- Pattern
+- Action
 
 ### Pattern Item
+
 Pattern item can match a specific packet data or traffic properties. It can also describe properties of the pattern.
 
 An Item can contain up to three structures of the same type:
+
 - spec
 - last
 - mask
 
 #### Supported Item Types
+
 At the moment Intel Ethernet Operator supports item types listed below.
 
 |   Item                                |   Description                         |
@@ -125,6 +134,7 @@ At the moment Intel Ethernet Operator supports item types listed below.
 |   RTE_FLOW_ITEM_TYPE_END              |   End marker for item lists           |
 
 ##### Item ETH
+
 |   Data Field  |   Value   |
 |---------------|-----------|
 |   dst         |   string  |
@@ -132,6 +142,7 @@ At the moment Intel Ethernet Operator supports item types listed below.
 |   type        |   0-65535 |
 
 An example of ETH Pattern Item:
+
 ```yaml
   - type: RTE_FLOW_ITEM_TYPE_IPV4
     spec:
@@ -141,19 +152,24 @@ An example of ETH Pattern Item:
     mask:
       dst: ff:ff:ff:ff:ff:0
 ```
+
 ##### Item Vlan
+
 |   Data Field  |   Value   |
 |---------------|-----------|
 |   tci         |  0-65535  |
 |   inner_type  |  0-65535  |
 
 An example of ETH Pattern Item:
+
 ```yaml
   - type: RTE_FLOW_ITEM_TYPE_VLAN
     spec:
       inner_type: 0x8100
 ```
+
 ##### Item IPv4
+
 |   Data Field  |   Value   |
 |---------------|-----------|
 |   hdr         |   struct  |
@@ -174,6 +190,7 @@ An example of ETH Pattern Item:
 |   dst_addr        |   string  |
 
 An example of IPv4 Pattern Item:
+
 ```yaml
   - type: RTE_FLOW_ITEM_TYPE_IPV4
     spec:
@@ -186,12 +203,15 @@ An example of IPv4 Pattern Item:
       hdr:
         dst_addr: 255.255.255.0
 ```
+
 ##### Item UDP
+
 |   Data Field  |   Value   |
 |---------------|-----------|
 |   hdr         |   struct  |
 
 ###### Item UDP header
+
 |   Data Field      |   Value   |
 |-------------------|-----------|
 |   src_port        |   0-65535 |
@@ -200,13 +220,16 @@ An example of IPv4 Pattern Item:
 |   dgram_cksum     |   0-65535 |
 
 An example of UDP Pattern Item:
+
 ```yaml
   - type: RTE_FLOW_ITEM_TYPE_UDP
     spec:
       hdr:
         dst_port: 67
 ```
+
 ##### Item PPPOES/PPPOED
+
 |   Data Field      |   Value   |
 |-------------------|-----------|
 |   version_type    |   0-255   |
@@ -215,27 +238,34 @@ An example of UDP Pattern Item:
 |   length          |   0-65535 |
 
 An example of PPPOES Pattern Item:
+
 ```yaml
   - type: RTE_FLOW_ITEM_TYPE_PPPOES
     spec:
       version_type: 0x01
       code: 0x09
 ```
+
 NOTE: A recent [Ice COMMS DDP package](https://downloadcenter.intel.com/download/29889/Intel-Ethernet-800-Series-Telecommunication-Comms-Dynamic-Device-Personalization-DDP-Package) needs to be loaded in order to create items of type PPPOES/PPPOED.
 
 ##### Item PPPOE PROTO ID
+
 |   Data Field      |   Value   |
 |-------------------|-----------|
 |   proto_id        |   0-65535 |
 
 An example of PPPOE PROTO ID Pattern Item:
+
 ```yaml
    - type: RTE_FLOW_ITEM_TYPE_PPPOE_PROTO_ID
      spec:
       proto_id: 0xc021
 ```
+
 NOTE: A recent [Ice COMMS DDP package](https://downloadcenter.intel.com/download/29889/Intel-Ethernet-800-Series-Telecommunication-Comms-Dynamic-Device-Personalization-DDP-Package) needs to be loaded in order to create items of type PPPOE PROTO ID.
+
 ### Actions
+
 Actions can alter the fate of matching traffic, its contents or properties. A list of actions can be assigned to a flow rule. These actions are performed in a given order and can require additional configuration.
 
 #### Supported Action Types
@@ -264,6 +294,7 @@ Actions can alter the fate of matching traffic, its contents or properties. A li
 |   RTE_FLOW_ACTION_TYPE_END                |   End marker for action lists                                                     |
 
 #### Action VF
+
 |   Data Field  |   Value           |
 |---------------|-------------------|
 |   Reserved    |   0               |
@@ -271,6 +302,7 @@ Actions can alter the fate of matching traffic, its contents or properties. A li
 |   Id          |   0-255           |
 
 An example of Action VF:
+
 ```yaml
   - type: RTE_FLOW_ACTION_TYPE_VF
     conf:
@@ -280,12 +312,13 @@ An example of Action VF:
 NOTE: At the moment only Action of type VF has additional config. Other actions have no configurable properties.
 
 ### Attributes
+
 Attributes are the additional properties of a flow rule.
 
 | Attribute | Description                                                           | Value        |
 |-----------|-----------------------------------------------------------------------|--------------|
 | group     | Group similar rules                                                   | 0-4294967295 |
 | priority  | Flow rule priority level                                              | 0-4294967295 |
-|	ingress   | Apply flowrule to inbound traffic                                     | 0-1          |
-|	egress    | Apply flowrule to outbound traffic                                    | 0-1          |
-|	transfer  | Transfer a flow rule to the lowest possible level of device endpoints | 0-1          |
+| ingress   | Apply flowrule to inbound traffic                                     | 0-1          |
+| egress    | Apply flowrule to outbound traffic                                    | 0-1          |
+| transfer  | Transfer a flow rule to the lowest possible level of device endpoints | 0-1          |

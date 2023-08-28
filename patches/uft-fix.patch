@@ -1,0 +1,24 @@
+--- entrypoint.sh	2023-04-27 13:34:45.728759110 +0000
++++ entrypoint-fix.sh	2023-04-27 13:35:24.300062339 +0000
+@@ -13,11 +13,17 @@
+ # See the License for the specific language governing permissions and
+ # limitations under the License.
+ ####
+-# This script generate server config file dynamically from VF PCI address
+-# given in Environment varible exported by device plugin in following
+-# format: PCIDEVICE_INTEL_COM_INTEL_ENP24S0F0=0000:18:02.2
++# This script generates a server config file dynamically from VF PCI address
++# provided by network device plugin. The environment variable is in the format:
++# PCIDEVICE_<RESOURCE_NAME>=<PCI_ADDRESSES>
++# E.g - PCIDEVICE_INTEL_COM_INTEL_ENP24S0F0=0000:18:02.2
++#
++# Device plugin also exposes a variable in the format of: 
++# PCIDEVICE_<RESOURCE_NAME>_INFO which contains additional information about 
++# the allocated devices. Information in that variable is not needed by this script
++# and so it is ignored.
+ ####
+-rawpci=$(env | grep PCIDEVICE_ | awk -F'=' '{ print $2 }')
++rawpci=$(env | grep -P 'PCIDEVICE_[A-Z0-9_]{1,}(?<!_INFO)=' | awk -F'=' '{ print $2 }')
+ pciids=(${rawpci//,/ })
+ 
+ SERVER_CONF_FILE=/opt/dcf/server_conf.yaml

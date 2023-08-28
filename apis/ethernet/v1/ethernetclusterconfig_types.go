@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// Copyright (c) 2021 Intel Corporation
+// Copyright (c) 2020-2023 Intel Corporation
 
 package v1
 
@@ -31,6 +31,9 @@ type DeviceConfig struct {
 	// +kubebuilder:validation:Pattern=`^[a-fA-F0-9]{40}$`
 	// SHA-1 checksum of .tar.gz Firmware
 	FWChecksum string `json:"fwChecksum,omitempty"`
+	// Additional arguments for NVMUpdate utility 
+	// e.g. "./nvmupdate64e -u -m 40a6b79ee660 -c ./nvmupdate.cfg -o update.xml -l <fwUpdateParam>"
+	FWUpdateParam string `json:"fwUpdateParam,omitempty"`
 }
 
 // EthernetClusterConfigSpec defines the desired state of EthernetClusterConfig

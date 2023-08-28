@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// Copyright (c) 2021 Intel Corporation
+// Copyright (c) 2020-2023 Intel Corporation
 
 package v1
 
@@ -14,8 +14,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/yaml"
 
-	"github.com/otcshare/intel-ethernet-operator/pkg/flowconfig/rpc/v1/flow"
-	"github.com/otcshare/intel-ethernet-operator/pkg/flowconfig/utils"
+	"github.com/intel-collab/applications.orchestration.operators.intel-ethernet-operator/pkg/flowconfig/rpc/v1/flow"
+	"github.com/intel-collab/applications.orchestration.operators.intel-ethernet-operator/pkg/flowconfig/utils"
 )
 
 func TestValidate(t *testing.T) {

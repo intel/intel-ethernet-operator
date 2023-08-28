@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// Copyright (c) 2021 Intel Corporation
+// Copyright (c) 2020-2023 Intel Corporation
 
 package daemon
 
@@ -9,12 +9,13 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 
 	"github.com/go-logr/logr"
-	ethernetv1 "github.com/otcshare/intel-ethernet-operator/apis/ethernet/v1"
-	"github.com/otcshare/intel-ethernet-operator/pkg/utils"
+	ethernetv1 "github.com/intel-collab/applications.orchestration.operators.intel-ethernet-operator/apis/ethernet/v1"
+	"github.com/intel-collab/applications.orchestration.operators.intel-ethernet-operator/pkg/utils"
 )
 
 const (
@@ -63,7 +64,7 @@ func (f *fwUpdater) prepareFirmware(config ethernetv1.DeviceNodeConfig) (string,
 	return findFw(targetPath)
 }
 
-func (f *fwUpdater) handleFWUpdate(pciAddr, fwPath string) (bool, error) {
+func (f *fwUpdater) handleFWUpdate(pciAddr, fwPath, fwUpdateParam string) (bool, error) {
 	log := f.log.WithName("handleFWUpdate")
 	rebootRequired := false
 
@@ -71,13 +72,20 @@ func (f *fwUpdater) handleFWUpdate(pciAddr, fwPath string) (bool, error) {
 		return false, nil
 	}
 
-	err := f.updateFirmware(pciAddr, fwPath)
+	returnCode, err := f.updateFirmware(pciAddr, fwPath, fwUpdateParam)
 	if err != nil {
 		log.Error(err, "Failed to update firmware", "device", pciAddr)
 		return false, err
 	}
 
-	reboot, err := isRebootRequired(updateResultPath(fwPath))
+	var reboot bool
+	// update successful despite exit code being >0, reboot needed to finish process
+	if returnCode == 50 || returnCode == 51 {
+		reboot = true
+	} else {
+		reboot, err = isRebootRequired(updateResultPath(fwPath))
+	}
+
 	if err != nil {
 		log.Error(err, "Failed to extract reboot required flag from file")
 		rebootRequired = true // failsafe
@@ -88,39 +96,92 @@ func (f *fwUpdater) handleFWUpdate(pciAddr, fwPath string) (bool, error) {
 	return rebootRequired, nil
 }
 
-func (f *fwUpdater) updateFirmware(pciAddr, fwPath string) error {
+func (f *fwUpdater) updateFirmware(pciAddr, fwPath, fwUpdateParam string) (int, error) {
 	log := f.log.WithName("updateFirmware")
 
 	rootAttr := &syscall.SysProcAttr{
 		Credential: &syscall.Credential{Uid: 0, Gid: 0},
 	}
-	// Call nvmupdate64 -i first to refresh devices
-	log.V(2).Info("Refreshing nvmupdate inventory")
-	cmd := exec.Command(nvmupdate64e, "-i")
-	cmd.SysProcAttr = rootAttr
-	cmd.Dir = fwPath
-	err := nvmupdateExec(cmd, log)
+
+	// read alternative fw search path, path might get modified on
+	// NVM Update runtime so it needs to be restored after tool execution
+	altFwPathBytes, err := os.ReadFile("/sys/module/firmware_class/parameters/path")
 	if err != nil {
-		return err
+		log.V(2).Info("Error reading /sys/module/firmware_class/parameters/path", "error", err)
 	}
 
-	mac, err := getDeviceMAC(pciAddr, log)
-	if err != nil {
-		log.Error(err, "Failed to get MAC for", "device", pciAddr)
-		return err
+	altFwPath := strings.TrimSuffix(string(altFwPathBytes), "\n")
+	if altFwPath != "" {
+		log.V(2).Info("Alternative firmware search path found", "path", altFwPath)
 	}
 
-	log.V(2).Info("Updating", "MAC", mac)
-	cmd = exec.Command(nvmupdate64e, "-u", "-m", mac, "-c", nvmupdate64eCfgPath(fwPath), "-o", updateResultPath(fwPath), "-l")
+	log.V(2).Info("Splitting PCI addr and converting to decimal", "pciAddr", pciAddr)
+	domain, bus, _, _, err := splitPCIAddr(pciAddr, log)
+	if err != nil {
+		log.V(2).Info("Error spitting PCI Addr", "error", err)
+		return -1, err
+	}
+
+	bus_dec, err := strconv.ParseInt(bus, 16, 32)
+	if err != nil {
+		log.V(2).Info("Error converting bus PCI to decimal", "error", err)
+		return -1, err
+	}
+
+	domain_dec, err := strconv.ParseInt(domain, 16, 32)
+	if err != nil {
+		log.V(2).Info("Error converting PCI domain to decimal", "error", err)
+		return -1, err
+	}
+
+	log.V(2).Info("PCI Addr splitted and converted successfully", "domain",
+		domain_dec, "bus", bus_dec)
+
+	configPath := nvmupdate64eCfgPath(fwPath)
+	resultPath := updateResultPath(fwPath)
+	pciLocation := fmt.Sprintf("%02d:%03d", domain_dec, bus_dec)
+
+	log.V(2).Info("Starting Firmware Update", "pciLocation", pciLocation,
+		"configPath", configPath, "resultPath", resultPath)
+
+	var cmd *exec.Cmd
+	if fwUpdateParam != "" {
+		cmd = exec.Command(nvmupdate64e, "-u", "-location", pciLocation, "-c",
+			configPath, "-o", resultPath, "-l", fwUpdateParam)
+	} else {
+		cmd = exec.Command(nvmupdate64e, "-u", "-location", pciLocation, "-c",
+			configPath, "-o", resultPath, "-l")
+	}
 
 	cmd.SysProcAttr = rootAttr
 	cmd.Dir = fwPath
 	err = nvmupdateExec(cmd, log)
-	if err != nil {
-		return err
+
+	// restore alternative firmware search path after update if necessary
+	if altFwPath != "" {
+		if err := os.WriteFile(
+			"/sys/module/firmware_class/parameters/path",
+			[]byte(altFwPath),
+			0644,
+		); err != nil {
+			log.V(2).Info("Failed to restore alternative firmware search path")
+		}
 	}
 
-	return nil
+	if err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			code := exitErr.ExitCode()
+			if code != 3 && code != 30 && code != 50 && code != 51 {
+				return -1, exitErr
+			} else {
+				return code, nil
+			}
+		} else {
+			return -1, err
+		}
+	}
+
+	return 0, nil
 }
 
 func findFwExec(targetPath string) (string, error) {

@@ -1,11 +1,11 @@
 # SPDX-License-Identifier: Apache-2.0
-# Copyright (c) 2021-2022 Intel Corporation
+# Copyright (c) 2020-2023 Intel Corporation
 
 apiVersion: v1
 kind: ConfigMap
 metadata:
   name: daemon-config
-  namespace: {{ .ETHERNET_NAMESPACE }}
+  namespace: "{{ .ETHERNET_NAMESPACE }}"
 immutable: false
 data:
   serviceAccount: |
@@ -129,33 +129,39 @@ data:
                 - name: tlscert
                   mountPath: "/etc/certificate"
                   readOnly: true
-                - name: run
-                  mountPath: /host/run
+                - name: run-systemd
+                  mountPath: /host/run/systemd
+                - name: run-dbus
+                  mountPath: /host/run/dbus
+                  readOnly: true
                 - name: run-volume
                   mountPath: /run
+                - name: nvmupdate-volume
+                  mountPath: /tmp
                 - name: binaries
                   mountPath: /host/bin/
+                  readOnly: true
                 - name: config-volume
                   mountPath: "/devices.json"
                   subPath: devices.json
                   readOnly: true
                 - name: libmodules
                   mountPath: /lib/modules
+                  readOnly: true
                 - name: lib
                   mountPath: /host/usr/lib
+                  readOnly: true
                 - name: lib
                   mountPath: /host/lib
+                  readOnly: true
                 - name: lib64
                   mountPath: /host/usr/lib64
+                  readOnly: true
                 - name: lib64
                   mountPath: /host/lib64
-                {{ if isK8s }}
-                - name: k8sddp
-                  mountPath: /host/lib/firmware/updates/intel/ice/ddp/
-                {{ else }}
-                - name: ocpddp
-                  mountPath: /host/var/lib/firmware/intel/ice/ddp/
-                {{ end }}
+                  readOnly: true
+                - name: firmware-ddp
+                  mountPath: /lib/firmware
               env:
                 {{ if ne .NO_PROXY "" }}
                 - name: NO_PROXY
@@ -198,9 +204,15 @@ data:
               secret:
                 secretName: tls-cert
                 optional: true
-            - name: run
+            - name: run-systemd
               hostPath:
-                path: /run
+                path: /run/systemd
+            - name: nvmupdate-volume
+              hostPath:
+                path: /tmp/
+            - name: run-dbus
+              hostPath:
+                path: /run/dbus
             - name: binaries
               hostPath:
                 path: /usr/bin/
@@ -212,18 +224,12 @@ data:
             - name: libmodules
               hostPath:
                 path: /lib/modules
-            {{ if isK8s }}
-            - name: k8sddp
-              hostPath:
-                path: /lib/firmware/updates/intel/ice/ddp
-            {{ else }}
-            - name: ocpddp
-              hostPath:
-                path: /var/lib/firmware/intel/ice/ddp
-            {{ end }}
             - name: lib
               hostPath:
                 path: /usr/lib
             - name: lib64
               hostPath:
                 path: /usr/lib64
+            - name: firmware-ddp
+              hostPath:
+                path: {{ .FW_HOST_PATH }}

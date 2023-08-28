@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// Copyright (c) 2021 Intel Corporation
+// Copyright (c) 2020-2023 Intel Corporation
 
 package flowconfig
 
@@ -11,9 +11,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/intel-collab/applications.orchestration.operators.intel-ethernet-operator/pkg/flowconfig/sriovutils"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"github.com/otcshare/intel-ethernet-operator/pkg/flowconfig/sriovutils"
 	mock "github.com/stretchr/testify/mock"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -21,10 +21,10 @@ import (
 	"k8s.io/apimachinery/pkg/util/yaml"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
-	flowconfigv1 "github.com/otcshare/intel-ethernet-operator/apis/flowconfig/v1"
-	"github.com/otcshare/intel-ethernet-operator/pkg/flowconfig/rpc/v1/flow"
-	mocks "github.com/otcshare/intel-ethernet-operator/pkg/flowconfig/rpc/v1/flow/mocks"
-	"github.com/otcshare/intel-ethernet-operator/pkg/flowconfig/utils"
+	flowconfigv1 "github.com/intel-collab/applications.orchestration.operators.intel-ethernet-operator/apis/flowconfig/v1"
+	"github.com/intel-collab/applications.orchestration.operators.intel-ethernet-operator/pkg/flowconfig/rpc/v1/flow"
+	mocks "github.com/intel-collab/applications.orchestration.operators.intel-ethernet-operator/pkg/flowconfig/rpc/v1/flow/mocks"
+	"github.com/intel-collab/applications.orchestration.operators.intel-ethernet-operator/pkg/flowconfig/utils"
 )
 
 // Controller tests

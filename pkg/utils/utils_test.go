@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// Copyright (c) 2021 Intel Corporation
+// Copyright (c) 2020-2023 Intel Corporation
 
 package utils
 
@@ -16,7 +16,6 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
-	"io/ioutil"
 	"math/big"
 	"net/http"
 	"net/http/httptest"
@@ -89,7 +88,7 @@ var _ = Describe("Utils", func() {
 		})
 
 		var _ = It("will return false if checksum does not match", func() {
-			tmpfile, err := ioutil.TempFile(".", "update")
+			tmpfile, err := os.CreateTemp(".", "update")
 			Expect(err).ToNot(HaveOccurred())
 
 			defer os.Remove(tmpfile.Name())
@@ -105,7 +104,7 @@ var _ = Describe("Utils", func() {
 		})
 
 		var _ = It("will return true if checksum does match", func() {
-			tmpfile, err := ioutil.TempFile(".", "testfile")
+			tmpfile, err := os.CreateTemp(".", "testfile")
 			Expect(err).ToNot(HaveOccurred())
 
 			defer os.Remove(tmpfile.Name())
@@ -256,7 +255,7 @@ var _ = Describe("Utils", func() {
 		})
 
 		var _ = It("will return error if file already exists, but cannot acquire file", func() {
-			tmpfile, err := ioutil.TempFile("/tmp", "somefilename")
+			tmpfile, err := os.CreateTemp("/tmp", "somefilename")
 			defer os.Remove(tmpfile.Name())
 			Expect(err).ToNot(HaveOccurred())
 
@@ -269,7 +268,7 @@ var _ = Describe("Utils", func() {
 			filePath := "/tmp/updatefile_101.tar.gz"
 			url := "/tmp/fake"
 
-			err := ioutil.WriteFile(filePath, []byte("1010101"), 0666)
+			err := os.WriteFile(filePath, []byte("1010101"), 0666)
 			Expect(err).To(BeNil())
 			defer os.Remove(filePath)
 
@@ -283,11 +282,11 @@ var _ = Describe("Utils", func() {
 			fileWithUrl := filePath + ".url"
 			url := "/tmp/fake"
 
-			err := ioutil.WriteFile(filePath, []byte("1010101"), 0666)
+			err := os.WriteFile(filePath, []byte("1010101"), 0666)
 			Expect(err).To(BeNil())
 			defer os.Remove(filePath)
 
-			err = ioutil.WriteFile(fileWithUrl, []byte(filePath), 0666)
+			err = os.WriteFile(fileWithUrl, []byte(filePath), 0666)
 			Expect(err).To(BeNil())
 			defer os.Remove(fileWithUrl)
 
@@ -312,7 +311,7 @@ var _ = Describe("Utils", func() {
 		})
 
 		var _ = It("will return error if input file is not an archive", func() {
-			tmpfile, err := ioutil.TempFile(".", "testfile")
+			tmpfile, err := os.CreateTemp(".", "testfile")
 			Expect(err).ToNot(HaveOccurred())
 
 			defer os.Remove(tmpfile.Name())
@@ -327,7 +326,7 @@ var _ = Describe("Utils", func() {
 		})
 
 		var _ = It("will extract valid archive", func() {
-			workDir, err := ioutil.TempDir("", "untar-test")
+			workDir, err := os.MkdirTemp("", "untar-test")
 			Expect(err).ToNot(HaveOccurred())
 			defer os.RemoveAll(workDir)
 
@@ -352,7 +351,7 @@ var _ = Describe("Utils", func() {
 		})
 
 		var _ = It("will fail when extracting zip-slip vulnerable archive", func() {
-			out, err := ioutil.TempDir("", "zip-slip-tar-out")
+			out, err := os.MkdirTemp("", "zip-slip-tar-out")
 			Expect(err).ToNot(HaveOccurred())
 			defer os.Remove(out)
 
@@ -366,7 +365,7 @@ var _ = Describe("Utils", func() {
 
 	var _ = Describe("OpenNoLinks", func() {
 		var _ = It("will succeed if a path is neither symlink nor hard link", func() {
-			tmpFile, err := ioutil.TempFile("", "regularFile")
+			tmpFile, err := os.CreateTemp("", "regularFile")
 			defer os.Remove(tmpFile.Name())
 			Expect(err).ToNot(HaveOccurred())
 
@@ -382,7 +381,7 @@ var _ = Describe("Utils", func() {
 		})
 
 		var _ = It("will return error if a path is a symlink", func() {
-			tmpFile, err := ioutil.TempFile("", "regularFile")
+			tmpFile, err := os.CreateTemp("", "regularFile")
 			defer os.Remove(tmpFile.Name())
 			Expect(err).ToNot(HaveOccurred())
 
@@ -401,7 +400,7 @@ var _ = Describe("Utils", func() {
 		})
 
 		var _ = It("will return error if a path is a hard link", func() {
-			tmpFile, err := ioutil.TempFile("", "regularFile")
+			tmpFile, err := os.CreateTemp("", "regularFile")
 			defer os.Remove(tmpFile.Name())
 			Expect(err).ToNot(HaveOccurred())
 
@@ -433,7 +432,7 @@ var _ = Describe("Utils", func() {
 			zipPath := makeZip("zip-*.zip", filesCreate, nil)
 			defer os.Remove(zipPath)
 
-			dir, err := ioutil.TempDir("", "zip-")
+			dir, err := os.MkdirTemp("", "zip-")
 			Expect(err).ToNot(HaveOccurred())
 			defer os.RemoveAll(dir)
 
@@ -472,7 +471,7 @@ var _ = Describe("Utils", func() {
 		})
 
 		var _ = It("will return error if input file is not a zip archive", func() {
-			thisIsNotZipArchive, err := ioutil.TempFile("", "temp-file")
+			thisIsNotZipArchive, err := os.CreateTemp("", "temp-file")
 			Expect(err).ToNot(HaveOccurred())
 			defer thisIsNotZipArchive.Close()
 			defer os.Remove(thisIsNotZipArchive.Name())
@@ -483,7 +482,7 @@ var _ = Describe("Utils", func() {
 		})
 
 		var _ = It("will fail when extracting zip-slip vulnerable archive", func() {
-			out, err := ioutil.TempDir("", "zip-slip-zip-out")
+			out, err := os.MkdirTemp("", "zip-slip-zip-out")
 			Expect(err).ToNot(HaveOccurred())
 			defer os.Remove(out)
 
@@ -514,7 +513,7 @@ var _ = Describe("Utils", func() {
 			archivedFiles = append(archivedFiles, outerFilesCreate...)
 			sort.Strings(archivedFiles)
 
-			dir, err := ioutil.TempDir("", "ddp-")
+			dir, err := os.MkdirTemp("", "ddp-")
 			Expect(err).ToNot(HaveOccurred())
 			defer os.RemoveAll(dir)
 
@@ -548,7 +547,7 @@ var _ = Describe("Utils", func() {
 			ddpArchive := makeZip("test-*.zip", outerFilesCreate, innerZipPaths)
 			defer os.Remove(ddpArchive)
 
-			dir, err := ioutil.TempDir("", "ddp-")
+			dir, err := os.MkdirTemp("", "ddp-")
 			Expect(err).ToNot(HaveOccurred())
 			defer os.RemoveAll(dir)
 
@@ -584,7 +583,7 @@ func createTarArchive(tarPath string, pathToArchiveDirectory string, dirToBeArch
 
 		Expect(tarWriter.WriteHeader(header)).ToNot(HaveOccurred())
 		if d.Type().IsRegular() {
-			bytes, err := ioutil.ReadFile(path)
+			bytes, err := os.ReadFile(path)
 			Expect(err).ToNot(HaveOccurred())
 			_, err = tarWriter.Write(bytes)
 			Expect(err).ToNot(HaveOccurred())
@@ -594,7 +593,7 @@ func createTarArchive(tarPath string, pathToArchiveDirectory string, dirToBeArch
 }
 
 func makeZip(name string, filesCreate, filesCopy []string) string {
-	zipFile, err := ioutil.TempFile("", name)
+	zipFile, err := os.CreateTemp("", name)
 	Expect(err).ToNot(HaveOccurred())
 	defer zipFile.Close()
 

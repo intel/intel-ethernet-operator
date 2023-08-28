@@ -1,11 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
-// Copyright (c) 2021 Intel Corporation
+// Copyright (c) 2020-2023 Intel Corporation
 
 package sriovutils
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path"
 )
@@ -25,7 +24,7 @@ type FakeFilesystem struct {
 //	defer tearDown()
 func (fs *FakeFilesystem) Use() (string, func()) {
 	// create the new fake fs root dir in /tmp/sriov...
-	tmpDir, err := ioutil.TempDir("", "sriov")
+	tmpDir, err := os.MkdirTemp("", "sriov")
 	if err != nil {
 		panic(fmt.Errorf("error creating fake root dir: %s", err.Error()))
 	}
@@ -38,7 +37,7 @@ func (fs *FakeFilesystem) Use() (string, func()) {
 		}
 	}
 	for filename, body := range fs.Files {
-		err := ioutil.WriteFile(path.Join(fs.RootDir, filename), body, 0600)
+		err := os.WriteFile(path.Join(fs.RootDir, filename), body, 0600)
 		if err != nil {
 			panic(fmt.Errorf("error creating fake file: %s", err.Error()))
 		}

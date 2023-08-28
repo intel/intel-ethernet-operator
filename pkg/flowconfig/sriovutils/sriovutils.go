@@ -1,11 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
-// Copyright (c) 2021 Intel Corporation
+// Copyright (c) 2020-2023 Intel Corporation
 
 package sriovutils
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -38,7 +37,7 @@ type sriovutils struct {
 func (s *sriovutils) GetPfName(pciAddr string) (string, error) {
 
 	path := filepath.Join(s.SysFs, sysBusPci, pciAddr, "physfn", "net")
-	files, err := ioutil.ReadDir(path)
+	files, err := os.ReadDir(path)
 	if err != nil {
 		return "", fmt.Errorf("error getting PF name for device %s: %v", pciAddr, err)
 	} else if len(files) > 0 {

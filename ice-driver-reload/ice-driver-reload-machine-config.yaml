@@ -1,0 +1,55 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2020-2023 Intel Corporation
+
+apiVersion: machineconfiguration.openshift.io/v1
+kind: MachineConfig
+metadata:
+  labels:
+    machineconfiguration.openshift.io/role: master
+  name: transfer-ice-reload-script
+spec:
+  config:
+    ignition:
+      version: 3.2.0
+    storage:
+      files:
+        - contents:
+            compression: gzip
+            source: data:;base64,H4sIAAAAAAAC/4RUT4/aPhC951PMz2spoP1FdPe6RNpeKvVWaW+lEJl4AlYTOxo7qC2ln71y/hhCoJtTmH+Z9+Y9Hv5bNJYWW6UXqA+wFXYfRZVQejaHYwQA8AA7dKBFhRZMAZWRTYkW3F44aCyCyrEPgtLOgCASP9vOvjTls9JWRsJv2BHWkHyBeKNyjM8BA/G3t0cez9s+iXkpCCERfngmsUYtUbs2+fnTWxr/H7fvhEJCQpNCWC6XjPefZ1EPYxj73K1o+3AChSLrwDpDGOApDYYkkofc6NIIqfQudFjMjZZdi73Zc9lxgacy0mbOZN3Ie9k2N1AYIo/pLPa0dSQVhkD5TzJ+HIFfva5P7AWkacv8owpYrYBxxSD9A6uNSH59TL6uYb1+AbdHHQr9kxvtlG4wBAsVXvM95t+z/th+XgfAaOzPcUCymLX0jla/xt0T2f0CoSUMVQORNZnaM+n5nOAdT5sCroysyWzRa2O85t1R7wy6MYXQNaThQ3SKoktignEqI1P+dOuMjD+xeUjc8AfbePWyewYZDuq737tpv2a3B5b2fNix8K5sdmWvUUGwl2VnlYw5/Zcc7ytppKZCeWZHmgrUhtW193Lq+fTqSxl/ZpMTC6LpEr561lqC8SPhoa2Yn0986v4FgfFXFuEP5aK/AQAA//9HgU3fKgUAAA==
+          mode: 484
+          overwrite: true
+          path: /home/core/ice-driver-reload
+
+---
+apiVersion: machineconfiguration.openshift.io/v1
+kind: MachineConfig
+metadata:
+  labels:
+    machineconfiguration.openshift.io/role: master
+  name: reload-ice-driver-on-boot
+spec:
+  config:
+    ignition:
+      version: 3.2.0
+    systemd:
+      units:
+        - contents: |
+            [Unit]
+            Description=ice driver reload
+            # Start after the network is up
+            Wants=network-online.target
+            After=network-online.target
+            # Also after docker.service (no effect on systems without docker)
+            After=docker.service
+            # Before kubelet.service (no effect on systems without kubernetes)
+            Before=kubelet.service
+            [Service]
+            Type=oneshot
+            TimeoutStartSec=25m
+            RemainAfterExit=true
+            ExecStart=/usr/bin/bash /home/core/ice-driver-reload
+            StandardOutput=journal+console
+            [Install]
+            WantedBy=default.target
+          enabled: true
+          name: "ice-driver-reload.service"

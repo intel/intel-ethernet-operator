@@ -1,10 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
-// Copyright (c) 2021 Intel Corporation
+// Copyright (c) 2020-2023 Intel Corporation
 
 package daemon
 
 import (
-	"io/ioutil"
 	"os"
 	"time"
 
@@ -64,7 +63,7 @@ const (
 
 var _ = Describe("isRebootRequired", func() {
 	var _ = It("will request reboot as specified in the XML", func() {
-		tmpfile, err := ioutil.TempFile(".", "update")
+		tmpfile, err := os.CreateTemp(".", "update")
 		Expect(err).ToNot(HaveOccurred())
 		defer os.Remove(tmpfile.Name())
 
@@ -78,7 +77,7 @@ var _ = Describe("isRebootRequired", func() {
 	})
 
 	var _ = It("will return error if too large file is provided", func() {
-		tmpfile, err := ioutil.TempFile(".", "update")
+		tmpfile, err := os.CreateTemp(".", "update")
 		Expect(err).ToNot(HaveOccurred())
 		defer os.Remove(tmpfile.Name())
 
@@ -93,7 +92,7 @@ var _ = Describe("isRebootRequired", func() {
 	})
 
 	var _ = It("will return error if parsing xml exceeds timeout value", func() {
-		tmpfile, err := ioutil.TempFile(".", "update")
+		tmpfile, err := os.CreateTemp(".", "update")
 		Expect(err).ToNot(HaveOccurred())
 		defer os.Remove(tmpfile.Name())
 
@@ -113,7 +112,7 @@ var _ = Describe("isRebootRequired", func() {
 	})
 
 	var _ = It("will return error if missing RebootRequired closing tag", func() {
-		tmpfile, err := ioutil.TempFile(".", "update")
+		tmpfile, err := os.CreateTemp(".", "update")
 		Expect(err).ToNot(HaveOccurred())
 		defer os.Remove(tmpfile.Name())
 

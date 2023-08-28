@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: Apache-2.0
-// Copyright (c) 2021 Intel Corporation
+// Copyright (c) 2020-2023 Intel Corporation
 
 package flowsets
 
 import (
 	"testing"
 
+	flowapi "github.com/intel-collab/applications.orchestration.operators.intel-ethernet-operator/pkg/flowconfig/rpc/v1/flow"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	flowapi "github.com/otcshare/intel-ethernet-operator/pkg/flowconfig/rpc/v1/flow"
 )
 
 func TestFlowSets(t *testing.T) {

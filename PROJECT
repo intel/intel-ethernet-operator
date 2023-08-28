@@ -6,7 +6,7 @@ plugins:
   manifests.sdk.operatorframework.io/v2: {}
   scorecard.sdk.operatorframework.io/v2: {}
 projectName: intel-ethernet-operator
-repo: github.com/otcshare/intel-ethernet-operator
+repo: github.com/intel-collab/applications.orchestration.operators.intel-ethernet-operator
 resources:
 - api:
     crdVersion: v1
@@ -15,7 +15,7 @@ resources:
   domain: intel.com
   group: ethernet
   kind: EthernetClusterConfig
-  path: github.com/otcshare/intel-ethernet-operator/apis/ethernet/v1
+  path: github.com/intel-collab/applications.orchestration.operators.intel-ethernet-operator/apis/ethernet/v1
   version: v1
 - api:
     crdVersion: v1
@@ -23,7 +23,7 @@ resources:
   domain: intel.com
   group: ethernet
   kind: EthernetNodeConfig
-  path: github.com/otcshare/intel-ethernet-operator/apis/ethernet/v1
+  path: github.com/intel-collab/applications.orchestration.operators.intel-ethernet-operator/apis/ethernet/v1
   version: v1
 - api:
     crdVersion: v1
@@ -32,7 +32,7 @@ resources:
   domain: intel.com
   group: flowconfig
   kind: NodeFlowConfig
-  path: github.com/otcshare/intel-ethernet-operator/apis/flowconfig/v1
+  path: github.com/intel-collab/applications.orchestration.operators.intel-ethernet-operator/apis/flowconfig/v1
   version: v1
   webhooks:
     validation: true
@@ -44,7 +44,7 @@ resources:
   domain: intel.com
   group: flowconfig
   kind: FlowConfigNodeAgentDeployment
-  path: github.com/otcshare/intel-ethernet-operator/apis/flowconfig/v1
+  path: github.com/intel-collab/applications.orchestration.operators.intel-ethernet-operator/apis/flowconfig/v1
   version: v1
 - api:
     crdVersion: v1
@@ -53,7 +53,7 @@ resources:
   domain: intel.com
   group: flowconfig
   kind: ClusterFlowConfig
-  path: github.com/otcshare/intel-ethernet-operator/apis/flowconfig/v1
+  path: github.com/intel-collab/applications.orchestration.operators.intel-ethernet-operator/apis/flowconfig/v1
   version: v1
   webhooks:
     validation: true

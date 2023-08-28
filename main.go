@@ -1,16 +1,18 @@
 // SPDX-License-Identifier: Apache-2.0
-// Copyright (c) 2021 Intel Corporation
+// Copyright (c) 2020-2023 Intel Corporation
 
 package main
 
 import (
 	"context"
+	"crypto/tls"
 	"flag"
 	"fmt"
 	"os"
+	"path"
 	"time"
 
-	"github.com/otcshare/intel-ethernet-operator/pkg/utils"
+	"github.com/intel-collab/applications.orchestration.operators.intel-ethernet-operator/pkg/utils"
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/rest"
 
@@ -21,7 +23,6 @@ import (
 	configv1 "github.com/openshift/api/config/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/types"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -29,11 +30,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	ethernetv1 "github.com/otcshare/intel-ethernet-operator/apis/ethernet/v1"
-	flowconfigv1 "github.com/otcshare/intel-ethernet-operator/apis/flowconfig/v1"
-	flowconfigcontrollers "github.com/otcshare/intel-ethernet-operator/controllers/flowconfig"
-	fwddp_manager "github.com/otcshare/intel-ethernet-operator/pkg/fwddp-manager"
-	"github.com/otcshare/intel-ethernet-operator/pkg/utils/assets"
+	ethernetv1 "github.com/intel-collab/applications.orchestration.operators.intel-ethernet-operator/apis/ethernet/v1"
+	flowconfigv1 "github.com/intel-collab/applications.orchestration.operators.intel-ethernet-operator/apis/flowconfig/v1"
+	flowconfigcontrollers "github.com/intel-collab/applications.orchestration.operators.intel-ethernet-operator/controllers/flowconfig"
+	fwddp_manager "github.com/intel-collab/applications.orchestration.operators.intel-ethernet-operator/pkg/fwddp-manager"
+	"github.com/intel-collab/applications.orchestration.operators.intel-ethernet-operator/pkg/utils/assets"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -104,6 +105,13 @@ func main() {
 		LeaderElection:         enableLeaderElection,
 		LeaderElectionID:       "8ee6d2ed.intel.com",
 		Namespace:              fwddp_manager.NAMESPACE,
+		TLSOpts: []func(config *tls.Config){
+			func(config *tls.Config) {
+				if os.Getenv("ENABLE_WEBHOOK_MTLS") == "true" {
+					config.ClientAuth = tls.RequireAndVerifyClientCert
+				}
+			},
+		},
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
@@ -121,6 +129,18 @@ func main() {
 
 	// Set min TLS for webhook server
 	mgr.GetWebhookServer().TLSMinVersion = "1.3"
+
+	if os.Getenv("ENABLE_WEBHOOK_MTLS") == "true" {
+		setupLog.Info("enabling mTLS for webhook server")
+		mgr.GetWebhookServer().CertDir = "/tmp/k8s-webhook-server/serving-certs/"
+
+		caPath := "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
+		_, err := os.Stat("/etc/ieo-webhook/pki/ca.crt")
+		if err == nil {
+			caPath = "/etc/ieo-webhook/pki/ca.crt"
+		}
+		mgr.GetWebhookServer().ClientCAName = path.Join("../../../", caPath)
+	}
 
 	// to disable webhook(e.g. when testing locally) run it as 'make run ENABLE_WEBHOOKS=false'
 	if os.Getenv("ENABLE_WEBHOOKS") != "false" {
@@ -145,12 +165,13 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err = (&flowconfigcontrollers.ClusterFlowConfigReconciler{
-		Client:                   mgr.GetClient(),
-		Log:                      ctrl.Log.WithName("controllers").WithName("flowconfig").WithName("ClusterFlowConfig"),
-		Scheme:                   mgr.GetScheme(),
-		Cluster2NodeRulesHashMap: make(map[types.NamespacedName]map[types.NamespacedName][]string),
-	}).SetupWithManager(mgr); err != nil {
+	clusterFlowRc := flowconfigcontrollers.GetClusterFlowConfigReconciler(
+		mgr.GetClient(),
+		ctrl.Log.WithName("controllers").WithName("flowconfig").WithName("ClusterFlowConfig"),
+		mgr.GetScheme(),
+	)
+
+	if err = clusterFlowRc.SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "ClusterFlowConfig")
 		os.Exit(1)
 	}

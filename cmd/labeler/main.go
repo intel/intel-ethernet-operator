@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0
-// Copyright (c) 2021 Intel Corporation
+// Copyright (c) 2020-2023 Intel Corporation
 
 package main
 
 import (
 	"fmt"
-	"github.com/otcshare/intel-ethernet-operator/pkg/labeler"
 	"os"
+
+	"github.com/intel-collab/applications.orchestration.operators.intel-ethernet-operator/pkg/labeler"
 )
 
 func main() {

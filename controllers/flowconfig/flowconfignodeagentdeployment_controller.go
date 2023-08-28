@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
-// Copyright (c) 2021 Intel Corporation
+// Copyright (c) 2020-2023 Intel Corporation
 
 package flowconfig
 
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"path/filepath"
 	"time"
 
@@ -28,8 +28,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
-	flowconfigv1 "github.com/otcshare/intel-ethernet-operator/apis/flowconfig/v1"
-	"github.com/otcshare/intel-ethernet-operator/pkg/utils"
+	flowconfigv1 "github.com/intel-collab/applications.orchestration.operators.intel-ethernet-operator/apis/flowconfig/v1"
+	"github.com/intel-collab/applications.orchestration.operators.intel-ethernet-operator/pkg/utils"
 )
 
 // FlowConfigNodeAgentDeploymentReconciler reconciles a FlowConfigNodeAgentDeployment object
@@ -49,8 +49,6 @@ const (
 	networkAnnotation = "k8s.v1.cni.cncf.io/networks"
 	nodeLabel         = "kubernetes.io/hostname"
 	uftContainerName  = "uft"
-	ocpDdpUpdatePath  = "/var/lib/firmware/intel/ice/ddp/"
-	k8sDdpUpdatePath  = "/lib/firmware/updates/intel/ice/ddp"
 	podVolumeName     = "iceddp"
 )
 
@@ -376,11 +374,13 @@ func (r *FlowConfigNodeAgentDeploymentReconciler) setInstanceOwner(instance clie
 }
 
 func (r *FlowConfigNodeAgentDeploymentReconciler) getPodTemplate() (*corev1.Pod, error) {
+	resLogger := r.Log.WithName("getPodTemplate")
+
 	filename, err := filepath.Abs(podTemplateFile)
 	if err != nil {
 		return nil, fmt.Errorf("error getting filepath %v", err)
 	}
-	spec, err := ioutil.ReadFile(filename)
+	spec, err := os.ReadFile(filename)
 	if err != nil {
 		return nil, fmt.Errorf("error reading %s file: %v", podTemplateFile, err)
 	}
@@ -400,11 +400,17 @@ func (r *FlowConfigNodeAgentDeploymentReconciler) getPodTemplate() (*corev1.Pod,
 		return nil, fmt.Errorf("uft container not found in podSpec, pod definition is invalid")
 	}
 
-	if utils.IsK8sDeployment() {
-		pod = r.addDdpVolumes(pod, k8sDdpUpdatePath)
-	} else {
-		pod = r.addDdpVolumes(pod, ocpDdpUpdatePath)
+	// create full path and log error messages first
+	fwPath, errFwPath := utils.GetFwSearchPath()
+	if errFwPath != nil {
+		resLogger.Error(errFwPath, "Using default fw search path", "path", fwPath)
 	}
+	// DDP profile is present in both intel/ice/ddp and updates/intel/ice/ddp,
+	// by default updates/... has priority so use it for UFT volume mount
+	_, ddpPath := utils.CreateFullDdpPaths(fwPath)
+
+	resLogger.Info("DDP volume mount host path", "path", ddpPath)
+	pod = r.addDdpVolumes(pod, ddpPath)
 
 	return pod, err
 }

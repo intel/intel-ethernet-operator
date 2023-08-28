@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// Copyright (c) 2021 Intel Corporation
+// Copyright (c) 2020-2023 Intel Corporation
 
 package utils
 
@@ -9,8 +9,8 @@ import (
 	"regexp"
 	"strings"
 
-	flowapi "github.com/otcshare/intel-ethernet-operator/pkg/flowconfig/rpc/v1/flow"
-	sutils "github.com/otcshare/intel-ethernet-operator/pkg/flowconfig/sriovutils"
+	flowapi "github.com/intel-collab/applications.orchestration.operators.intel-ethernet-operator/pkg/flowconfig/rpc/v1/flow"
+	sutils "github.com/intel-collab/applications.orchestration.operators.intel-ethernet-operator/pkg/flowconfig/sriovutils"
 	"google.golang.org/protobuf/proto"
 	any "google.golang.org/protobuf/types/known/anypb"
 )

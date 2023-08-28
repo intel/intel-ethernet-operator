@@ -1,29 +1,28 @@
 ```text
 SPDX-License-Identifier: Apache-2.0
-Copyright (c) 2022 Intel Corporation
+Copyright (c) 2020-2023 Intel Corporation
 ```
-# Deploy Intel Ethernet Operator on OCP cluster
 
+# Deploy Intel Ethernet Operator on OCP cluster
 
 ## Technical Requirements and Dependencies
 
 The Intel Ethernet Operator on OCP has the following requirements:
 
 - Intel® Ethernet Network Adapter E810
-- [OpenShift 4.10.3](https://docs.openshift.com/container-platform/4.10/release_notes/ocp-4-10-release-notes.html)
+- OpenShift 4.9 or newer
+- Out of tree ICE driver
 - [Intel® Network Adapter Driver for E810 Series Devices](https://www.intel.com/content/www/us/en/download/19630/intel-network-adapter-driver-for-e810-series-devices-under-linux.html)
 - IOMMU enabled
-- 2M Hugepage memory configured
+- Hugepage memory configured
 - Node Feature Discovery Operator with basic NFD CR applied
 - SRIOV Network Operator deployed
 - External Docker Registry is setup and Cluster is configured to use that
-- Out of tree ICE driver v1.6.7
 
 ### Intel Ethernet Operator - OOT ICE Driver Update
 
 In order for the FW update and Flow Configuration to be possible the platform needs to provide an [OOT ICE driver](https://www.intel.com/content/www/us/en/download/19630/intel-network-adapter-driver-for-e810-series-devices-under-linux.html). This is required since current implementations of in-tree drivers do not support all required features.
-It is a responsibility of the cluster admin to provide and install this driver and it is out of scope of this Operator at this time. See the [sro-ice-install document](oot-ice-driver/sro-ice-install.md) for sample instructions on how to install the driver using SRO.
-
+It is a responsibility of the cluster admin to provide and install this driver and it is out of scope of this Operator at this time. See the [kmm-ice-install-ocp document](oot-ice-driver/kmm-ice-install-ocp.md) for sample instructions on how to install the driver using KMMO.
 
 ## Deploying the Operator
 
@@ -41,30 +40,33 @@ To build the Operator the images must be built from source, in order to build ex
 
 > Note: The arguments are to be replaced with the following:
 >
-* VERSION is the version to be applied to the bundle ie. `0.0.1`.
-* IMAGE_REGISTRY is the address of the registry where the build images are to be pushed to ie. `my.private.registry.com`.
-* TLS_VERIFY defines whether connection to registry need TLS verification, default is `false`.
-* TARGET_PLATFORM specific platform for which operator will be built. Supported values are `OCP` and `K8S`. If operator is built for other platform than `OCP`, 
-then user has to manually install sriov-network-operator as described [on sriov-network-operator page](https://github.com/k8snetworkplumbingwg/sriov-network-operator). Default is `OCP` 
+- VERSION is the version to be applied to the bundle ie. `0.0.1`.
+- IMAGE_REGISTRY is the address of the registry where the build images are to be pushed to ie. `my.private.registry.com`.
+- TLS_VERIFY defines whether connection to registry need TLS verification, default is `false`.
+- TARGET_PLATFORM specific platform for which operator will be built. Supported values are `OCP` and `K8S`. If operator is built for other platform than `OCP`,
+then user has to manually install sriov-network-operator as described [on sriov-network-operator page](https://github.com/k8snetworkplumbingwg/sriov-network-operator). Default is `OCP`
+
 ```shell
-# cd intel-ethernet-operator
-# make VERSION=$(VERSION) IMAGE_REGISTRY=$(IMAGE_REGISTRY) TLS_VERIFY=$(TLS_VERIFY) TARGET_PLATFORM=$(TARGET_PLATFORM) build_all push_all catalog-build catalog-push
+$ cd intel-ethernet-operator
+$ make VERSION=$(VERSION) IMAGE_REGISTRY=$(IMAGE_REGISTRY) TLS_VERIFY=$(TLS_VERIFY) TARGET_PLATFORM=$(TARGET_PLATFORM) build_all push_all catalog-build catalog-push
 ```
 
 ### Installing the Bundle
+
 Once the operator images are built and accessible inside the cluster, the operator is to be installed by running the following:
 
 Create a namespace for the operator:  
+
 ```shell
-# oc create ns intel-ethernet-operator
+$ oc create ns intel-ethernet-operator
 ```
 
 Create the following `Catalog Source` `yaml` file:
 
 > Note: The REGISTRY_ADDRESS and VERSION need to be replaced:
 >
-> * VERSION is the version to be applied to the bundle ie. `0.0.2`.
-> * IMAGE_REGISTRY is the address of the registry where the build images are to be pushed to ie. `my.private.registry.com`.
+> - VERSION is the version to be applied to the bundle ie. `0.0.2`.
+> - IMAGE_REGISTRY is the address of the registry where the build images are to be pushed to ie. `my.private.registry.com`.
 
 ```yaml
 apiVersion: operators.coreos.com/v1alpha1
@@ -82,8 +84,9 @@ spec:
 Create the `Catalog Source`
 
 ```shell
-# oc apply -f <filename>
+$ oc apply -f <filename>
 ```
+
 Create the following `yaml` files including `Subscription` and `OperatorGroup`:
 
 ```yaml
@@ -114,13 +117,14 @@ spec:
 Subscribe to and install the operator:
 
 ```shell
-# oc apply -f <filename>
+$ oc apply -f <filename>
 ```
 
 Check that the operator is deployed:
 > Note: SRIOV Network Operator pods deployed as a dependency in OCP environments.
 
-```oc get pods -n intel-ethernet-operator
+```text
+$ oc get pods -n intel-ethernet-operator
 NAME                                                          READY   STATUS    RESTARTS      AGE
 clv-discovery-db6j7                                           1/1     Running   0             23h
 clv-discovery-fl5n6                                           1/1     Running   0             23h

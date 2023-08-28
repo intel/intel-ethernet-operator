@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// Copyright (c) 2020-2021 Intel Corporation
+// Copyright (c) 2020-2023 Intel Corporation
 
 package drainhelper
 
@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
-	"github.com/otcshare/intel-ethernet-operator/pkg/utils"
+	"github.com/intel-collab/applications.orchestration.operators.intel-ethernet-operator/pkg/utils"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"

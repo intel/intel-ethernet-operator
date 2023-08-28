@@ -1,17 +1,17 @@
 // SPDX-License-Identifier: Apache-2.0
-// Copyright (c) 2021 Intel Corporation
+// Copyright (c) 2020-2023 Intel Corporation
 
 package daemon
 
 import (
 	"fmt"
 
+	"github.com/intel-collab/applications.orchestration.operators.intel-ethernet-operator/pkg/utils"
 	"github.com/jaypipes/ghw"
 	"github.com/jaypipes/ghw/pkg/net"
 	"github.com/jaypipes/pcidb"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"github.com/otcshare/intel-ethernet-operator/pkg/utils"
 	ctrl "sigs.k8s.io/controller-runtime"
 )
 

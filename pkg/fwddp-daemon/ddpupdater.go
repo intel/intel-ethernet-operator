@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// Copyright (c) 2021 Intel Corporation
+// Copyright (c) 2020-2023 Intel Corporation
 
 package daemon
 
@@ -11,19 +11,11 @@ import (
 	"strings"
 
 	"github.com/go-logr/logr"
-	ethernetv1 "github.com/otcshare/intel-ethernet-operator/apis/ethernet/v1"
-	"github.com/otcshare/intel-ethernet-operator/pkg/utils"
+	ethernetv1 "github.com/intel-collab/applications.orchestration.operators.intel-ethernet-operator/apis/ethernet/v1"
+	"github.com/intel-collab/applications.orchestration.operators.intel-ethernet-operator/pkg/utils"
 )
 
-var (
-	findDdp = findDdpProfile
-	// /host comes from mounted folder in OCP
-	// /var/lib/firmware comes from modified kernel argument, which allows OS to read DDP profile from that path.
-	// This is done because on RHCOS /lib/firmware/* path is read-only
-	// intel/ice/ddp is default path for ICE *.pkg files
-	ocpDdpUpdatePath = "/host/var/lib/firmware/intel/ice/ddp"
-	k8sDdpUpdatePath = "/host/lib/firmware/updates/intel/ice/ddp"
-)
+var findDdp = findDdpProfile
 
 type ddpUpdater struct {
 	log        logr.Logger
@@ -45,14 +37,8 @@ func (d *ddpUpdater) handleDDPUpdate(pciAddr string, ddpPath string) (bool, erro
 }
 
 // ddpProfilePath is the path to our extracted DDP profile
-// we copy it to ocpDdpUpdatePath or k8sDdpUpdatePath
 func (d *ddpUpdater) updateDDP(pciAddr, ddpProfilePath string) error {
 	log := d.log.WithName("updateDDP")
-
-	err := os.MkdirAll(d.getDdpUpdatePath(), 0600)
-	if err != nil {
-		return err
-	}
 
 	devId, err := execCmd([]string{"sh", "-c", "lspci -vs " + pciAddr +
 		" | awk '/Device Serial/ {print $NF}' | sed s/-//g"}, log)
@@ -64,10 +50,24 @@ func (d *ddpUpdater) updateDDP(pciAddr, ddpProfilePath string) error {
 		return fmt.Errorf("failed to extract devId")
 	}
 
-	target := filepath.Join(d.getDdpUpdatePath(), "ice-"+devId+".pkg")
-	log.V(4).Info("Copying", "source", ddpProfilePath, "target", target)
+	// create both intel/ice/ddp and updates/intel/ice/ddp
+	// DDP paths for compatibility with different drivers
+	intelPath, updatesPath := d.getDdpUpdatePaths()
+	
+	for _, path := range []string{intelPath, updatesPath} {
+		if err := os.MkdirAll(path, 0600); err != nil {
+			return err
+		}
 
-	return utils.CopyFile(ddpProfilePath, target)
+		target := filepath.Join(path, "ice-"+devId+".pkg")
+		log.V(4).Info("Copying", "source", ddpProfilePath, "target", target)
+
+		if err :=  utils.CopyFile(ddpProfilePath, target); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (d *ddpUpdater) prepareDDP(config ethernetv1.DeviceNodeConfig) (string, error) {
@@ -103,11 +103,14 @@ func (d *ddpUpdater) prepareDDP(config ethernetv1.DeviceNodeConfig) (string, err
 	return findDdp(targetPath)
 }
 
-func (d *ddpUpdater) getDdpUpdatePath() string {
-	if utils.IsK8sDeployment() {
-		return k8sDdpUpdatePath
-	}
-	return ocpDdpUpdatePath
+func (d *ddpUpdater) getDdpUpdatePaths() (string, string) {
+	log := d.log.WithName("getDDPUpdatePath")
+
+	const baseDir = "/lib/firmware/"
+	intelPath, updatesPath := utils.CreateFullDdpPaths(baseDir)
+	log.V(4).Info("Using DDP paths", "path", intelPath, "path", updatesPath)
+
+	return intelPath, updatesPath
 }
 
 func findDdpProfile(targetPath string) (string, error) {

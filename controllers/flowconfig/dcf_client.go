@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// Copyright (c) 2021 Intel Corporation
+// Copyright (c) 2020-2023 Intel Corporation
 
 package flowconfig
 
@@ -8,8 +8,9 @@ import (
 	"fmt"
 	"time"
 
-	flowapi "github.com/otcshare/intel-ethernet-operator/pkg/flowconfig/rpc/v1/flow"
+	flowapi "github.com/intel-collab/applications.orchestration.operators.intel-ethernet-operator/pkg/flowconfig/rpc/v1/flow"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 	"k8s.io/apimachinery/pkg/util/wait"
 )
 
@@ -108,7 +109,7 @@ func getDCFFlowClientConn() (*grpc.ClientConn, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	conn, err := grpc.DialContext(ctx, grpcUrl, grpc.WithInsecure())
+	conn, err := grpc.DialContext(ctx, grpcUrl, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		return nil, fmt.Errorf("unable to connect to DCF grpc endpoint: %s", err)
 	}
@@ -129,7 +130,7 @@ func CheckClientReadiness() error {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 
-		conn, err := grpc.DialContext(ctx, grpcUrl, grpc.WithInsecure())
+		conn, err := grpc.DialContext(ctx, grpcUrl, grpc.WithTransportCredentials(insecure.NewCredentials()))
 		if err == nil && conn != nil {
 			defer conn.Close()
 			client := flowapi.NewFlowServiceClient(conn)

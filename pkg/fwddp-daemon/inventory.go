@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// Copyright (c) 2021 Intel Corporation
+// Copyright (c) 2020-2023 Intel Corporation
 
 package daemon
 
@@ -11,11 +11,11 @@ import (
 	"regexp"
 
 	"github.com/go-logr/logr"
+	ethernetv1 "github.com/intel-collab/applications.orchestration.operators.intel-ethernet-operator/apis/ethernet/v1"
+	"github.com/intel-collab/applications.orchestration.operators.intel-ethernet-operator/pkg/utils"
 	"github.com/jaypipes/ghw"
 	"github.com/jaypipes/ghw/pkg/net"
 	"github.com/jaypipes/ghw/pkg/pci"
-	ethernetv1 "github.com/otcshare/intel-ethernet-operator/apis/ethernet/v1"
-	"github.com/otcshare/intel-ethernet-operator/pkg/utils"
 )
 
 const (
@@ -165,19 +165,17 @@ func addDDPInfo(log logr.Logger, device *ethernetv1.Device) {
 	}
 }
 
-func getDeviceMAC(pciAddr string, log logr.Logger) (string, error) {
-	inv, err := getInventory(log)
-	if err != nil {
-		log.Error(err, "Failed to retrieve inventory")
-		return "", err
+func splitPCIAddr(pciAddr string, log logr.Logger) (string, string, string, string, error) {
+	pciAddrList := strings.Split(pciAddr, ":")
+	if len(pciAddrList) != 3 {
+		return "", "", "", "", fmt.Errorf("PCI Address %v format issue, cannot split on colon :", pciAddr)
+	}
+	busDevice := strings.Split(pciAddrList[2], ".")
+	if len(busDevice) != 2 {
+		return "", "", "", "", fmt.Errorf("Bus and device %v format issue, cannot split on dot .", pciAddrList[2])
 	}
 
-	for _, i := range inv {
-		if i.PCIAddress == pciAddr {
-			return strings.Replace(strings.ToUpper(i.Firmware.MAC), ":", "", -1), nil
-		}
-	}
-	return "", fmt.Errorf("failed to get MAC for device %v. Device not found", pciAddr)
+	return pciAddrList[0], pciAddrList[1], busDevice[0], busDevice[1], nil
 }
 
 type DeviceIDs utils.SupportedDevice

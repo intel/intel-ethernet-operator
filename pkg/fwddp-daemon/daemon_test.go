@@ -1,12 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
-// Copyright (c) 2021 Intel Corporation
+// Copyright (c) 2020-2023 Intel Corporation
 
 package daemon
 
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"os/exec"
@@ -17,9 +16,9 @@ import (
 	gerrors "errors"
 
 	"github.com/go-logr/logr"
+	ethernetv1 "github.com/intel-collab/applications.orchestration.operators.intel-ethernet-operator/apis/ethernet/v1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	ethernetv1 "github.com/otcshare/intel-ethernet-operator/apis/ethernet/v1"
 	core "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -825,14 +824,13 @@ var _ = Describe("DaemonTests", func() {
 
 			Expect(initReconciler(reconciler, data.NodeConfig.Name, data.NodeConfig.Namespace)).To(Succeed())
 
-			tempFile, err := ioutil.TempFile("/tmp", "daemontest")
+			tempFile, err := os.CreateTemp("/tmp", "daemontest")
 			Expect(err).To(Succeed())
 			defer tempFile.Close()
 
 			findDdp = func(targetPath string) (string, error) {
 				return tempFile.Name(), nil
 			}
-			ocpDdpUpdatePath = "/tmp"
 
 			wasRebootCalled := false
 

@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-# Copyright (c) 2021 Intel Corporation
+# Copyright (c) 2020-2023 Intel Corporation
 
 apiVersion: v1
 kind: Namespace
@@ -27,8 +27,6 @@ spec:
       annotations:
         kubectl.kubernetes.io/default-container: manager
     spec:
-      securityContext:
-        runAsNonRoot: true
       topologySpreadConstraints:
         - maxSkew: 1
           topologyKey: kubernetes.io/hostname
@@ -44,7 +42,11 @@ spec:
         image: controller:latest
         name: manager
         securityContext:
+          readOnlyRootFilesystem: true
           allowPrivilegeEscalation: false
+          capabilities:
+              drop:
+                - all
         livenessProbe:
           httpGet:
             path: /healthz
@@ -75,5 +77,19 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: metadata.namespace
+        - name: ENABLE_WEBHOOK_MTLS
+          valueFrom:
+            configMapKeyRef:
+              name: webhook-config
+              key: enable-webhook-mtls
+              optional: true
+        volumeMounts:
+          - name: webhook-ca
+            mountPath: /etc/ieo-webhook/pki/
+      volumes:
+        - name: webhook-ca
+          secret:
+            secretName: webhook-client-ca
+            optional: true
       serviceAccountName: controller-manager
       terminationGracePeriodSeconds: 10

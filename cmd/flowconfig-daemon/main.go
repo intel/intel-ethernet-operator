@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// Copyright (c) 2021 Intel Corporation
+// Copyright (c) 2020-2023 Intel Corporation
 
 package main
 
@@ -7,7 +7,7 @@ import (
 	"flag"
 	"os"
 
-	"github.com/otcshare/intel-ethernet-operator/pkg/flowconfig/flowsets"
+	"github.com/intel-collab/applications.orchestration.operators.intel-ethernet-operator/pkg/flowconfig/flowsets"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -15,8 +15,8 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	flowconfigv1 "github.com/otcshare/intel-ethernet-operator/apis/flowconfig/v1"
-	flowconfigctlr "github.com/otcshare/intel-ethernet-operator/controllers/flowconfig"
+	flowconfigv1 "github.com/intel-collab/applications.orchestration.operators.intel-ethernet-operator/apis/flowconfig/v1"
+	flowconfigctlr "github.com/intel-collab/applications.orchestration.operators.intel-ethernet-operator/controllers/flowconfig"
 )
 
 const (

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// Copyright (c) 2021 Intel Corporation
+// Copyright (c) 2020-2023 Intel Corporation
 
 package flowconfig
 
@@ -7,7 +7,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -23,7 +22,7 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	flowconfigv1 "github.com/otcshare/intel-ethernet-operator/apis/flowconfig/v1"
+	flowconfigv1 "github.com/intel-collab/applications.orchestration.operators.intel-ethernet-operator/apis/flowconfig/v1"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -972,14 +971,9 @@ var _ = Describe("FlowConfigNodeAgentDeployment controller", func() {
 				})
 		}
 
-		Context("On a vanilla K8s", func() {
+		Context("On standard cluster", func() {
 			It("Should have correct DDP volume mount in Pod spec", func() {
-				checkHostVolPath("true", k8sDdpUpdatePath)
-			})
-		})
-		Context("On a OCP cluster", func() {
-			It("Should have correct DDP volume mount in Pod spec", func() {
-				checkHostVolPath("false", ocpDdpUpdatePath)
+				checkHostVolPath("true", "/lib/firmware/updates/intel/ice/ddp")
 			})
 		})
 	})
@@ -1023,26 +1017,26 @@ var _ = Describe("FlowConfigNodeAgentDeployment controller", func() {
 			podTemplatePath, err := filepath.Abs(podTemplateFile)
 			Expect(err).Should(BeNil())
 
-			input, err := ioutil.ReadFile(podTemplatePath)
+			input, err := os.ReadFile(podTemplatePath)
 			Expect(err).Should(BeNil())
 
 			fileAsString := bytes.NewBuffer(input).String()
 			fileAsString = strings.Replace(fileAsString, "name: uft", "name: external", 1)
 
-			err = ioutil.WriteFile(podTemplatePath, []byte(fileAsString), 0644)
+			err = os.WriteFile(podTemplatePath, []byte(fileAsString), 0644)
 			Expect(err).Should(BeNil())
 
 			defer func() {
 				podTemplatePath, err := filepath.Abs(podTemplateFile)
 				Expect(err).Should(BeNil())
 
-				input, err := ioutil.ReadFile(podTemplatePath)
+				input, err := os.ReadFile(podTemplatePath)
 				Expect(err).Should(BeNil())
 
 				fileAsString := bytes.NewBuffer(input).String()
 				fileAsString = strings.Replace(fileAsString, "name: external", "name: uft", 1)
 
-				err = ioutil.WriteFile(podTemplatePath, []byte(fileAsString), 0644)
+				err = os.WriteFile(podTemplatePath, []byte(fileAsString), 0644)
 				Expect(err).Should(BeNil())
 			}()
 

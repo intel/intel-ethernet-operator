@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// Copyright (c) 2021 Intel Corporation
+// Copyright (c) 2020-2023 Intel Corporation
 
 package flowconfig
 
@@ -19,7 +19,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	kubeTypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -29,9 +28,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
-	flowconfigv1 "github.com/otcshare/intel-ethernet-operator/apis/flowconfig/v1"
-	"github.com/otcshare/intel-ethernet-operator/pkg/flowconfig/flowsets"
-	mock "github.com/otcshare/intel-ethernet-operator/pkg/flowconfig/rpc/v1/flow/mocks"
+	flowconfigv1 "github.com/intel-collab/applications.orchestration.operators.intel-ethernet-operator/apis/flowconfig/v1"
+	"github.com/intel-collab/applications.orchestration.operators.intel-ethernet-operator/pkg/flowconfig/flowsets"
+	mock "github.com/intel-collab/applications.orchestration.operators.intel-ethernet-operator/pkg/flowconfig/rpc/v1/flow/mocks"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -245,12 +244,12 @@ var _ = BeforeSuite(func(ctx SpecContext) {
 	err = nodeAgentDeploymentRc.SetupWithManager(k8sManager)
 	Expect(err).ToNot(HaveOccurred())
 
-	clusterFlowConfigRc = &ClusterFlowConfigReconciler{
-		Client:                   k8sManager.GetClient(),
-		Log:                      ctrl.Log.WithName("controllers").WithName("ClusterFlowConfig"),
-		Scheme:                   k8sManager.GetScheme(),
-		Cluster2NodeRulesHashMap: make(map[kubeTypes.NamespacedName]map[kubeTypes.NamespacedName][]string),
-	}
+	clusterFlowConfigRc = GetClusterFlowConfigReconciler(
+		k8sManager.GetClient(),
+		ctrl.Log.WithName("controllers").WithName("ClusterFlowConfig"),
+		k8sManager.GetScheme(),
+	)
+
 	err = clusterFlowConfigRc.SetupWithManager(k8sManager)
 	Expect(err).ToNot(HaveOccurred())
 

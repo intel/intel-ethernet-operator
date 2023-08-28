@@ -1,13 +1,17 @@
 ```text
 SPDX-License-Identifier: Apache-2.0
-Copyright (c) 2021 Intel Corporation
+Copyright (c) 2020-2023 Intel Corporation
 ```
 
-# Install OOT (out of tree) ICE driver on OCP nodes
+# Install OOT (out of tree) ICE driver on OCP nodes (Depreciated)
+
+## Important Note
+
+For later versions such as OCP 4.12 and greater, the use of SRO appears to be depreciated and replaced with KMM. Similarly for non-OCP use cases also please reference the KMM guide.
 
 ## Prerequisites
 
-> Note: This guide was prepared and tested on environment using DCI to set up OCP.
+> Notes:  This guide was prepared and tested on environment using DCI to set up OCP 4.9.
 
 * OCP cluster 4.9.7
 * DCI configured to interact with above OCP cluster, podman installed (see note above).
@@ -226,7 +230,7 @@ special-resource-controller-manager-5557cdcf55-wpbqs   2/2     Running   0      
 
 ### Get Redhat image pull secret from Redhat subscription
 
-Go to [Pull secret](https://console.redhat.com/openshift/install/pull-secret) page on Redhat OpenShift cluster manager site and download the pull secrete file. Save it on on file in accessible on client machine. Assumed it is stored in `./rht_auth.json` file. You will need to log in with your RH account.
+Go to [Pull secret](https://console.redhat.com/openshift/install/pull-secret) page on Redhat OpenShift cluster manager site and download the pull secret file. Save it on on file in accessible on client machine. Assumed it is stored in `./rht_auth.json` file. You will need to log in with your RH account.
 Copy the secret to clipboard or save to a file.
 Either way create the secret file on dci-agent.
 
@@ -254,7 +258,7 @@ Pull this image locally on client machine using Podman and the authfile `./rht_
 
 #### Configure registry (Optional)
 
-Configuring the registry as per https://docs.openshift.com/container-platform/4.9/registry/configuring_registry_storage/configuring-registry-storage-baremetal.html
+Configuring the registry as per <https://docs.openshift.com/container-platform/4.9/registry/configuring_registry_storage/configuring-registry-storage-baremetal.html>
 
 ```shell
 # oc patch configs.imageregistry.operator.openshift.io cluster --type merge --patch '{"spec":{"managementState":"Managed"}}'
@@ -283,7 +287,7 @@ node-ca-tnh99                                     1/1     Running     1         
 
 #### Expose registry externally (Optional)
 
-Exposing the registry: https://docs.openshift.com/container-platform/4.9/registry/securing-exposing-registry.html
+Exposing the registry: <https://docs.openshift.com/container-platform/4.9/registry/securing-exposing-registry.html>
 
 ```shell
 # oc patch configs.imageregistry.operator.openshift.io/cluster --patch '{"spec":{"defaultRoute":true}}' --type=merge
@@ -447,9 +451,11 @@ spec:
 #### Create ICE OOT SRO
 
 Create the special resource
+
 ```shell
 # oc create -f special-resource.yaml
 ```
+
 Once the above SRO CR is created it will start BuildConfig.
 
 ```shell

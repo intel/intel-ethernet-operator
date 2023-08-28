@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// Copyright (c) 2021 Intel Corporation
+// Copyright (c) 2020-2023 Intel Corporation
 
 package assets
 
@@ -7,15 +7,14 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"github.com/go-logr/logr"
-	"github.com/otcshare/intel-ethernet-operator/pkg/utils"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"text/template"
 	"time"
+
+	"github.com/go-logr/logr"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -76,12 +75,11 @@ func (a *Asset) loadFromFile() error {
 		return errors.New("loading directory of assets is not supported")
 	}
 
-	content, err := ioutil.ReadFile(cleanPath)
+	content, err := os.ReadFile(cleanPath)
 	if err != nil {
 		return err
 	}
-
-	t, err := template.New("asset").Funcs(map[string]interface{}{"isK8s": utils.IsK8sDeployment}).Option("missingkey=error").Parse(string(content))
+	t, err := template.New("asset").Option("missingkey=error").Parse(string(content))
 	if err != nil {
 		return err
 	}
