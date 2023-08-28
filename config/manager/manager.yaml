@@ -34,6 +34,21 @@ spec:
           labelSelector:
             matchLabels:
               control-plane: controller-manager
+      initContainers:
+      - command:
+          - /bin/bash
+        args:
+          - -c
+          - echo -n /var/lib/firmware/ > /host/sys/module/firmware_class/parameters/path
+        name: alt-fw-search-path-enabler
+        image: docker.io/redhat/ubi9-micro:9.2-5
+        securityContext:
+          privileged: true
+          runAsUser: 0
+          readOnlyRootFilesystem: true
+        volumeMounts:
+          - name: firmware-class
+            mountPath: /host/sys/module/firmware_class/parameters
       containers:
       - command:
         - /manager
@@ -91,5 +106,8 @@ spec:
           secret:
             secretName: webhook-client-ca
             optional: true
+        - name: firmware-class
+          hostPath:
+            path: /sys/module/firmware_class/parameters
       serviceAccountName: controller-manager
       terminationGracePeriodSeconds: 10

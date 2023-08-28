@@ -119,6 +119,28 @@ data:
           hostPID: true
           hostNetwork: true
           dnsPolicy: ClusterFirstWithHostNet
+          initContainers:
+            - command:
+                - /bin/bash
+              args:
+                - -c
+                - echo -n /var/lib/firmware/ > /host/sys/module/firmware_class/parameters/path
+              name: alt-fw-search-path-enabler
+              image: docker.io/redhat/ubi9-micro:9.2-5
+              resources:
+                limits:
+                  cpu: 200m
+                  memory: 400Mi
+                requests:
+                  cpu: 200m
+                  memory: 400Mi
+              securityContext:
+                privileged: true
+                runAsUser: 0
+                readOnlyRootFilesystem: true
+              volumeMounts:
+                - name: firmware-class
+                  mountPath: /host/sys/module/firmware_class/parameters
           containers:
             - name: fwddp-daemon
               image: "{{ .ETHERNET_DAEMON_IMAGE }}"
@@ -230,6 +252,9 @@ data:
             - name: lib64
               hostPath:
                 path: /usr/lib64
+            - name: firmware-class
+              hostPath:
+                path: /sys/module/firmware_class/parameters
             - name: firmware-ddp
               hostPath:
                 path: {{ .FW_HOST_PATH }}
