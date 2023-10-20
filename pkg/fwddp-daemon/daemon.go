@@ -318,12 +318,14 @@ func (r *NodeConfigReconciler) configureNode(updateQueue deviceUpdateQueue, node
 				return true
 			}
 
-			rebootRequired = fwReboot || ddpReboot
-
-			err := os.RemoveAll(artifactsFolder)
-			if err != nil {
-				r.log.Info("Error deleting artifacts folder", "error", err)
+			if fwReboot || ddpReboot {
+				rebootRequired = true
 			}
+		}
+
+		err := os.RemoveAll(artifactsFolder)
+		if err != nil {
+			r.log.Info("Error deleting artifacts folder", "error", err)
 		}
 
 		if rebootRequired {
