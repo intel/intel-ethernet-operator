@@ -20,16 +20,21 @@ This document provides high-level system features, issues, and limitations infor
 
 # Release history
 
-| Version   | Release Date   | Cluster Compatibility                          | Verified on                  |
-|---------- |----------------|------------------------------------------------|------------------------------|
-| 0.0.1     | January  2022  | OCP 4.9                                        | OCP 4.9.7                    |
-| 0.0.2     | April    2022  | BMRA 22.01(K8S v1.22.3)<br>OCP 4.10            | OCP 4.10.3                   |
-| 0.1.0     | December 2022  | OCP 4.9, 4.10, 4.11                            | OCP 4.9.51, 4.10.34, 4.11.13 |
-| v22.11    | December 2022  | OCP 4.9, 4.10, 4.11<br>BMRA 22.11(K8S v1.25.3) | OCP 4.9.51, 4.10.34, 4.11.13 |
-| v23.07    | July     2023  | OCP 4.9, 4.10, 4.11, 4.12, 4.13                | OCP 4.12.21, 4.13.3          |
-| v23.08    | August   2023  | K8S v1.25.3                                    | K8S v1.25.3                  |
+| Version            | Release Date  | Cluster Compatibility                          | Verified on                  |
+|--------------------|---------------|------------------------------------------------|------------------------------|
+| 0.0.1              | January  2022 | OCP 4.9                                        | OCP 4.9.7                    |
+| 0.0.2              | April    2022 | BMRA 22.01(K8S v1.22.3)<br>OCP 4.10            | OCP 4.10.3                   |
+| 0.1.0              | December 2022 | OCP 4.9, 4.10, 4.11                            | OCP 4.9.51, 4.10.34, 4.11.13 |
+| v22.11             | December 2022 | OCP 4.9, 4.10, 4.11<br>BMRA 22.11(K8S v1.25.3) | OCP 4.9.51, 4.10.34, 4.11.13 |
+| v23.07             | July     2023 | OCP 4.9, 4.10, 4.11, 4.12, 4.13                | OCP 4.12.21, 4.13.3          |
+| v23.08             | August   2023 | K8S v1.25.3                                    | K8S v1.25.3                  |
+| v23.08-operatorhub | November 2023 | K8S >v1.21                                     | K8S v1.25.3                  |
 
 # Features for Release
+
+***v23.08-operatorhub***
+
+- Add Intel Ethernet Operator to [OperatorHub.io](https://operatorhub.io/) catalog.
 
 ***v23.08***
 
@@ -71,6 +76,10 @@ on node by manager pod
   - The operator handles the traffic flow configuration of Intel® Ethernet Network Adapter E810 Series.
 
 # Changes to Existing Features
+
+***v23.08-operatorhub***
+
+None
 
 ***v23.08***
 
@@ -132,6 +141,12 @@ on node by manager pod
 - If your cluster already has SR-IOV Network Operator deployed, please deploy Intel Ethernet Operator in the same namespace to avoid any issues
 - The installation of the Out Of Tree [ICE driver](https://www.intel.com/content/www/us/en/download/19630/29746/) is necessary to leverage certain features of the operator. The provisioning/installation of this driver is out of scope for this operator, the user is required to provide/install the [OOT ICE driver](https://www.intel.com/content/www/us/en/download/19630/29746/intel-network-adapter-driver-for-e810-series-devices-under-linux.html) on the desired platforms. **BMRA distribution comes with required version of ICE driver and no additional steps are required.**
 
+***v23.08-operatorhub***
+
+- OperatorHub release do not contain Flow Configuration. Flow Configuration will not be available when installing
+Intel Ethernet Operator from OperatorHub catalog.
+- Rest is the same as in v23.08 release
+
 ***v23.08***
 
 - Operator support updates to firmware versions 3.0 or newer
@@ -178,9 +193,13 @@ on node by manager pod
 
 # Supported Operating Systems
 
+***v23.08-operatorhub***
+
+- K8S >v1.21 (tested on Ubuntu 22.04 - 5.15.0-88-generic intree ICE driver)
+
 ***v23.08*** was tested using the following
 
-- K8S v1.25.3 (Ubuntu 22.04 - 1.9.11 OOT ICE driver)
+- K8S >v1.21 (tested on Ubuntu 22.04 - 1.9.11 OOT ICE driver)
 
 ***v23.07*** was tested using the following
 
