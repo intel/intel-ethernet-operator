@@ -15,8 +15,10 @@ type FlowConfigNodeAgentDeploymentSpec struct {
 	// Important: Run "make" to regenerate code after modifying this file
 
 	// NADAnnotation is the name reference to Network Attachement Definition required by UFT container
+	//+operator-sdk:csv:customresourcedefinitions:type=spec
 	NADAnnotation string `json:"NADAnnotation,omitempty"`
 	// DCFVfPoolName is the name reference to CVL admin VF pool
+	//+operator-sdk:csv:customresourcedefinitions:type=spec
 	DCFVfPoolName string `json:"DCFVfPoolName,omitempty"`
 }
 
@@ -30,6 +32,7 @@ type FlowConfigNodeAgentDeploymentStatus struct {
 //+kubebuilder:subresource:status
 
 // FlowConfigNodeAgentDeployment is the Schema for the flowconfignodeagentdeployments API
+//+operator-sdk:csv:customresourcedefinitions:resources={{Pod,v1,flowconfig-daemon}}
 type FlowConfigNodeAgentDeployment struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
