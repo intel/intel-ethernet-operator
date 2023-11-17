@@ -16,9 +16,11 @@ type ClusterFlowConfigSpec struct {
 
 	// This is a label selector which selects Pods. This field follows standard label
 	// selector semantics; if present but empty, it selects all pods.
+	//+operator-sdk:csv:customresourcedefinitions:type=spec
 	PodSelector *metav1.LabelSelector `json:"podSelector,omitempty"`
 
 	// Rules is a list of FlowCreate rules
+	//+operator-sdk:csv:customresourcedefinitions:type=spec
 	Rules []*ClusterFlowRule `json:"rules,omitempty"`
 }
 
@@ -32,6 +34,7 @@ type ClusterFlowConfigStatus struct {
 //+kubebuilder:subresource:status
 
 // ClusterFlowConfig is the Schema for the clusterflowconfigs API
+//+operator-sdk:csv:customresourcedefinitions:resources={{Pod,v1,flowconfig-daemon}}
 type ClusterFlowConfig struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`

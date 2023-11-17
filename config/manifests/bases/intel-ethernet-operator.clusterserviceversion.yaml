@@ -13,7 +13,7 @@ metadata:
     description: The role of the Intel Ethernet Operator is to orchestrate and manage
       the configuration of the capabilities exposed by the Intel E810 Series network
       interface cards (NICs).
-    repository: https://github.com/smart-edge-open/intel-ethernet-operator
+    repository: https://github.com/intel/intel-ethernet-operator
     support: Intel Corporation
   name: intel-ethernet-operator.v0.0.0
   namespace: placeholder
@@ -25,28 +25,107 @@ spec:
       displayName: Cluster Flow Config
       kind: ClusterFlowConfig
       name: clusterflowconfigs.flowconfig.intel.com
+      resources:
+      - kind: Pod
+        name: flowconfig-daemon
+        version: v1
+      specDescriptors:
+      - description: This is a label selector which selects Pods. This field follows
+          standard label selector semantics; if present but empty, it selects all
+          pods.
+        displayName: Pod Selector
+        path: podSelector
+      - description: Rules is a list of FlowCreate rules
+        displayName: Rules
+        path: rules
       version: v1
     - description: EthernetClusterConfig is the Schema for the ethernetclusterconfigs
         API
       displayName: Ethernet Cluster Config
       kind: EthernetClusterConfig
       name: ethernetclusterconfigs.ethernet.intel.com
+      resources:
+      - kind: DaemonSet
+        name: fwddp-daemon
+        version: v1
+      specDescriptors:
+      - description: Contains configuration which will be applied to selected devices
+        displayName: Device Config
+        path: deviceConfig
+      - description: Selector for devices on nodes. If value is not set, then configuration
+          is applied to all CLV cards on selected nodes
+        displayName: Device Selector
+        path: deviceSelector
+      - description: Selector for nodes. If value is not set, then configuration is
+          applied to all nodes with CLV cards in cluster
+        displayName: Node Selector
+        path: nodeSelectors
       version: v1
     - description: EthernetNodeConfig is the Schema for the ethernetnodeconfigs API
       displayName: Ethernet Node Config
       kind: EthernetNodeConfig
       name: ethernetnodeconfigs.ethernet.intel.com
+      resources:
+      - kind: DaemonSet
+        name: fwddp-daemon
+        version: v1
+      specDescriptors:
+      - description: Contains mapping of PciAddress to Configuration which will be
+          applied to device on particular PciAddress
+        displayName: Config
+        path: config
+      - description: Skips drain process when true; default false. Should be true
+          if operator is running on SNO
+        displayName: Drain Skip
+        path: drainSkip
+      statusDescriptors:
+      - description: Provides information about device update status
+        displayName: Conditions
+        path: conditions
+      - description: Contains list of supported CLV cards and details about them
+        displayName: Devices
+        path: devices
       version: v1
     - description: FlowConfigNodeAgentDeployment is the Schema for the flowconfignodeagentdeployments
         API
       displayName: Flow Config Node Agent Deployment
       kind: FlowConfigNodeAgentDeployment
       name: flowconfignodeagentdeployments.flowconfig.intel.com
+      resources:
+      - kind: Pod
+        name: flowconfig-daemon
+        version: v1
+      specDescriptors:
+      - description: DCFVfPoolName is the name reference to CVL admin VF pool
+        displayName: DCFVf Pool Name
+        path: DCFVfPoolName
+      - description: NADAnnotation is the name reference to Network Attachement Definition
+          required by UFT container
+        displayName: NADAnnotation
+        path: NADAnnotation
       version: v1
     - description: NodeFlowConfig is the Schema for the nodeflowconfigs API
       displayName: Node Flow Config
       kind: NodeFlowConfig
       name: nodeflowconfigs.flowconfig.intel.com
+      resources:
+      - kind: Pod
+        name: flowconfig-daemon
+        version: v1
+      specDescriptors:
+      - description: Rules is a list of FlowCreate rules
+        displayName: Rules
+        path: rules
+      statusDescriptors:
+      - displayName: Port Info
+        path: portInfo
+      - description: Last applied rules
+        displayName: Rules
+        path: rules
+      - displayName: Sync Msg
+        path: syncMsg
+      - displayName: Sync Status
+        path: syncStatus
       version: v1
   description: The role of the Intel Ethernet Operator is to orchestrate and manage
     the configuration of the capabilities exposed by the Intel E810 Series network
@@ -71,7 +150,7 @@ spec:
   - supported: false
     type: AllNamespaces
   keywords:
-  - CLV
+  - CVL
   - E810
   - DDP
   - Firmware
@@ -79,7 +158,8 @@ spec:
   links:
   - name: Intel Ethernet Operator
     url: https://intel-ethernet-operator.domain
-  maturity: alpha
+  maturity: stable
+  minKubeVersion: 1.21.0
   provider:
     name: Intel Corporation
     url: https://www.intel.com/content/www/us/en/products/details/ethernet/800-controllers/e810-controllers/docs.html

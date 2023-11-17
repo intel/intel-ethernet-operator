@@ -16,6 +16,7 @@ type NodeFlowConfigSpec struct {
 	// Important: Run "make" to regenerate code after modifying this file
 
 	// Rules is a list of FlowCreate rules
+	//+operator-sdk:csv:customresourcedefinitions:type=spec
 	Rules []*FlowRules `json:"rules,omitempty"`
 }
 
@@ -24,10 +25,14 @@ type NodeFlowConfigStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
+	//+operator-sdk:csv:customresourcedefinitions:type=status
 	PortInfo []PortsInformation `json:"portInfo"`
 	// Last applied rules
+	//+operator-sdk:csv:customresourcedefinitions:type=status
 	Rules      []*FlowRules   `json:"rules,omitempty"`
+	//+operator-sdk:csv:customresourcedefinitions:type=status
 	SyncStatus SyncStatusType `json:"syncStatus,omitempty"`
+	//+operator-sdk:csv:customresourcedefinitions:type=status
 	SyncMsg    string         `json:"syncMsg,omitempty"`
 }
 
@@ -35,6 +40,7 @@ type NodeFlowConfigStatus struct {
 //+kubebuilder:subresource:status
 
 // NodeFlowConfig is the Schema for the nodeflowconfigs API
+//+operator-sdk:csv:customresourcedefinitions:resources={{Pod,v1,flowconfig-daemon}}
 type NodeFlowConfig struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`

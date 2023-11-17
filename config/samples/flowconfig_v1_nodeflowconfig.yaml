@@ -1,11 +1,12 @@
 # SPDX-License-Identifier: Apache-2.0
 # Copyright (c) 2020-2023 Intel Corporation
 
+---
 apiVersion: flowconfig.intel.com/v1
 kind: NodeFlowConfig
 metadata:
-  name: node01
-  namespace: intel-ethernet-operator-system
+  name: sample-node
+  namespace: intel-ethernet-operator
 spec:
   rules:
     - pattern:

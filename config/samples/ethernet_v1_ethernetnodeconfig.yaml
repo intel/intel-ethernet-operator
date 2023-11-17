@@ -1,10 +1,32 @@
 # SPDX-License-Identifier: Apache-2.0
 # Copyright (c) 2020-2023 Intel Corporation
 
+---
 apiVersion: ethernet.intel.com/v1
 kind: EthernetNodeConfig
 metadata:
-  name: ethernetnodeconfig-sample
-spec:
-  # Add fields here
-  foo: bar
+  name: sample-node
+  namespace: intel-ethernet-operator
+spec: {}
+status:
+  conditions:
+    - lastTransitionTime: "2023-11-14T13:57:06Z"
+      message: Inventory up to date
+      observedGeneration: 1
+      reason: NotRequested
+      status: "True"
+      type: Updated
+  devices:
+    - DDP:
+        packageName: ICE COMMS Package
+        trackId: "0xc0000002"
+        version: 1.3.37.0
+      PCIAddress: 0000:5e:00.0
+      deviceID: "1592"
+      driver: ice
+      driverVersion: 1.9.11
+      firmware:
+        MAC: b4:96:91:af:70:3c
+        version: 4.00 0x800117ee 1.3236.0
+      name: Ethernet Controller E810-C for QSFP
+      vendorID: "8086"

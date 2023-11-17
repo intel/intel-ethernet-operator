@@ -1,10 +1,33 @@
 # SPDX-License-Identifier: Apache-2.0
 # Copyright (c) 2020-2023 Intel Corporation
 
+---
 apiVersion: flowconfig.intel.com/v1
 kind: ClusterFlowConfig
 metadata:
-  name: clusterflowconfig-sample
+  name: pppoesLCP
+  namespace: intel-ethernet-operator
 spec:
-  # Add fields here
-  foo: bar
+  rules:
+    - pattern:
+        - type: RTE_FLOW_ITEM_TYPE_ETH
+        - type: RTE_FLOW_ITEM_TYPE_VLAN
+        - type: RTE_FLOW_ITEM_TYPE_VLAN
+        - type: RTE_FLOW_ITEM_TYPE_PPPOES
+        - type: RTE_FLOW_ITEM_TYPE_PPPOE_PROTO_ID
+          spec:
+            protoId: 0xc023
+          mask:
+            protoId: 0xFFFF
+        - type: RTE_FLOW_ITEM_TYPE_END
+      action:
+        - type: to-pod-interface
+          interface: net0
+      attr:
+        ingress: 1
+      priority: 0
+  podSelector:
+    matchLabels:
+      app: vagf
+      role: controlplane
+      serverProvider: vodafone

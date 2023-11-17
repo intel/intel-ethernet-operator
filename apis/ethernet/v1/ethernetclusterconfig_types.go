@@ -39,10 +39,13 @@ type DeviceConfig struct {
 // EthernetClusterConfigSpec defines the desired state of EthernetClusterConfig
 type EthernetClusterConfigSpec struct {
 	// Selector for nodes. If value is not set, then configuration is applied to all nodes with CLV cards in cluster
+	//+operator-sdk:csv:customresourcedefinitions:type=spec
 	NodeSelector map[string]string `json:"nodeSelectors,omitempty"`
 	// Selector for devices on nodes. If value is not set, then configuration is applied to all CLV cards on selected nodes
+	//+operator-sdk:csv:customresourcedefinitions:type=spec
 	DeviceSelector DeviceSelector `json:"deviceSelector,omitempty"`
 	// Contains configuration which will be applied to selected devices
+	//+operator-sdk:csv:customresourcedefinitions:type=spec
 	DeviceConfig DeviceConfig `json:"deviceConfig"`
 
 	// Higher priority policies can override lower ones.
@@ -59,6 +62,7 @@ type EthernetClusterConfigStatus struct {
 //+kubebuilder:resource:shortName=ecc
 
 // EthernetClusterConfig is the Schema for the ethernetclusterconfigs API
+//+operator-sdk:csv:customresourcedefinitions:resources={{DaemonSet,v1,fwddp-daemon}}
 type EthernetClusterConfig struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`

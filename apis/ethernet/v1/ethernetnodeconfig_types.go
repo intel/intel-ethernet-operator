@@ -18,8 +18,10 @@ type DeviceNodeConfig struct {
 // EthernetNodeConfigSpec defines the desired state of EthernetNodeConfig
 type EthernetNodeConfigSpec struct {
 	// Contains mapping of PciAddress to Configuration which will be applied to device on particular PciAddress
+	//+operator-sdk:csv:customresourcedefinitions:type=spec
 	Config []DeviceNodeConfig `json:"config,omitempty"`
 	// Skips drain process when true; default false. Should be true if operator is running on SNO
+	//+operator-sdk:csv:customresourcedefinitions:type=spec
 	DrainSkip bool `json:"drainSkip,omitempty"`
 }
 
@@ -56,8 +58,10 @@ type Device struct {
 // EthernetNodeConfigStatus defines the observed state of EthernetNodeConfig
 type EthernetNodeConfigStatus struct {
 	// Provides information about device update status
+	//+operator-sdk:csv:customresourcedefinitions:type=status
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
 	// Contains list of supported CLV cards and details about them
+	//+operator-sdk:csv:customresourcedefinitions:type=status
 	Devices []Device `json:"devices,omitempty"`
 }
 
@@ -68,6 +72,7 @@ type EthernetNodeConfigStatus struct {
 //+kubebuilder:printcolumn:name="Message",type=string,JSONPath=`.status.conditions[?(@.type=="Updated")].message`
 
 // EthernetNodeConfig is the Schema for the ethernetnodeconfigs API
+//+operator-sdk:csv:customresourcedefinitions:resources={{DaemonSet,v1,fwddp-daemon}}
 type EthernetNodeConfig struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
